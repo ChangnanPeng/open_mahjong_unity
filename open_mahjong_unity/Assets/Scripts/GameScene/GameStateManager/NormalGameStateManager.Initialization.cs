@@ -8,8 +8,11 @@ public partial class NormalGameStateManager {
         ClearPendingCuoheContinue();
         ClearPendingSichuanContinue();
         lastAskHandPlayerIndex = -1;
-        string incomingGamestateId = gameInfo?.gamestate_id;
-        if (string.IsNullOrEmpty(gamestateId) || gamestateId != incomingGamestateId) {
+        // 新对局（gamestate_id 变化）才清空本地结算快照；同一场对局的下一局 game_start 不应清空，
+        // 否则会抹掉已累积的主番快照（国标每局都会广播 game_start），导致计分板主番列整列变 —。
+        // 重连时若本地快照行数与服务端 score_history 不一致，仍清空以免与分值行错位。
+        bool isNewMatch = string.IsNullOrEmpty(gamestateId) || gamestateId != gameInfo.gamestate_id;
+        if (isNewMatch) {
             ClearRoundSettlementHistory();
         }
         if (!IsRealtimeSpectator) {
@@ -27,7 +30,7 @@ public partial class NormalGameStateManager {
 
         Game3DManager.Instance.Clear3DTile(); // 清空3D手牌
 
-        InitializeSetInfo(gameInfo); // 初始化对局数据
+        InitializeSetInfo(gameInfo, isNewMatch); // 初始化对局数据
         GameCanvas.Instance.InitializeUIInfo(gameInfo,indexToPosition); // 初始化面板信息
         BoardCanvas.Instance.InitializeBoardInfo(gameInfo,indexToPosition); // 初始化桌面信息
         RestoreSichuanDingque(gameInfo); // 四川：重连/进局中时恢复各家定缺标记
@@ -155,7 +158,7 @@ public partial class NormalGameStateManager {
     }
 
     // 设置游戏信息
-    private void InitializeSetInfo(GameInfo gameInfo){
+    private void InitializeSetInfo(GameInfo gameInfo, bool isNewMatch){
         // 清空操作列表
         allowActionList = new List<string>();
         // 清空弃牌列表
@@ -301,6 +304,7 @@ public partial class NormalGameStateManager {
                 player_to_info["self"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["self"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["self"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["self"].score_history, player_to_info["self"].round_number_history);
                 player_to_info["self"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["self"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "right") {
@@ -320,6 +324,7 @@ public partial class NormalGameStateManager {
                 player_to_info["right"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["right"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["right"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["right"].score_history, player_to_info["right"].round_number_history);
                 player_to_info["right"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["right"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "top") {
@@ -339,6 +344,7 @@ public partial class NormalGameStateManager {
                 player_to_info["top"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["top"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["top"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["top"].score_history, player_to_info["top"].round_number_history);
                 player_to_info["top"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["top"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "left") {
@@ -358,8 +364,21 @@ public partial class NormalGameStateManager {
                 player_to_info["left"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["left"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["left"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["left"].score_history, player_to_info["left"].round_number_history);
                 player_to_info["left"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["left"].tag_list = player.tag_list; // 存储标签列表
+            }
+        }
+
+        // 重连兜底：同一对局重连时，若本地快照行数与服务端恢复的 score_history 不一致，清空以免错位。
+        // 正常下一局 game_start 时两者同步增长，不会进入此分支，主番快照得以保留。
+        if (!isNewMatch) {
+            int scoreRows = 0;
+            foreach (var info in player_to_info.Values) {
+                if (info.score_history != null) scoreRows = Mathf.Max(scoreRows, info.score_history.Count);
+            }
+            if (roundSettlementHistory.Count != scoreRows) {
+                ClearRoundSettlementHistory();
             }
         }
     }

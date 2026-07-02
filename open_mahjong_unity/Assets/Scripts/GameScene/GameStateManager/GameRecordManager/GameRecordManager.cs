@@ -123,6 +123,58 @@ public partial class GameRecordManager : MonoBehaviour {
         _recordHuPresentationCoroutine = null;
     }
 
+    /// <summary>
+    /// 清除局终结算 UI（和牌/流局/数和尾/演出协程），切局或观战追帧时与正常对局一致。
+    /// </summary>
+    private void ClearRecordRoundEndPanels() {
+        CancelRecordHuPresentation();
+        ClearPendingRecordCuoheContinue();
+        if (EndResultPanel.Instance != null) {
+            EndResultPanel.Instance.ClearEndResultPanel();
+        }
+        if (EndLiujuPanel.Instance != null) {
+            EndLiujuPanel.Instance.ClearEndLiujuPanel();
+        }
+        if (EndShuheWeiPanel.Instance != null) {
+            EndShuheWeiPanel.Instance.ClearEndShuheWeiPanel();
+        }
+        if (RoundEndPresentation.Instance != null) {
+            RoundEndPresentation.Instance.StopActiveSequence();
+            RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
+        }
+        RestoreRecordSelfHandContainer();
+    }
+
+    /// <summary>
+    /// 荣和 tick 推演：去掉未切摸牌位并写入和牌张，与服务器 hand_tiles.append 对齐。
+    /// </summary>
+    private void ApplyRecordRonHuToHandState(List<string> tick, string action) {
+        if (action != "hu_first" && action != "hu_second" && action != "hu_third") {
+            return;
+        }
+        int hepaiPlayerIndex = ParseTickInt(tick, 1);
+        if (!indexToPosition.TryGetValue(hepaiPlayerIndex, out string huPosition)) {
+            return;
+        }
+        if (!recordPlayer_to_info.TryGetValue(huPosition, out RecordPlayer huPlayer)) {
+            return;
+        }
+        string recordRule = ReadGameTitleString(gameRecord.gameTitle, "rule", "");
+        RecordHuHandBuilder.TryParseHepaiTile(tick, recordRule, out int parsedHepaiTile);
+        int winTile = parsedHepaiTile >= 10 ? parsedHepaiTile
+            : (lastWinnableTileId >= 10 ? lastWinnableTileId : 0);
+        if (winTile < 10) {
+            return;
+        }
+        if (huPlayer.showHandDrawSlotActive && huPlayer.tileList.Count > 0) {
+            huPlayer.tileList.RemoveAt(huPlayer.tileList.Count - 1);
+            huPlayer.showHandDrawSlotActive = false;
+        }
+        if (huPlayer.tileList.Count == 0 || huPlayer.tileList[huPlayer.tileList.Count - 1] != winTile) {
+            huPlayer.tileList.Add(winTile);
+        }
+    }
+
     private static readonly Dictionary<string, string> RecordToDisplay = new Dictionary<string, string> {
         {"bh", "buhua"}, {"c", "cut"}, {"ag", "angang"}, {"jg", "jiagang"},
         {"cl", "chi_left"}, {"cm", "chi_mid"}, {"cr", "chi_right"},
@@ -335,6 +387,10 @@ public partial class GameRecordManager : MonoBehaviour {
         Game3DManager.Instance.StopAllRunningAnimations();
         // 清理3D桌面
         Game3DManager.Instance.Clear3DTile();
+        // 清空 2D 换牌队列，避免上局未跑完的 GetCard/Rearrange 协程在重建后插入额外手牌
+        if (GameCanvas.Instance != null) {
+            GameCanvas.Instance.ClearHandCardQueue();
+        }
 
         // 重置局内行动节点
         currentNode = 0;
@@ -555,12 +611,21 @@ public partial class GameRecordManager : MonoBehaviour {
         if (fromUserAction && IsSpectatorSession) {
             SwitchToRecordMode();
         }
+        int previousRoundIndex = currentRoundIndex;
+        if (roundIndex != previousRoundIndex) {
+            ClearRecordRoundEndPanels();
+        }
         currentRoundIndex = roundIndex;
         InitGameRound(roundIndex);
         if (IsSpectatorSession) {
             if (!fromUserAction && IsLiveSpectatorMode) {
-                // 直播观战自动进入下一局：对齐到该局最新 tick，保持直播模式
-                SyncSpectatorLiveToRoundTail(roundIndex);
+                // 直播观战自动进入下一局：从该局 node 0 由 AutoPlay 按序逐步播放已有 tick，动画照播，不跳转。
+                SetSpectatorModeFlags(true);
+                int tickCount = 0;
+                if (gameRecord.gameRound.rounds.TryGetValue(roundIndex, out Round rd) && rd.actionTicks != null) {
+                    tickCount = rd.actionTicks.Count;
+                }
+                waitingForMoreTicks = tickCount == 0;
             } else if (!fromUserAction) {
                 RefreshSpectatorModeByNodePosition();
             }
@@ -757,6 +822,9 @@ public partial class GameRecordManager : MonoBehaviour {
             int discardPlayerIndex = lastDiscardPlayerIndex >= 0 ? lastDiscardPlayerIndex : previousPlayerIndex;
             string relative = GetRelativePosition(actingPlayerIndex, discardPlayerIndex);
             int[] combinationMask = GameRecordMeldCodec.BuildMingpaiMask(action, mingpaiTile, removedTiles, relative);
+            // 透传被认走的打牌者座位 + 牌 id：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
+            // 3D 鸣牌认走弃牌需显式传入才能命中「该家最新弃牌」并停掉飞牌协程，避免被鸣牌仍落到河里。
+            string meldDiscarderPos = indexToPosition.ContainsKey(discardPlayerIndex) ? indexToPosition[discardPlayerIndex] : null;
             currentRecordPlayer.combinationTiles.Add(GameRecordMeldCodec.BuildCombinationTarget(action, mingpaiTile));
             currentRecordPlayer.combinationMasks.Add(combinationMask);
             currentRecordPlayer.showHandDrawSlotActive = false;
@@ -765,7 +833,8 @@ public partial class GameRecordManager : MonoBehaviour {
             if (currentPlayerPosition == "self") {
                 GameCanvas.Instance.ChangeHandCards("RemoveCombinationCard", 0, removedTiles.ToArray(), null);
             }
-            Game3DManager.Instance.Change3DTile(displayAction, 0, removedTiles.Count, currentPlayerPosition, false, combinationMask);
+            Game3DManager.Instance.Change3DTile(displayAction, 0, removedTiles.Count, currentPlayerPosition, false, combinationMask,
+                meldDiscarderPos: meldDiscarderPos, meldClaimedTile: mingpaiTile);
             GameCanvas.Instance.ShowActionDisplay(currentPlayerPosition, displayAction);
             if (action == "g") {
                 PlayRecordGangScoreChanges(tick);
@@ -776,6 +845,8 @@ public partial class GameRecordManager : MonoBehaviour {
             string ruleName = ReadGameTitleString(gameRecord.gameTitle, "rule", "").ToLowerInvariant();
             if (ruleName == "classical") {
                 int hepaiPlayerIndexOnly = ParseTickInt(tick, 1);
+                MarkRecordPlayerHu(hepaiPlayerIndexOnly);
+                ApplyRecordRonHuToHandState(tick, action);
                 if (indexToPosition.ContainsKey(hepaiPlayerIndexOnly)) {
                     string classicalHuPosition = indexToPosition[hepaiPlayerIndexOnly];
                     GameCanvas.Instance.ShowActionDisplay(classicalHuPosition, action);
@@ -807,11 +878,9 @@ public partial class GameRecordManager : MonoBehaviour {
                 fuFanList = tick.Count > 6 ? ParseHuFanList(tick, 6) : null;
             }
             RecordHuHandBuilder.TryParseHepaiTile(tick, recordRule, out int parsedHepaiTile);
-            if (IsSpectatorSession && action != "hu_self") {
-                huPlayer.showHandDrawSlotActive = false;
-            }
+            ApplyRecordRonHuToHandState(tick, action);
             int[] hepaiPlayerHand = RecordHuHandBuilder.BuildDisplayHand(
-                huPlayer.tileList, action, parsedHepaiTile, lastWinnableTileId, IsSpectatorSession);
+                huPlayer.tileList, action, parsedHepaiTile, lastWinnableTileId);
             int[] hepaiPlayerHuapai = huPlayer.huapaiList.ToArray();
             int[][] hepaiPlayerCombinationMask = huPlayer.combinationMasks.ToArray();
 
@@ -1557,11 +1626,9 @@ public partial class GameRecordManager : MonoBehaviour {
         RecordPlayer huPlayer = recordPlayer_to_info[huPosition];
         string recordRule = ReadGameTitleString(gameRecord.gameTitle, "rule", "riichi").ToLowerInvariant();
         RecordHuHandBuilder.TryParseHepaiTile(tick, recordRule, out int parsedHepaiTile);
-        if (IsSpectatorSession && huClass != "hu_self") {
-            huPlayer.showHandDrawSlotActive = false;
-        }
+        ApplyRecordRonHuToHandState(tick, huClass);
         int[] hepaiPlayerHand = RecordHuHandBuilder.BuildDisplayHand(
-            huPlayer.tileList, huClass, parsedHepaiTile, lastWinnableTileId, IsSpectatorSession);
+            huPlayer.tileList, huClass, parsedHepaiTile, lastWinnableTileId);
         int[] hepaiPlayerHuapai = huPlayer.huapaiList.ToArray();
         int[][] hepaiPlayerCombinationMask = huPlayer.combinationMasks.ToArray();
 

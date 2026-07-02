@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 public class GameStateNetworkManager : MonoBehaviour {
     
     public static GameStateNetworkManager Instance { get; private set; }
-    
+
     private void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -107,6 +107,12 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/broadcast_sticker":
                 HandleBroadcastSticker(response);
                 break;
+            case "gamestate/vote_update":
+                HandleVoteUpdate(response);
+                break;
+            case "gamestate/vote_end":
+                HandleVoteEnd(response);
+                break;
             default:
                 Debug.LogWarning($"未知的游戏状态消息类型: {response.type}");
                 break;
@@ -178,7 +184,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             askresponse.remaining_time,
             askresponse.action_list,
             askresponse.cut_tile,
-            askresponse.chi_candidates
+            askresponse.chi_candidates,
+            askresponse.is_tactical_recheck == true
         );
     }
     
@@ -188,6 +195,11 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleDoAction(Response response) {
         Debug.Log($"收到执行操作消息: {response.do_action_info}");
         DoActionInfo doresponse = response.do_action_info;
+        if (doresponse == null) return;
+        // 服务器侧已消除乱序源头：受保护观众的实际鸣牌不再用追赶协程延迟发送，
+        // 而是按序 await（cut flush 先发 -> meld -> 下一巡 cut），故此处直接派发即可保证逻辑顺序。
+        // 鸣牌认走的“打牌者+牌张”由服务器在 meld payload 显式下发 cut_from_player / cut_tile，
+        // 客户端据此精确移除对应牌河弃牌，不依赖 lastDiscardPlayerPosition、也不靠 tick 倒查。
         NormalGameStateManager.Instance.DoAction(
             doresponse.action_list,
             doresponse.action_player,
@@ -203,7 +215,10 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.silent == true,
             doresponse.is_mo_gang,
             doresponse.gang_score_changes,
-            doresponse.is_mo_buhua
+            doresponse.is_mo_buhua,
+            doresponse.action_tick,
+            doresponse.cut_from_player,
+            doresponse.meld_reveal_delay
         );
     }
     
@@ -412,6 +427,89 @@ public class GameStateNetworkManager : MonoBehaviour {
             response.sticker_info.original_player_index,
             response.sticker_info.player_index,
             response.sticker_info.sticker);
+    }
+
+    // ========== 房间对局投票暂停/结束 ==========
+
+    private void HandleVoteUpdate(Response response) {
+        VotePanel.Instance?.ApplyState(response.vote_info);
+        ClearGameTimerIfVoteRequires(response.vote_info);
+    }
+
+    private void HandleVoteEnd(Response response) {
+        VotePanel.Instance?.Hide();
+        ClearGameActionTimer();
+        // 投票结束对局通过：直接回主菜单（强制清理对局场景）
+        PostGameNavigator.ExitToLobby(forceTeardown: true);
+    }
+
+    /// <summary>
+    /// 投票通过后的阶段（结束倒计时、待暂停、已暂停等）须停掉步时/切牌计时，避免计时板继续走表。
+    /// </summary>
+    private static void ClearGameTimerIfVoteRequires(VoteInfo info) {
+        if (info == null || string.IsNullOrEmpty(info.phase)) return;
+        switch (info.phase) {
+            case "end_countdown":
+            case "pause_pending":
+            case "paused":
+            case "resume_voting":
+            case "resume_countdown":
+                ClearGameActionTimer();
+                break;
+        }
+    }
+
+    private static void ClearGameActionTimer() {
+        if (NormalGameStateManager.Instance != null) {
+            NormalGameStateManager.Instance.SwitchCurrentPlayer("None", "ClearAction", 0);
+        } else {
+            GameCanvas.Instance?.StopTimeRunning();
+            GameCanvas.Instance?.ClearActionButton();
+        }
+    }
+
+    /// <summary>发起投票（vote_type: "pause" / "end"）。仅自定义房间对局真人玩家可发。</summary>
+    public async void SendVoteStart(string voteType) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteStartRequest {
+                type = "gamestate/vote_start",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+                vote_type = voteType,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            Debug.LogError($"发起投票失败: {e.Message}");
+        }
+    }
+
+    /// <summary>提交投票（vote: "agree" / "refuse"）。</summary>
+    public async void SendVoteResponse(string vote) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteResponseRequest {
+                type = "gamestate/vote_response",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+                vote = vote,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            Debug.LogError($"提交投票失败: {e.Message}");
+        }
+    }
+
+    /// <summary>请求解除暂停。</summary>
+    public async void SendVoteResume() {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteResumeRequest {
+                type = "gamestate/vote_resume",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            Debug.LogError($"请求解除暂停失败: {e.Message}");
+        }
     }
     
     /// <summary>

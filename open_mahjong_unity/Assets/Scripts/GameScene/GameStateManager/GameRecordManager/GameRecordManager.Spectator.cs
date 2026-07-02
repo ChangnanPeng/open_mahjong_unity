@@ -30,6 +30,9 @@ public partial class GameRecordManager {
     private float autoPlaySpeed = 1.0f;
     private bool waitingForMoreTicks = false;
     private bool PauseAutoPlay => !IsLiveSpectatorMode;
+    /// <summary>同一 (局, 节点) 上「已是最后行动」提示仅展示一次，避免滚轮/连点重复刷屏。</summary>
+    private int _lastReachedLastActionTipRound = -1;
+    private int _lastReachedLastActionTipNode = -1;
 
     [Header("观战模式面板（仅观战时显示）")]
     [SerializeField] private GameObject spectatorModePanel;
@@ -73,6 +76,7 @@ public partial class GameRecordManager {
         IsSpectating = true;
         IsLiveSpectatorMode = true;
         waitingForMoreTicks = false;
+        ResetReachedLastActionTipGate();
         ClearSpectatorActionButtons();
 
         PlayerRecordInfo[] playersInfo = ExtractPlayersSettings(recordJson);
@@ -105,6 +109,7 @@ public partial class GameRecordManager {
         IsLiveSpectatorMode = true;
         CurrentMode = RecordManagerMode.Record;
         waitingForMoreTicks = false;
+        ResetReachedLastActionTipGate();
         ClearSpectatorActionButtons();
         ShowSpectatorModePanel(false);
         UpdateModeUIVisibility();
@@ -147,7 +152,18 @@ public partial class GameRecordManager {
     }
 
     public void NotifyReachedLastAction() {
+        if (_lastReachedLastActionTipRound == currentRoundIndex
+            && _lastReachedLastActionTipNode == currentNode) {
+            return;
+        }
+        _lastReachedLastActionTipRound = currentRoundIndex;
+        _lastReachedLastActionTipNode = currentNode;
         NotificationManager.Instance.ShowTip("观战", false, "已经是最后一个行动了");
+    }
+
+    private void ResetReachedLastActionTipGate() {
+        _lastReachedLastActionTipRound = -1;
+        _lastReachedLastActionTipNode = -1;
     }
 
     /// <summary>供按钮逻辑判断：当前局是否还能继续前进一步。</summary>
@@ -233,6 +249,8 @@ public partial class GameRecordManager {
             waitingForMoreTicks = false;
         }
 
+        // 不再走 GotoAction 批量跳转：堆积的 tick 由 AutoPlay 按序逐条 NextAction 播放，动画照播。
+
         // 若用户在牌谱阅览模式且已到最后一局最后节点，恢复直播模式
         if (!IsLiveSpectatorMode && gameRecord?.gameRound?.rounds != null) {
             int lastRound = 0;
@@ -293,8 +311,8 @@ public partial class GameRecordManager {
 
             if (!HasMoreSpectatorTicks()) {
                 int nextRound = currentRoundIndex + 1;
-                if (gameRecord.gameRound.rounds.ContainsKey(nextRound)) {
-                    EndResultPanel.Instance.ClearEndResultPanel();
+                if (gameRecord.gameRound.rounds.ContainsKey(nextRound) && SpectatorCurrentRoundEndedWithEndTick()) {
+                    ClearRecordRoundEndPanels();
                     GotoSelectRound(nextRound, false);
                     continue;
                 }
@@ -308,6 +326,15 @@ public partial class GameRecordManager {
             // 否则会出现“和牌面板一闪而过就进入下一局”的问题（应与真实玩家 8 秒确认倒计时一致）。
             float delay = nextAction == "end" ? GetSpectatorEndHoldDelay() : GetSpectatorDelay(nextAction);
             yield return new WaitForSeconds(delay / autoPlaySpeed);
+            // end tick 会 ClearRecordRoundEndPanels → CancelRecordHuPresentation，中断进行中的和牌 3D 演出协程。
+            // 必须等演出协程结束再执行 end，否则和牌面板一闪而过或根本没显示完。
+            if (nextAction == "end") {
+                float waited = 0f;
+                while (_recordHuPresentationActive && waited < 10f) {
+                    yield return new WaitForSeconds(0.1f);
+                    waited += 0.1f;
+                }
+            }
             if (!IsSpectating) yield break;
             SpectatorNextAction();
         }
@@ -411,7 +438,7 @@ public partial class GameRecordManager {
         string action = tick[0];
 
         if (action == "end") {
-            EndResultPanel.Instance.ClearEndResultPanel();
+            ClearRecordRoundEndPanels();
             currentNode++;
             int nextRound = currentRoundIndex + 1;
             if (gameRecord.gameRound.rounds.ContainsKey(nextRound)) {
@@ -471,29 +498,37 @@ public partial class GameRecordManager {
 
     private void JumpToLatestState() {
         if (gameRecord?.gameRound?.rounds == null) return;
+        ClearRecordRoundEndPanels();
         int lastRound = 1;
         foreach (var kvp in gameRecord.gameRound.rounds) {
             if (kvp.Key > lastRound) lastRound = kvp.Key;
         }
         currentRoundIndex = lastRound;
         InitGameRound(lastRound);
-        SyncSpectatorLiveToRoundTail(lastRound);
+        // 不再 GotoAction 跳转：AutoPlay 从本局 node 0 按序逐步播放已有 tick，动画照播。
+        // 追赶即 WebSocket 信息堆积后按序自然执行，无需额外加速/降帧逻辑。
+        int tickCount = 0;
+        if (gameRecord.gameRound.rounds.TryGetValue(lastRound, out Round rd) && rd.actionTicks != null) {
+            tickCount = rd.actionTicks.Count;
+        }
+        waitingForMoreTicks = tickCount == 0;
     }
 
     /// <summary>
-    /// 直播观战自动切局：快进到该局已有 tick 末尾并保持直播模式（避免 node=0 被误判为牌谱阅览）。
+    /// 本局 tick 已全部播完且最后一条为 end（与牌谱切局条件一致，防止下一局 key 先到就提前跳局）。
     /// </summary>
-    private void SyncSpectatorLiveToRoundTail(int roundIndex) {
-        if (!IsSpectating) return;
-        int tickCount = 0;
-        if (gameRecord.gameRound.rounds.TryGetValue(roundIndex, out Round roundData) && roundData.actionTicks != null) {
-            tickCount = roundData.actionTicks.Count;
+    private bool SpectatorCurrentRoundEndedWithEndTick() {
+        if (!gameRecord.gameRound.rounds.TryGetValue(currentRoundIndex, out Round roundData)) {
+            return false;
         }
-        if (tickCount > 0) {
-            GotoAction(tickCount);
+        if (roundData.actionTicks == null || roundData.actionTicks.Count == 0) {
+            return false;
         }
-        SetSpectatorModeFlags(true);
-        waitingForMoreTicks = tickCount == 0;
+        if (currentNode < roundData.actionTicks.Count) {
+            return false;
+        }
+        List<string> lastTick = roundData.actionTicks[roundData.actionTicks.Count - 1];
+        return lastTick != null && lastTick.Count > 0 && lastTick[0] == "end";
     }
 
     private string BuildSpectatorInfoString() {

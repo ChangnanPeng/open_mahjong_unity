@@ -73,6 +73,8 @@ public partial class GameCanvas{
                 tileCard.handSortIndex = i;
             }
             LayoutHandCardsFromCurrentOrder();
+            // 重建后补涂铳张遮罩：RefreshRecordChongHint 在入队前同步执行，此时新牌尚未创建
+            GameRecordManager.Instance?.ReapplySelf2DHandChongOverlay();
         }
 
         // 摸牌 添加摸牌区手牌
@@ -82,6 +84,8 @@ public partial class GameCanvas{
             tileCard.SetTile(tileId, true);
             int handCardCount = handCardsContainer.childCount - 1;
             tileCard.handSortIndex = handCardCount;
+            // 新张创建后立即补涂铳张遮罩，避免 AnimateGetCard 动画期间提示缺失
+            GameRecordManager.Instance?.ReapplySelf2DHandChongOverlay();
             List<TileCard> main = GetMainHandCardsOrdered(tileCard);
             RectTransform cardRect = cardObj.GetComponent<RectTransform>();
             Vector2 targetPosition = GetDrawTileTargetPosition(main);
@@ -99,6 +103,7 @@ public partial class GameCanvas{
             int handCardCount = handCardsContainer.childCount - 1;
             tileCard.handSortIndex = handCardCount;
             LayoutHandCardsFromCurrentOrder();
+            GameRecordManager.Instance?.ReapplySelf2DHandChongOverlay();
             if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsSelfActionRequired) {
                 RefreshHandTileSelectability();
             }

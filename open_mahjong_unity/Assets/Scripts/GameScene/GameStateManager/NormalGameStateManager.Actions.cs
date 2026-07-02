@@ -31,7 +31,7 @@ public partial class NormalGameStateManager {
     }
 
     // 询问鸣牌操作 鸣牌操作包括 吃 碰 杠 胡 跳过
-    public void AskMingPaiAction(int remaining_time,string[] action_list,int cut_tile, Dictionary<string, int[][]> chi_candidates = null){
+    public void AskMingPaiAction(int remaining_time,string[] action_list,int cut_tile, Dictionary<string, int[][]> chi_candidates = null, bool isTacticalRecheck = false){
         TryResumeAfterCuoheContinue();
         TryResumeAfterSichuanContinue();
         chiCandidates = chi_candidates ?? new Dictionary<string, int[][]>();
@@ -41,7 +41,7 @@ public partial class NormalGameStateManager {
         currentAskCutTileId = cut_tile;
         if (action_list.Length > 0){
             allowActionList = BuildMingPaiAllowActionList(action_list);
-            SwitchCurrentPlayer("self","askMingPaiAction",remaining_time);
+            SwitchCurrentPlayer("self","askMingPaiAction",remaining_time, isTacticalRecheck: isTacticalRecheck);
         }
     }
 
@@ -52,7 +52,7 @@ public partial class NormalGameStateManager {
     }
 
     // 执行行动
-    public void DoAction(string[] action_list, int action_player, int? cut_tile, int? cut_tile_index, bool? cut_class, int? deal_tile, int? buhua_tile, int[] combination_mask,string combination_target, bool? is_riichi_horizontal = null, bool isClaim = false, bool isSilent = false, bool? is_mo_gang = null, Dictionary<int, int> gangScoreChanges = null, bool? is_mo_buhua = null) {
+    public void DoAction(string[] action_list, int action_player, int? cut_tile, int? cut_tile_index, bool? cut_class, int? deal_tile, int? buhua_tile, int[] combination_mask,string combination_target, bool? is_riichi_horizontal = null, bool isClaim = false, bool isSilent = false, bool? is_mo_gang = null, Dictionary<int, int> gangScoreChanges = null, bool? is_mo_buhua = null, int action_tick = 0, int? cut_from_player = null, float? meld_reveal_delay = null) {
         string GetCardPlayer = indexToPosition[action_player]; // 获取执行操作的玩家位置
         bool isRiichiHorizontalCut = is_riichi_horizontal == true;
         if (isClaim) {
@@ -61,10 +61,12 @@ public partial class NormalGameStateManager {
             return;
         }
         // isSilent：战术鸣牌申请阶段已发声/动画，实际行为仅同步状态
+        float meldRevealDelaySec = meld_reveal_delay ?? 0f;
         foreach (string action in action_list) {
 
             Debug.Log($"执行DoAction操作: {action} (silent={isSilent})");
-            if (!isSilent) {
+            bool deferMeldFeedback = !isSilent && meldRevealDelaySec > 0f && IsChiPengMingGangAction(action);
+            if (!isSilent && !deferMeldFeedback) {
                 SoundManager.Instance.PlayActionSound(GetCardPlayer, action);
                 // 切牌物理音改在 3D 出牌手牌队列中播放，避免吃牌后立刻收到 cut 消息时声音早于出牌动画
                 if (action != "cut") {
@@ -97,7 +99,7 @@ public partial class NormalGameStateManager {
                     break;
                 
                 // 切牌
-                case "cut": 
+                case "cut":
                     pendingAskFromJiagang = false;
                     lastCutCardID = cut_tile.Value; // 存储上次切牌的ID
                     lastDiscardPlayerPosition = GetCardPlayer;
@@ -196,11 +198,13 @@ public partial class NormalGameStateManager {
                     }
                     else{
                         // 吃 / 碰 / 明杠：河牌被取走，按掩码 flag!=1 删手牌侧真实 ID
-                        player_to_info[CurrentPlayer].discard_tiles.Remove(lastCutCardID);
-                        if (player_to_info[CurrentPlayer].discard_riichi_flags.Count > 0){
-                            player_to_info[CurrentPlayer].discard_riichi_flags.RemoveAt(player_to_info[CurrentPlayer].discard_riichi_flags.Count - 1);
-                        }
-                        player_to_info[CurrentPlayer].discard_origin_tiles.Add(lastCutCardID);
+                        // 打牌者+被鸣牌张优先用服务器在 meld payload 显式下发的 cut_from_player / cut_tile，
+                        // 不再依赖会被乱序覆盖的 lastDiscardPlayerPosition / currentAskCutTileId，也不依赖“最近一张”不变量；
+                        // 字段缺失（老服务器/非国标）时退回 lastDiscardPlayerPosition（S1 消除乱序后已按序到达，正确）。
+                        currentMeldDiscarderPos = ResolveMeldDiscarder(cut_from_player, GetCardPlayer);
+                        currentMeldClaimedTileId = cut_tile.HasValue ? cut_tile.Value
+                            : (currentAskCutTileId > 0 ? currentAskCutTileId : lastCutCardID);
+                        RemoveClaimedDiscardFromRiver(currentMeldDiscarderPos, currentMeldClaimedTileId);
 
                         player_to_info[GetCardPlayer].combination_tiles.Add(combination_target);
                         AppendCombinationMask(player_to_info[GetCardPlayer], combination_mask);
@@ -214,7 +218,12 @@ public partial class NormalGameStateManager {
                         else{
                             player_to_info[GetCardPlayer].hand_tiles_count -= need_remove_list.Count;
                         }
-                        Game3DManager.Instance.Change3DTile(action, 0, need_remove_list.Count, GetCardPlayer, false, combination_mask);
+                        Game3DManager.Instance.Change3DTile(action, 0, need_remove_list.Count, GetCardPlayer, false, combination_mask,
+                            meldRevealDelay: meldRevealDelaySec,
+                            meldDiscarderPos: currentMeldDiscarderPos,
+                            meldClaimedTile: currentMeldClaimedTileId,
+                            meldFeedbackAction: deferMeldFeedback ? action : null,
+                            meldFeedbackRoomRule: deferMeldFeedback ? roomRule : null);
                     }
                     break;
                 default:
@@ -279,13 +288,62 @@ public partial class NormalGameStateManager {
 
     /// <summary>他家操作改变牌桌可见牌时，刷新已缓存的听牌提示（绝张/余张/番数）。</summary>
     private void RefreshTableTipsAfterAction(string[] action_list, string actionPlayer) {
-        if (!tips || actionPlayer == "self") return;
+        if (!tips) return;
         foreach (string action in action_list) {
-            if (ActionAffectsVisibleTiles(action)) {
-                TipsContainer.Instance?.RefreshTenpaiTipsIfCached();
-                return;
-            }
+            if (!ActionAffectsVisibleTiles(action)) continue;
+            // 自家鸣牌后 ShowTipsBlock 会全量重算；刷新前同步手牌避免缓存与 GameState 不一致
+            TipsContainer.Instance?.RefreshTenpaiTipsIfCached(syncHandFromLiveState: true);
+            return;
         }
+    }
+
+    /// <summary>
+    /// 吃/碰/明杠：从出牌者河牌移除被鸣走的一张（与服务端 discard_tiles.pop(-1) 及牌谱回放一致）。
+    /// discarderPos / claimedTile 由调用方通过 action_tick 回查得到，避免乱序下 lastDiscardPlayerPosition/currentAskCutTileId 已被覆盖。
+    /// </summary>
+    private void RemoveClaimedDiscardFromRiver(string discarderPos, int claimedTile) {
+        if (string.IsNullOrEmpty(discarderPos)) {
+            discarderPos = !string.IsNullOrEmpty(lastDiscardPlayerPosition) ? lastDiscardPlayerPosition : CurrentPlayer;
+        }
+        if (claimedTile <= 0) {
+            claimedTile = currentAskCutTileId > 0 ? currentAskCutTileId : lastCutCardID;
+        }
+        if (string.IsNullOrEmpty(discarderPos)
+            || !player_to_info.TryGetValue(discarderPos, out PlayerInfoClass discarder)
+            || discarder.discard_tiles == null
+            || discarder.discard_tiles.Count == 0) {
+            Debug.LogWarning(
+                $"RemoveClaimedDiscardFromRiver: 无法移除河牌 discarder={discarderPos}, "
+                + $"lastDiscard={lastDiscardPlayerPosition}, currentPlayer={CurrentPlayer}, "
+                + $"askCut={currentAskCutTileId}, lastCut={lastCutCardID}, claimed={claimedTile}");
+            return;
+        }
+
+        int lastIdx = discarder.discard_tiles.Count - 1;
+        int removedTile;
+        if (claimedTile > 0 && discarder.discard_tiles[lastIdx] == claimedTile) {
+            removedTile = claimedTile;
+            discarder.discard_tiles.RemoveAt(lastIdx);
+        } else if (claimedTile > 0) {
+            int idx = discarder.discard_tiles.LastIndexOf(claimedTile);
+            if (idx >= 0) {
+                removedTile = claimedTile;
+                discarder.discard_tiles.RemoveAt(idx);
+            } else {
+                removedTile = discarder.discard_tiles[lastIdx];
+                discarder.discard_tiles.RemoveAt(lastIdx);
+                Debug.LogWarning(
+                    $"RemoveClaimedDiscardFromRiver: 河末张 {removedTile} 与鸣牌张 {claimedTile} 不一致，已移除末张");
+            }
+        } else {
+            removedTile = discarder.discard_tiles[lastIdx];
+            discarder.discard_tiles.RemoveAt(lastIdx);
+        }
+
+        if (discarder.discard_riichi_flags != null && discarder.discard_riichi_flags.Count > 0) {
+            discarder.discard_riichi_flags.RemoveAt(discarder.discard_riichi_flags.Count - 1);
+        }
+        discarder.discard_origin_tiles.Add(removedTile);
     }
 
     private static void AppendCombinationMask(PlayerInfoClass player, int[] mask) {
@@ -346,6 +404,32 @@ public partial class NormalGameStateManager {
             GameCanvas.Instance.ShowActionDisplay(actor, action, roomRule);
         }
         // 申请-停顿期间隐藏本家操作按钮；可抢断玩家会在 ask_other 再次询问时重新弹出按钮。
-        GameCanvas.Instance.ClearActionButton();
+    GameCanvas.Instance.ClearActionButton();
+    }
+
+    private static bool IsChiPengMingGangAction(string action) {
+        switch (action) {
+            case "chi_left":
+            case "chi_mid":
+            case "chi_right":
+            case "peng":
+            case "gang":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// 鸣牌（吃/碰/明杠）时解析被认走的打牌者座位：优先用服务器在 meld payload 显式下发的
+    /// cut_from_player（绝对权威，乱序/双同牌都不歧义）；字段缺失（老服务器/非国标）时退回
+    /// lastDiscardPlayerPosition（S1 消除乱序后到达顺序即逻辑顺序，正确）。meldPlayer 仅用于异常自检。
+    /// </summary>
+    private string ResolveMeldDiscarder(int? cutFromPlayer, string meldPlayer) {
+        if (cutFromPlayer.HasValue && indexToPosition.TryGetValue(cutFromPlayer.Value, out string pos)
+            && !string.IsNullOrEmpty(pos) && pos != meldPlayer) {
+            return pos;
+        }
+        return !string.IsNullOrEmpty(lastDiscardPlayerPosition) ? lastDiscardPlayerPosition : CurrentPlayer;
     }
 }

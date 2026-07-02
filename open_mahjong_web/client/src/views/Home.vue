@@ -79,8 +79,8 @@ const features = ref([
   },
   {
     id: 2,
-    title: '玩家数据',
-    description: '查询玩家的胜率、得分、对战次数等数据。',
+    title: '玩家/平台数据站',
+    description: '查询玩家战绩，或查看全站天梯场次统计与番种数据。',
     icon: User,
     // 大红色
     color: '#ff0000',

@@ -21,8 +21,9 @@ from .boardcast import (
 )
 from ..public.logic_common import get_index_relative_position, next_current_index, next_current_num, assign_strict_final_ranks
 from .init_tiles import init_classical_tiles
-from ..public.next_game_round import next_game_round_random_switchseat
+from ..public.next_game_round import next_game_round_classical_switchseat
 from ..public.spectator_rules import too_many_ai_for_spectator
+from ..public.vote_manager import vote_checkpoint
 from ..public.game_record_manager import init_game_record, init_game_round, player_action_record_deal, player_action_record_angang, player_action_record_jiagang, player_action_record_chipenggang, player_action_record_hu, player_action_record_liuju, player_action_record_jiuzhongjiupai, player_action_record_shuhewei, player_action_record_round_end, end_game_record, build_score_changes_by_seat, build_score_changes_dict, capture_player_entry_order
 from ..public.round_end_timing import liuju_ready_wait_seconds, shuhewei_ready_wait_seconds
 from ...game_calculation.game_calculation_service import GameCalculationService
@@ -123,6 +124,8 @@ class ClassicalGameState:
         self.room_rule = room_data["room_rule"]
         self.room_type = room_data["room_type"]
         self.sub_rule = room_data.get("sub_rule")
+        self.match_tier = room_data.get("match_tier")
+        self.event_id = room_data.get("event_id")
 
         self.room_random_seed = room_data.get("random_seed", 0)
         self.open_cuohe = room_data.get("open_cuohe", False)
@@ -323,6 +326,10 @@ class ClassicalGameState:
         init_game_record(self)
         self.game_record["game_title"]["sub_rule"] = self.sub_rule
         self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
+        if self.match_tier is not None:
+            self.game_record["game_title"]["match_tier"] = self.match_tier
+        if self.event_id is not None:
+            self.game_record["game_title"]["event_id"] = self.event_id
 
         while self.current_round <= self.max_round * 4:
 
@@ -385,6 +392,7 @@ class ClassicalGameState:
 
                 # 游戏主循环
                 while self.game_status != "END":
+                    await vote_checkpoint(self)
                     match self.game_status:
 
                         case "deal_card":
@@ -579,7 +587,7 @@ class ClassicalGameState:
                 self.hu_class in ["hu_self", "hu_first", "hu_second", "hu_third"]
                 and hepai_player_index == 0
             )
-            next_game_round_random_switchseat(
+            next_game_round_classical_switchseat(
                 self,
                 keep_current_round=is_dealer_win,
                 keep_dealer_seat=is_dealer_win,
@@ -728,12 +736,7 @@ class ClassicalGameState:
         hepai_fu_types: Optional[List[str]],
         hu_class: Optional[str],
     ) -> float:
-        """数和尾结算：
-        - 有和牌者时：和牌家向其余三家各收取其自身全额副数（不做比对）；
-        - 其余未和牌者之间两两比对，副高者向副低者收取副差；
-        - 流局时：四家之间两两比对副差；
-        - 涉及庄家时该笔转账翻倍（庄家幺二）。
-        """
+        """数和尾结算：先结算和牌家（另三家各付和牌总副），再结算其余玩家两两副差比对。"""
         player_fu = {}
         player_fan: Dict[int, List[str]] = {}
         player_fu_types: Dict[int, List[str]] = {}
@@ -759,23 +762,24 @@ class ClassicalGameState:
             shuhewei_changes[receiver] += amount
             shuhewei_changes[payer] -= amount
 
-        # 和牌家收取其余三家各自的全额副数
-        if hepai_player_index is not None:
+        # 一、和牌家：另三家各付和牌总副（涉及庄家翻倍）
+        if hepai_player_index is not None and hepai_total_fu is not None:
             for payer in indices:
                 if payer == hepai_player_index:
                     continue
-                transfer = player_fu[payer] * _dealer_multiplier(hepai_player_index, payer)
+                transfer = hepai_total_fu * _dealer_multiplier(hepai_player_index, payer)
                 _apply_transfer(hepai_player_index, payer, transfer)
 
-        # 未和牌者之间（流局时则为四家）两两比对副差
-        for receiver in indices:
-            if hepai_player_index is not None and receiver == hepai_player_index:
-                continue
+        # 二、其余玩家两两比对副差（有和牌时排除和牌家；流局时四家互比）
+        compare_indices = (
+            [i for i in indices if i != hepai_player_index]
+            if hepai_player_index is not None
+            else indices
+        )
+        for receiver in compare_indices:
             receiver_fu = player_fu[receiver]
-            for payer in indices:
+            for payer in compare_indices:
                 if payer == receiver:
-                    continue
-                if hepai_player_index is not None and payer == hepai_player_index:
                     continue
                 if player_fu[payer] < receiver_fu:
                     transfer = (receiver_fu - player_fu[payer]) * _dealer_multiplier(receiver, payer)
