@@ -1,5 +1,8 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const config = require('./config');
+
+// DATE 类型直接返回 YYYY-MM-DD 字符串，避免时区序列化为 T16:00:00.000Z
+types.setTypeParser(1082, (val) => val);
 
 // 创建 PostgreSQL 连接池
 const pool = new Pool({

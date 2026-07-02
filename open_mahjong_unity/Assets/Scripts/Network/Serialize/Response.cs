@@ -147,7 +147,7 @@ public class DoActionInfo { // 执行操作
     public int action_player;
     public int action_tick;
     public int? cut_from_player;      // 鸣牌（吃/碰/明杠）真正认走的打牌者座位索引；服务器显式下发，避免乱序/双同牌歧义
-    public float? meld_reveal_delay;  // 受保护观众鸣牌显示层延迟（秒）：仅延迟 3D 动画/声音，复现 0.5s 间隔且不破坏 wire 顺序
+    public float? meld_reveal_delay;  // 受保护观众鸣牌呈现延迟（秒）：display/音效/3D 一并延后，复现 claim_meld_followup_gap 间隔且不破坏 wire 顺序
     public int? cut_tile;           // 可空类型
     public int? cut_tile_index;     // 可空类型
     public bool? cut_class;         // 可空类型

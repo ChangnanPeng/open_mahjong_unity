@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
-const { createWindowLimiter } = require('../middleware/rateLimit');
+const { createWindowLimiter, getClientIp } = require('../middleware/rateLimit');
+
+// 重查询限流：仅 info / records；成功响应才计数，404 等失败不占配额
+const playerQueryLimiter = createWindowLimiter({
+  windowMs: 60_000,
+  max: 30,
+  keyFn: (req) => `${getClientIp(req)}:player-query`,
+  countSuccessfulOnly: true,
+});
 
 // 下载专用限流：每 IP 每日最多 10 次（单局 + 批量合并计数），防止无限拉取牌谱
 const downloadLimiter = createWindowLimiter({
   windowMs: 86_400_000,
   max: 10,
-  keyFn: (req) => `${req.ip || 'unknown'}:download`,
+  keyFn: (req) => `${getClientIp(req)}:download`,
 });
 
 // 国标麻将番种英文->中文翻译字典
@@ -221,7 +229,7 @@ async function resolveUserId(key) {
   return parseInt(r.rows[0].user_id, 10);
 }
 
-router.get('/info/:key', async (req, res) => {
+router.get('/info/:key', playerQueryLimiter, async (req, res) => {
   try {
     const userId = await resolveUserId(req.params.key);
 
@@ -310,7 +318,7 @@ function _analyzeBucketKey(req) {
   const d = new Date(now);
   if (d.getHours() < 4) d.setDate(d.getDate() - 1);
   const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return `${req.ip || 'unknown'}:analyze:${ymd}`;
+  return `${getClientIp(req)}:analyze:${ymd}`;
 }
 const analyzeLimiter = createWindowLimiter({
   windowMs: 86_400_000,
@@ -417,7 +425,7 @@ function buildRecordFilters(userId, query, params) {
   return conditions;
 }
 
-router.get('/records/:key', async (req, res) => {
+router.get('/records/:key', playerQueryLimiter, async (req, res) => {
   try {
     const userId = await resolveUserId(req.params.key);
     if (userId == null) {

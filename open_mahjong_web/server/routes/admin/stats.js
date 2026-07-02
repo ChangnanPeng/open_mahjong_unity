@@ -1,92 +1,142 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/database');
+const {
+  LADDER_TIERS,
+  formatStatDate,
+  mapTotalsRow,
+  querySceneTotals,
+  querySceneTotalsFans,
+  querySceneDailyGames,
+  fillFanByTier,
+} = require('../../services/platformStats');
 
-// 场次等级 tier → (room_type, match_tier) 条件（用于 scene_daily_stats 查询）
-function applyTierCondition(tier, where, params) {
-  switch (tier) {
-    case 'custom':
-      params.push('custom');
-      where.push(`room_type = $${params.length}`);
-      break;
-    case 'events':
-      params.push('events');
-      where.push(`room_type = $${params.length}`);
-      break;
-    case 'legacy_match':
-      params.push('match');
-      where.push(`room_type = $${params.length}`, `match_tier IS NULL`);
-      break;
-    case 'beginner':
-    case 'intermediate':
-    case 'advanced':
-    case 'mcrpl':
-      params.push('match');
-      where.push(`room_type = $${params.length}`);
-      params.push(tier);
-      where.push(`match_tier = $${params.length}`);
-      break;
-    default:
-      break;
-  }
+function mapDailyRow(row) {
+  return {
+    stat_date: formatStatDate(row.stat_date),
+    game_count: Number(row.game_count) || 0,
+    active_users: Number(row.active_users) || 0,
+    max_online: Number(row.max_online) || 0,
+  };
 }
 
-// 每日全站统计：对局数 / 用户量 / 最大在线
+function parseDateParam(val) {
+  if (!val || typeof val !== 'string') return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(val) ? val : null;
+}
+
+function defaultDateRange(days) {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - (days - 1));
+  return {
+    date_from: formatStatDate(from),
+    date_to: formatStatDate(to),
+  };
+}
+
 router.get('/daily', async (req, res) => {
   try {
-    const days = Math.min(120, Math.max(1, parseInt(req.query.days) || 30));
-    const result = await pool.query(
-      `SELECT stat_date, game_count, active_users, max_online
-       FROM daily_stats
-       ORDER BY stat_date DESC
-       LIMIT $1`,
-      [days]
-    );
-    res.json({ success: true, data: result.rows });
+    const granularity = ['day', 'week', 'month'].includes(req.query.granularity)
+      ? req.query.granularity
+      : 'day';
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 30));
+    let dateFrom = parseDateParam(req.query.date_from);
+    let dateTo = parseDateParam(req.query.date_to);
+    if (!dateFrom || !dateTo) {
+      const defaults = defaultDateRange(days);
+      dateFrom = dateFrom || defaults.date_from;
+      dateTo = dateTo || defaults.date_to;
+    }
+
+    let sql;
+    const params = [dateFrom, dateTo];
+    if (granularity === 'day') {
+      sql = `
+        SELECT stat_date, game_count, active_users, max_online
+        FROM daily_stats
+        WHERE stat_date >= $1::date AND stat_date <= $2::date
+        ORDER BY stat_date ASC
+      `;
+    } else {
+      const trunc = granularity === 'week' ? 'week' : 'month';
+      sql = `
+        SELECT
+          date_trunc('${trunc}', stat_date)::date AS stat_date,
+          SUM(game_count)::int AS game_count,
+          SUM(active_users)::int AS active_users,
+          MAX(max_online)::int AS max_online
+        FROM daily_stats
+        WHERE stat_date >= $1::date AND stat_date <= $2::date
+        GROUP BY 1
+        ORDER BY stat_date ASC
+      `;
+    }
+
+    const result = await pool.query(sql, params);
+    res.json({
+      success: true,
+      data: result.rows.map(mapDailyRow),
+      meta: { date_from: dateFrom, date_to: dateTo, granularity },
+    });
   } catch (error) {
     console.error('admin stats daily error:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
   }
 });
 
-// 各场次每日统计：按 tier/game_type/日期筛选
-router.get('/scene', async (req, res) => {
+router.get('/scene/daily', async (req, res) => {
   try {
-    const where = [];
-    const params = [];
-    if (req.query.date_from) {
-      params.push(req.query.date_from);
-      where.push(`stat_date >= $${params.length}`);
+    const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 30));
+    let dateFrom = parseDateParam(req.query.date_from);
+    let dateTo = parseDateParam(req.query.date_to);
+    if (!dateFrom || !dateTo) {
+      const defaults = defaultDateRange(days);
+      dateFrom = dateFrom || defaults.date_from;
+      dateTo = dateTo || defaults.date_to;
     }
-    if (req.query.date_to) {
-      params.push(req.query.date_to);
-      where.push(`stat_date <= $${params.length}`);
-    }
-    if (req.query.tier) applyTierCondition(req.query.tier, where, params);
-    if (req.query.game_type) {
-      params.push(req.query.game_type);
-      where.push(`game_type = $${params.length}`);
-    }
-    if (req.query.rule) {
-      params.push(req.query.rule);
-      where.push(`rule = $${params.length}`);
-    }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const result = await pool.query(
-      `SELECT stat_date, room_type, match_tier, event_id, rule, game_type,
-              total_games, total_rounds, win_count, self_draw_count, deal_in_count,
-              total_fan_score, total_win_turn, total_fangchong_score,
-              first_place_count, second_place_count, third_place_count, fourth_place_count,
-              fulu_round_count, cuohe_count, total_round_score
-       FROM scene_daily_stats
-       ${whereSql}
-       ORDER BY stat_date DESC, room_type, match_tier, game_type
-       LIMIT 500`,
-      params
-    );
-    res.json({ success: true, data: result.rows });
+    const data = await querySceneDailyGames({
+      dateFrom,
+      dateTo,
+      tier: req.query.tier,
+      gameType: req.query.game_type,
+      rule: req.query.rule,
+    });
+    res.json({
+      success: true,
+      data,
+      meta: { date_from: dateFrom, date_to: dateTo },
+    });
   } catch (error) {
-    console.error('admin stats scene error:', error);
+    console.error('admin stats scene daily error:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+router.get('/scene/totals', async (req, res) => {
+  try {
+    const data = await querySceneTotals({
+      tier: req.query.tier,
+      gameType: req.query.game_type,
+      rule: req.query.rule,
+      detail: req.query.detail,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('admin stats scene totals error:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+router.get('/scene/totals/fans', async (req, res) => {
+  try {
+    const data = await querySceneTotalsFans({
+      tier: req.query.tier,
+      rule: req.query.rule,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('admin stats scene totals fans error:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
   }
 });

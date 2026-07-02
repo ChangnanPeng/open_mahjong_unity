@@ -130,15 +130,6 @@ class DatabaseManager:
                     cursor.execute("ROLLBACK TO SAVEPOINT sp_add_original_player_index;")
                 else:
                     raise
-            # 从牌谱 JSON 回填 room_type
-            cursor.execute("""
-                UPDATE game_player_records gpr
-                SET room_type = gr.record->'game_title'->>'room_type'
-                FROM game_records gr
-                WHERE gpr.game_id = gr.game_id
-                  AND (gpr.room_type IS NULL OR gpr.room_type = '')
-                  AND gr.record->'game_title'->>'room_type' IS NOT NULL;
-            """)
             # 迁移：追加 match_tier（排位场次等级 beginner/intermediate/advanced/mcrpl）
             cursor.execute("SAVEPOINT sp_add_match_tier;")
             try:
@@ -157,35 +148,6 @@ class DatabaseManager:
                     cursor.execute("ROLLBACK TO SAVEPOINT sp_add_event_id;")
                 else:
                     raise
-            # 从牌谱 JSON 回填 match_tier / event_id
-            cursor.execute("""
-                UPDATE game_player_records gpr
-                SET match_tier = gr.record->'game_title'->>'match_tier'
-                FROM game_records gr
-                WHERE gpr.game_id = gr.game_id
-                  AND (gpr.match_tier IS NULL OR gpr.match_tier = '')
-                  AND gr.record->'game_title'->>'match_tier' IS NOT NULL;
-            """)
-            # 天梯对局按「是否提示」补齐 match_tier：有提示=初级场(beginner)，无提示=中级场(intermediate)
-            # 取消历史排位(legacy_match)设计——所有 match 对局都归类为具体天梯场次
-            cursor.execute("""
-                UPDATE game_player_records gpr
-                SET match_tier = CASE WHEN (gr.record->'game_title'->>'tips')::boolean
-                                      THEN 'beginner' ELSE 'intermediate' END
-                FROM game_records gr
-                WHERE gpr.game_id = gr.game_id
-                  AND gpr.room_type = 'match'
-                  AND (gpr.match_tier IS NULL OR gpr.match_tier = '')
-                  AND gr.record->'game_title'->>'tips' IS NOT NULL;
-            """)
-            cursor.execute("""
-                UPDATE game_player_records gpr
-                SET event_id = gr.record->'game_title'->>'event_id'
-                FROM game_records gr
-                WHERE gpr.game_id = gr.game_id
-                  AND (gpr.event_id IS NULL OR gpr.event_id = '')
-                  AND gr.record->'game_title'->>'event_id' IS NOT NULL;
-            """)
             # 迁移：若表中曾有 mode 列，将 mode 拷贝到 match_type 后丢弃 mode
             cursor.execute("""
                 SELECT 1 FROM information_schema.columns
@@ -760,13 +722,11 @@ class DatabaseManager:
 
             # 迁移：国标 history_stats 增加累计小局净得分（局均点分子）
             cursor.execute("SAVEPOINT sp_round_score_guobiao_history_stats;")
-            added_round_score_column = False
             try:
                 cursor.execute(
                     "ALTER TABLE guobiao_history_stats "
                     "ADD COLUMN total_round_score INT NOT NULL DEFAULT 0;"
                 )
-                added_round_score_column = True
             except Error as e:
                 if getattr(e, "pgcode", None) == "42701":
                     cursor.execute("ROLLBACK TO SAVEPOINT sp_round_score_guobiao_history_stats;")
@@ -814,6 +774,12 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_game_player_metrics_scene "
                 "ON game_player_metrics (room_type, match_tier, event_id, game_type);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_game_player_metrics_ladder_day "
+                "ON game_player_metrics (created_at, match_tier) "
+                "WHERE room_type = 'match' AND match_tier IN "
+                "('beginner', 'intermediate', 'advanced', 'mcrpl');"
             )
 
             # 每日全站统计：对局数 / 用户量 / 最大在线
@@ -867,6 +833,19 @@ class DatabaseManager:
                 );
             """)
 
+            # 天梯场次番种按日累计（04:00 聚合时 DELETE+INSERT，可安全重跑）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scene_tier_fan_daily (
+                    stat_date DATE NOT NULL,
+                    match_tier VARCHAR(24) NOT NULL,
+                    rule VARCHAR(10) NOT NULL DEFAULT 'guobiao',
+                    fan_field VARCHAR(32) NOT NULL,
+                    fan_count INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (stat_date, match_tier, rule, fan_field)
+                );
+            """)
+
             conn.commit() # 提交
             logger.info('数据表初始化成功')
             print('数据表初始化成功')
@@ -875,11 +854,6 @@ class DatabaseManager:
             # 清理远古数据：删除 room_type 不属于 match/custom/events 的对局记录
             # （早期数据可能 room_type 为 NULL 或非法值），重建统计前先清掉避免污染。
             self._cleanup_legacy_room_type_records()
-
-            if added_round_score_column or self._guobiao_history_stats_needs_rebuild():
-                from .guobiao.backfill_history_stats import backfill_guobiao_history_stats
-                backfill_guobiao_history_stats(self)
-                self._mark_guobiao_history_stats_rebuilt()
 
         except Exception as e:
             logger.error(f'数据表初始化失败: {e}', exc_info=True)
@@ -890,38 +864,6 @@ class DatabaseManager:
             if conn:
                 cursor.close()
                 conn.close()
-
-    def _guobiao_history_stats_needs_rebuild(self) -> bool:
-        """是否需要重建 guobiao_history_stats + fan_stats（按 match_type 分开排位/自定义 + 局均点赋值）。
-
-        v3：total_win_turn（和巡）改为由 action_ticks 推理 seat 流转重建，故独立 marker。
-        """
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """CREATE TABLE IF NOT EXISTS app_meta (
-                       meta_key VARCHAR(100) PRIMARY KEY,
-                       meta_value TEXT,
-                       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                   )"""
-            )
-            cursor.execute(
-                "SELECT meta_value FROM app_meta WHERE meta_key = %s",
-                ("guobiao_history_stats_rebuilt_v3",),
-            )
-            row = cursor.fetchone()
-            conn.commit()
-            return row is None or row[0] != "1"
-        except Exception:
-            if conn:
-                conn.rollback()
-            return True
-        finally:
-            if conn:
-                cursor.close()
-                self._put_connection(conn)
 
     def _cleanup_legacy_room_type_records(self) -> None:
         """清理远古数据：删除 room_type 不属于 match/custom/events 的对局。
@@ -961,109 +903,6 @@ class DatabaseManager:
                 cursor.close()
                 self._put_connection(conn)
 
-    def _mark_guobiao_history_stats_rebuilt(self) -> None:
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """CREATE TABLE IF NOT EXISTS app_meta (
-                       meta_key VARCHAR(100) PRIMARY KEY,
-                       meta_value TEXT,
-                       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                   )"""
-            )
-            cursor.execute(
-                """
-                INSERT INTO app_meta (meta_key, meta_value)
-                VALUES (%s, %s)
-                ON CONFLICT (meta_key) DO UPDATE SET meta_value = EXCLUDED.meta_value,
-                                                     updated_at = CURRENT_TIMESTAMP
-                """, ("guobiao_history_stats_rebuilt_v3", "1")
-            )
-            conn.commit()
-        except Exception as e:
-            logger.error(f"标记 guobiao_history_stats_rebuilt 失败: {e}", exc_info=True)
-            if conn:
-                conn.rollback()
-        finally:
-            if conn:
-                cursor.close()
-                self._put_connection(conn)
-    
-    def _guobiao_round_score_needs_backfill(self) -> bool:
-        """列已存在但尚未完成牌谱回溯时返回 True（仅执行一次）。"""
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_name = 'guobiao_history_stats'
-                  AND column_name = 'total_round_score'
-                LIMIT 1
-            """)
-            if cursor.fetchone() is None:
-                return False
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS app_meta (
-                    meta_key VARCHAR(64) PRIMARY KEY,
-                    meta_value TEXT NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cursor.execute(
-                "SELECT meta_value FROM app_meta WHERE meta_key = %s",
-                ("guobiao_round_score_backfilled",),
-            )
-            row = cursor.fetchone()
-            if row and row[0] == "1":
-                return False
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM game_player_records
-                    WHERE rule = 'guobiao' AND user_id > 10000000
-                )
-            """)
-            return bool(cursor.fetchone()[0])
-        except Exception as e:
-            logger.warning("检测国标局均点回溯需求失败: %s", e)
-            return False
-        finally:
-            if conn:
-                cursor.close()
-                self._put_connection(conn)
-
-    def _mark_guobiao_round_score_backfilled(self) -> None:
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS app_meta (
-                    meta_key VARCHAR(64) PRIMARY KEY,
-                    meta_value TEXT NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cursor.execute("""
-                INSERT INTO app_meta (meta_key, meta_value)
-                VALUES (%s, %s)
-                ON CONFLICT (meta_key) DO UPDATE SET
-                    meta_value = EXCLUDED.meta_value,
-                    updated_at = CURRENT_TIMESTAMP
-            """, ("guobiao_round_score_backfilled", "1"))
-            conn.commit()
-        except Exception as e:
-            logger.warning("标记国标局均点回溯完成失败: %s", e)
-            if conn:
-                conn.rollback()
-        finally:
-            if conn:
-                cursor.close()
-                self._put_connection(conn)
-    
     # 获取用户名
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """

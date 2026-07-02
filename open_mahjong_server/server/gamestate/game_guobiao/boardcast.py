@@ -372,7 +372,7 @@ def _build_do_action_payload(
         # 客户端据此精确移除对应玩家牌河的弃牌，彻底消除乱序/双同牌歧义。cut 帧等无需此字段。
         "cut_from_player": cut_from_player,
         # 受保护观众鸣牌的显示层延迟（秒）：服务器仍按序发送（wire 不乱序），
-        # 由客户端仅延迟鸣牌 3D 动画/声音，复现“出牌→0.5s→鸣牌”视觉间隔。非受保护观众为 None。
+        # 由客户端仅延迟鸣牌 3D 动画/声音，复现“出牌→0.8s→鸣牌”视觉间隔。非受保护观众为 None。
         "meld_reveal_delay": meld_reveal_delay,
     }
 
@@ -432,7 +432,7 @@ async def broadcast_do_action(
     interval_active = claim_protection_enabled(self) and getattr(self, "_cp_active", False)
     is_cut = bool(action_list) and action_list[0] == "cut"
     is_real_meld = (not is_claim) and bool(action_list) and action_list[0] in REAL_MELD_ACTIONS
-    # 本 do_action 调用前受保护观众是否已揭示过出牌（含 1.5s 超时 flush）。
+    # 本 do_action 调用前受保护观众是否已揭示过出牌（含 claim_protect_delay 超时 flush）。
     # 用于区分：已揭示且看过 is_claim 时实际鸣牌应静默（战术）；追赶 flush 的 cut 始终有声。
     cut_already_revealed = getattr(self, "_cp_cut_flushed", False)
 
@@ -453,7 +453,7 @@ async def broadcast_do_action(
 
             protected = interval_active and is_protected_viewer(self, i)
 
-            # 战术 is_claim：受保护观众在尚未看到出牌前不发送；1.5s 超时或 flush 后已看到出牌则可发送
+            # 战术 is_claim：受保护观众在尚未看到出牌前不发送；超时 flush 或鸣牌前 flush 后已看到出牌则可发送
             if is_claim and protected and not getattr(self, "_cp_cut_flushed", False):
                 continue
 
@@ -462,7 +462,7 @@ async def broadcast_do_action(
             # - 出牌已揭示（含超时后收到 is_claim）：尊重 silent（战术申请后静默执行）。
             if protected and is_real_meld:
                 viewer_silent = silent if cut_already_revealed else False
-                viewer_reveal_delay = protected_meld_delay  # 受保护观众：显示层延迟，复现 0.5s 间隔
+                viewer_reveal_delay = protected_meld_delay  # 受保护观众：显示层延迟，复现 claim_meld_followup_gap 间隔
             else:
                 viewer_silent = silent
                 viewer_reveal_delay = 0.0
@@ -495,7 +495,7 @@ async def broadcast_do_action(
             # 实际鸣牌：不再用追赶协程延迟发送（曾导致受保护观众收到 N+4 在 N+2 之前的乱序）。
             # cut 已在 prepare_protected_meld_for_viewers 里 await flush 先发，此处鸣牌按序 await 发送，
             # 保证受保护观众收到的 do_action 序列 = 逻辑顺序 cut(N) -> meld(N+2) -> 下一巡 cut(N+4)。
-            # 0.5s 视觉间隔由出牌飞行动画自然提供；如需精确间隔后续可改客户端仅延迟动画。
+            # 受保护观众 cut→鸣牌间隔由 claim_meld_followup_gap（默认 0.8s）经 meld_reveal_delay 在客户端延迟动画。
 
             if current_player.user_id in self.game_server.user_id_to_connection:
                 await _send_do_action_payload_to_viewer(self, i, payload)
@@ -506,7 +506,7 @@ async def broadcast_do_action(
             logger.error(f"向玩家 {current_player.username} (user_id={current_player.user_id}) 广播操作信息失败: {e}")
             # 允许广播出错，继续向其他玩家广播
 
-    # 出牌广播完成后，启动 1.5s 超时定时器：到点把暂存出牌发给受保护观众
+    # 出牌广播完成后，启动 claim_protect_delay 超时定时器：到点把暂存出牌发给受保护观众
     if interval_active and is_cut:
         arm_claim_protection_timer(self, _send_do_action_payload_to_viewer)
 

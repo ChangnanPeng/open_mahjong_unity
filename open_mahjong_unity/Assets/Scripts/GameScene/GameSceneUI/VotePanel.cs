@@ -46,6 +46,16 @@ public class VotePanel : MonoBehaviour {
     private float _countdown;
     private bool _localVoted;
 
+    /// <summary>
+    /// 投票已通过或处于暂停流程：须停步时/切牌计时，并忽略服务端迟到的 ask 重新开表。
+    /// </summary>
+    public bool IsGameTimerSuppressed =>
+        _phase == "end_countdown"
+        || _phase == "pause_pending"
+        || _phase == "paused"
+        || _phase == "resume_voting"
+        || _phase == "resume_countdown";
+
     private void Awake() {
         Instance = this;
         _blocks = new[] { block1, block2, block3, block4 };
@@ -155,9 +165,37 @@ public class VotePanel : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 服务端 votes 的 key 是座位 player_index（含机器人空位），
+    /// UI 方块按真人数量顺序展示，须先筛出非 bot 座位再映射到 block。
+    /// </summary>
+    private static List<int> CollectHumanSeatIndices(Dictionary<string, string> votes, int total) {
+        var seats = new List<int>();
+        if (votes != null) {
+            foreach (KeyValuePair<string, string> kv in votes) {
+                if (kv.Value == "bot") continue;
+                if (int.TryParse(kv.Key, out int seat)) {
+                    seats.Add(seat);
+                }
+            }
+            seats.Sort();
+        }
+        if (seats.Count == 0 && total > 0) {
+            for (int i = 0; i < total; i++) {
+                seats.Add(i);
+            }
+        }
+        return seats;
+    }
+
     private void RefreshBlocks(Dictionary<string, string> votes, int total) {
         if (_blocks == null) return;
-        int showCount = Mathf.Clamp(total, 0, _blocks.Length);
+
+        List<int> humanSeats = CollectHumanSeatIndices(votes, total);
+        int showCount = humanSeats.Count > 0
+            ? Mathf.Clamp(humanSeats.Count, 0, _blocks.Length)
+            : Mathf.Clamp(total, 0, _blocks.Length);
+
         for (int i = 0; i < _blocks.Length; i++) {
             Image img = _blocks[i];
             if (img == null) continue;
@@ -166,8 +204,14 @@ public class VotePanel : MonoBehaviour {
             img.gameObject.SetActive(visible);
             if (!visible) continue;
 
-            string key = i.ToString();
-            string v = (votes != null && votes.ContainsKey(key)) ? votes[key] : "none";
+            string v = "none";
+            if (votes != null && i < humanSeats.Count) {
+                string key = humanSeats[i].ToString();
+                if (votes.TryGetValue(key, out string voteVal)) {
+                    v = voteVal;
+                }
+            }
+
             switch (v) {
                 case "agree": img.color = agreeColor; break;
                 case "refuse": img.color = refuseColor; break;

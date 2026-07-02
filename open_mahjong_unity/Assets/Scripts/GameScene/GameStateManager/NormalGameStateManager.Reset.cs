@@ -16,8 +16,6 @@ public partial class NormalGameStateManager {
         CurrentPlayer = null;
         lastAskHandPlayerIndex = -1;
         lastDealTileType = null;
-        pendingBuhuaIsHandSettle = false;
-        pendingKanIsMoGang = true;
         selfRiichiCandidateCuts.Clear();
         selfForbiddenCutTiles.Clear();
         chiCandidates.Clear();

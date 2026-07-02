@@ -185,35 +185,28 @@ public partial class Game3DManager {
         if (actionType == "jiagang" || actionType == "angang") {
             return;
         }
-        string discarderPos = null;
-        int claimedTile = 0;
-        // 优先用派发时捕获的 override（延迟动画下避免共享字段被后续鸣牌覆盖）；
-        // 否则回退到 NormalGameStateManager 的 currentMeld* / lastDiscardPlayerPosition。
-        if (!string.IsNullOrEmpty(discarderPosOverride)) {
-            discarderPos = discarderPosOverride;
-            claimedTile = claimedTileOverride;
-        }
-        else if (NormalGameStateManager.Instance != null) {
+        string discarderPos = discarderPosOverride;
+        int claimedTile = claimedTileOverride;
+
+        // override 缺失（牌谱回放路径）时，退回共享字段解析 discarder/tile。
+        if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
             discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
-            claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
             if (string.IsNullOrEmpty(discarderPos)) {
                 discarderPos = NormalGameStateManager.Instance.lastDiscardPlayerPosition;
             }
-            if (claimedTile <= 0) {
-                claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
-            }
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
         }
 
-        GameObject obj = FindDiscardTileObject(discarderPos, claimedTile);
-        if (obj == null) {
-            // 回放/边界兜底：退回旧全局引用，保持兼容
-            obj = lastCutJiagang3DObject;
-        }
+        // 1) 优先用「该家最新弃牌」的登记对象（出牌 3D Spawn 时登记），校验 tileId 一致；
+        //    退回河里精确搜索，再退全局 lastCutJiagang3DObject。消除同类牌歧义与新弃牌未就位认错旧牌。
+        GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
         if (obj == null) {
             return;
         }
 
-        StopDiscardMoveCoroutine(discarderPos);
+        // 停掉该打牌者的飞牌协程并清登记，避免被认走的牌仍在飞行/落到河里或被重复认走。
+        OnLastDiscardTaken(discarderPos);
         MahjongObjectPool.Instance.Return(-1, obj);
         if (lastCutJiagang3DObject == obj) {
             lastCutJiagang3DObject = null;
@@ -254,9 +247,13 @@ public partial class Game3DManager {
         string actionType,
         int[] combinationMask,
         bool removeDrawSlotFirst = false,
-        int drawSlotTileId = 0) {
+        int drawSlotTileId = 0,
+        string discarderPos = null,
+        int claimedTile = 0) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        TryReturnLastCutTileForMeld(actionType);
+        // 透传 discarder+tile：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
+        // 必须显式传入才能正确认走「该家最新弃牌」并停掉其飞牌协程，避免被鸣牌仍落到河里。
+        TryReturnLastCutTileForMeld(actionType, discarderPos, claimedTile);
         if (removeDrawSlotFirst) {
             yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true, playerPosition);
             ClearRecordPlayerDrawSlotState(playerPosition);

@@ -143,6 +143,7 @@ public partial class GameCanvas : MonoBehaviour {
         playerLeftPanel?.Clear();
         playerTopPanel?.Clear();
         playerRightPanel?.Clear();
+        StopTimeRunning();
         ClearActionButton();
         // 退出前在 SetActive(false) 之前销毁残留的操作文本，避免「补花」等字卡死下次进入
         ClearActionDisplay();

@@ -36,17 +36,13 @@ function reconstructRoundWinTurns(rd) {
       if (typeof tick[2] === 'number') currentSeat = ((tick[2] % 4) + 4) % 4;
     } else if (code === 'ca') {
       if (typeof tick[1] === 'number') currentSeat = ((tick[1] % 4) + 4) % 4;
-    } else if (HU_ACTIONS.has(code)) {
-      if (typeof tick[1] === 'number' && tick.length >= 5) {
-        const huFan = tick[3] || [];
-        const isCuohe = Array.isArray(huFan) && huFan.some((f) => String(f).includes('错和'));
-        if (!isCuohe) {
-          const seat = ((tick[1] % 4) + 4) % 4;
-          bySeat[seat] = (bySeat[seat] || 0) + xunmu;
-        }
-      }
     } else if (code === 'end') {
       break;
+    } else {
+      const hu = parseHuTick(tick);
+      if (hu && !isCuohe(hu.yaku)) {
+        bySeat[hu.winnerSeat] = (bySeat[hu.winnerSeat] || 0) + xunmu;
+      }
     }
   }
   return bySeat;
@@ -79,6 +75,39 @@ function findOriginalIndex(record, userId) {
 
 function isCuohe(huFan) {
   return Array.isArray(huFan) && huFan.some((f) => String(f).includes('错和'));
+}
+
+/**
+ * 统一解析和牌 tick（国标 hu_* 与日麻 hu_riichi）。
+ * 日麻: [hu_riichi, seat, hu_class, han, fu, yaku[], score_changes[], ...]
+ * 其他: [hu_class, seat, fanScore, yaku[], score_changes[], ...]
+ */
+function parseHuTick(tick) {
+  if (!Array.isArray(tick) || tick.length === 0) return null;
+  const code = tick[0];
+  if (code === 'hu_riichi' && tick.length >= 7) {
+    const huClass = tick[2];
+    if (typeof huClass !== 'string' || !HU_ACTIONS.has(huClass)) return null;
+    if (typeof tick[1] !== 'number') return null;
+    return {
+      huClass,
+      winnerSeat: ((tick[1] % 4) + 4) % 4,
+      fanScore: Number(tick[3]) || 0,
+      yaku: tick[5] || [],
+      scoreChanges: toScoreChanges(tick[6]),
+    };
+  }
+  if (HU_ACTIONS.has(code) && tick.length >= 5) {
+    if (typeof tick[1] !== 'number') return null;
+    return {
+      huClass: code,
+      winnerSeat: ((tick[1] % 4) + 4) % 4,
+      fanScore: Number(tick[2]) || 0,
+      yaku: tick[3] || [],
+      scoreChanges: toScoreChanges(tick[4]),
+    };
+  }
+  return null;
 }
 
 /**
@@ -115,15 +144,14 @@ function analyzeOneRecord(record, userId, acc) {
         hadFulu = true;
       }
 
-      if (!HU_ACTIONS.has(code) || tick.length < 5) continue;
-      const sc = toScoreChanges(tick[4]);
+      const hu = parseHuTick(tick);
+      if (!hu) continue;
+      const sc = hu.scoreChanges;
       if (!sc || mySeat < 0 || mySeat >= sc.length) continue;
 
-      const huFan = tick[3] || [];
-      const huScore = Number(tick[2]) || 0;
       const myDelta = sc[mySeat];
 
-      if (isCuohe(huFan)) {
+      if (isCuohe(hu.yaku)) {
         if (myDelta < 0) acc.cuohe_count += 1;
         finalScore += myDelta;
         continue;
@@ -132,15 +160,15 @@ function analyzeOneRecord(record, userId, acc) {
       finalScore += myDelta;
 
       if (myDelta > 0) {
-        if (code === 'hu_self') acc.self_draw_count += 1;
+        if (hu.huClass === 'hu_self') acc.self_draw_count += 1;
         else acc.deal_in_win_count += 1; // 荣和计数（并入 win_count）
-        acc.total_fan_score += huScore;
-      } else if (RON_ACTIONS.has(code) && myDelta < 0) {
+        acc.total_fan_score += hu.fanScore;
+      } else if (RON_ACTIONS.has(hu.huClass) && myDelta < 0) {
         // 放铳：取本局负分最小者为放铳方
         const neg = sc.filter((x) => x < 0);
         if (neg.length && myDelta === Math.min(...neg)) {
           acc.deal_in_count += 1;
-          acc.total_fangchong_score += huScore;
+          acc.total_fangchong_score += hu.fanScore;
         }
       }
     }
@@ -220,8 +248,9 @@ function computeFinalScore(record, originalIndex) {
     const seats = rd.seats || [0, 1, 2, 3];
     const mySeat = seatForOriginal(seats, originalIndex);
     for (const tick of rd.action_ticks || []) {
-      if (!Array.isArray(tick) || !HU_ACTIONS.has(tick[0]) || tick.length < 5) continue;
-      const sc = toScoreChanges(tick[4]);
+      const hu = parseHuTick(tick);
+      if (!hu) continue;
+      const sc = hu.scoreChanges;
       if (!sc || mySeat < 0 || mySeat >= sc.length) continue;
       total += sc[mySeat];
     }

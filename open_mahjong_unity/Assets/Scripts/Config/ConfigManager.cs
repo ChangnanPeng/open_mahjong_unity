@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Runtime.InteropServices;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 public class ConfigManager : MonoBehaviour {
     public static ConfigManager Instance { get; private set; }
@@ -16,22 +18,24 @@ public class ConfigManager : MonoBehaviour {
     public static int releaseVersion;
     public static string githubUrl;
     public static string documentUrl;
+    public static string mobileDownloadUrl;
 
     static ConfigManager() {
         if (Debug) {
             // 开发接口地址
             gameUrl = "ws://localhost:8081/game"; // 游戏服务器地址(连接到OMU服务器)
             chatUrl = "ws://localhost:8083/chat"; // 聊天服务器地址(连接到OMUChat服务器)
-            releaseVersion = 12; // 发行版号(验证客户端-服务器版本是否一致)
+            releaseVersion = 13; // 发行版号(验证客户端-服务器版本是否一致)
         } else {
             // 生产环境接口地址
             gameUrl = "wss://salasasa.cn/game";
             chatUrl = "wss://salasasa.cn/chat";
-            releaseVersion = 12;
+            releaseVersion = 13;
         }
         // 官方服务器链接网址 用于访问转到 （不影响游戏进程）
-        clientVersion = "0.4.70.0"; // 仅存储 [大版本号.发行版号.开发版本.开发小版本号]
+        clientVersion = "0.4.71.0"; // 仅存储 [大版本号.发行版号.开发版本.开发小版本号]
         webUrl = "https://salasasa.cn"; // 访问转到
+        mobileDownloadUrl = "https://salasasa.cn/mobile-download"; // Android APK 版本更新下载页
         documentUrl = "https://www.yuque.com/xelnaga-yjcgq/zkwfgr/lusmvid200iez36q?singleDoc#"; // 访问转到
         githubUrl = "https://github.com/xelnagamiao/open_mahjong_unity"; // 访问转到
     }
@@ -157,6 +161,11 @@ public class ConfigManager : MonoBehaviour {
         QualitySettings.vSyncCount = 0;
         ApplyTargetFrameRate();
         Application.runInBackground = true;
+        ApplyAntialiasingByPlatform();
+    }
+
+    private void Start() {
+        ApplyCameraAntialiasingByPlatform();
     }
 
     public void SetUserConfig(int volume) {
@@ -352,6 +361,42 @@ public class ConfigManager : MonoBehaviour {
 #else
         Application.targetFrameRate = TargetFrameRate;
 #endif
+    }
+
+    // Windows / WebGL / iOS / Editor：URP MSAA 4x；Android：MSAA 关 + 相机 FXAA 兜底。
+    private const int MsaaSampleCountHigh = 4;
+    // Android 保留 6/28 PR#50 规避：MSAA 会强制中间 render pass，Mali Valhall Vulkan 上触发 Canvas 丢失。
+    private const int MsaaSampleCountDisabled = 1;
+
+    private static void ApplyAntialiasingByPlatform() {
+        if (!(UniversalRenderPipeline.asset is UniversalRenderPipelineAsset urpAsset)) return;
+#if UNITY_ANDROID && !UNITY_EDITOR
+        urpAsset.msaaSampleCount = MsaaSampleCountDisabled;
+#else
+        urpAsset.msaaSampleCount = MsaaSampleCountHigh;
+#endif
+    }
+
+    private static void ApplyCameraAntialiasingByPlatform() {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        ApplyCameraFxaa(true);
+#else
+        ApplyCameraFxaa(false);
+#endif
+    }
+
+    private static void ApplyCameraFxaa(bool enable) {
+        var cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+        foreach (var camera in cameras) {
+            if (camera == null || !camera.isActiveAndEnabled) continue;
+            if (!camera.TryGetComponent<UniversalAdditionalCameraData>(out var cameraData)) continue;
+            if (enable) {
+                cameraData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+                cameraData.antialiasingQuality = AntialiasingQuality.High;
+            } else {
+                cameraData.antialiasing = AntialiasingMode.None;
+            }
+        }
     }
 
     private static int NormalizeTargetFrameRate(int frameRate) {

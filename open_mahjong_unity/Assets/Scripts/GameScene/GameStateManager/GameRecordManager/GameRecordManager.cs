@@ -387,6 +387,10 @@ public partial class GameRecordManager : MonoBehaviour {
         Game3DManager.Instance.StopAllRunningAnimations();
         // 清理3D桌面
         Game3DManager.Instance.Clear3DTile();
+        // 清空 2D 换牌队列，避免上局未跑完的 GetCard/Rearrange 协程在重建后插入额外手牌
+        if (GameCanvas.Instance != null) {
+            GameCanvas.Instance.ClearHandCardQueue();
+        }
 
         // 重置局内行动节点
         currentNode = 0;
@@ -615,8 +619,13 @@ public partial class GameRecordManager : MonoBehaviour {
         InitGameRound(roundIndex);
         if (IsSpectatorSession) {
             if (!fromUserAction && IsLiveSpectatorMode) {
-                // 直播观战自动进入下一局：对齐到该局最新 tick，保持直播模式
-                SyncSpectatorLiveToRoundTail(roundIndex);
+                // 直播观战自动进入下一局：从该局 node 0 由 AutoPlay 按序逐步播放已有 tick，动画照播，不跳转。
+                SetSpectatorModeFlags(true);
+                int tickCount = 0;
+                if (gameRecord.gameRound.rounds.TryGetValue(roundIndex, out Round rd) && rd.actionTicks != null) {
+                    tickCount = rd.actionTicks.Count;
+                }
+                waitingForMoreTicks = tickCount == 0;
             } else if (!fromUserAction) {
                 RefreshSpectatorModeByNodePosition();
             }
@@ -813,6 +822,9 @@ public partial class GameRecordManager : MonoBehaviour {
             int discardPlayerIndex = lastDiscardPlayerIndex >= 0 ? lastDiscardPlayerIndex : previousPlayerIndex;
             string relative = GetRelativePosition(actingPlayerIndex, discardPlayerIndex);
             int[] combinationMask = GameRecordMeldCodec.BuildMingpaiMask(action, mingpaiTile, removedTiles, relative);
+            // 透传被认走的打牌者座位 + 牌 id：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
+            // 3D 鸣牌认走弃牌需显式传入才能命中「该家最新弃牌」并停掉飞牌协程，避免被鸣牌仍落到河里。
+            string meldDiscarderPos = indexToPosition.ContainsKey(discardPlayerIndex) ? indexToPosition[discardPlayerIndex] : null;
             currentRecordPlayer.combinationTiles.Add(GameRecordMeldCodec.BuildCombinationTarget(action, mingpaiTile));
             currentRecordPlayer.combinationMasks.Add(combinationMask);
             currentRecordPlayer.showHandDrawSlotActive = false;
@@ -821,7 +833,8 @@ public partial class GameRecordManager : MonoBehaviour {
             if (currentPlayerPosition == "self") {
                 GameCanvas.Instance.ChangeHandCards("RemoveCombinationCard", 0, removedTiles.ToArray(), null);
             }
-            Game3DManager.Instance.Change3DTile(displayAction, 0, removedTiles.Count, currentPlayerPosition, false, combinationMask);
+            Game3DManager.Instance.Change3DTile(displayAction, 0, removedTiles.Count, currentPlayerPosition, false, combinationMask,
+                meldDiscarderPos: meldDiscarderPos, meldClaimedTile: mingpaiTile);
             GameCanvas.Instance.ShowActionDisplay(currentPlayerPosition, displayAction);
             if (action == "g") {
                 PlayRecordGangScoreChanges(tick);

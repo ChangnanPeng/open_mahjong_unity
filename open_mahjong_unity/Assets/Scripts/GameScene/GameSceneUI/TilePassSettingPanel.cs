@@ -4,9 +4,10 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 牌张设置：勾选牌张后不询问对应弃牌/加杠牌的一切鸣牌（含荣和）。
-/// 层级：HintRow + 4 排牌张 + 1 排选项（全选/行为开关）。
-/// 选项排列：所有牌张、万/条/饼/字/红宝、不吃、不碰、不明杠、不点和、不自摸、不抢杠。
+/// 牌张设置子面板。
+/// - 勾选牌张：命中河牌/加杠牌时不询问任何操作（含荣和/抢杠）。
+/// - 不吃/不碰/不明杠：与主面板「自动过牌」同语义，仅过滤鸣牌，不过和牌。
+/// - 不点和/不自摸/不抢杠：仅在「自动胡牌」开启时，分别阻止自动荣和/自摸/抢杠和。
 /// </summary>
 public class TilePassSettingPanel : MonoBehaviour {
     private static readonly int[][] RowTileIds = {
@@ -112,6 +113,7 @@ public class TilePassSettingPanel : MonoBehaviour {
         gameObject.SetActive(visible);
     }
 
+    /// <summary>当前询问牌是否在跳过列表中（命中则直接 pass，含荣和）。</summary>
     public bool ShouldAutoPassForCurrentDiscard() {
         NormalGameStateManager gsm = NormalGameStateManager.Instance;
         if (gsm == null || gsm.currentAskCutTileId <= 0) return false;

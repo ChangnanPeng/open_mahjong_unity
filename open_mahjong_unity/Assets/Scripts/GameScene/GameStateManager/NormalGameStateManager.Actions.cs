@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -32,7 +31,7 @@ public partial class NormalGameStateManager {
     }
 
     // 询问鸣牌操作 鸣牌操作包括 吃 碰 杠 胡 跳过
-    public void AskMingPaiAction(int remaining_time,string[] action_list,int cut_tile, Dictionary<string, int[][]> chi_candidates = null){
+    public void AskMingPaiAction(int remaining_time,string[] action_list,int cut_tile, Dictionary<string, int[][]> chi_candidates = null, bool isTacticalRecheck = false){
         TryResumeAfterCuoheContinue();
         TryResumeAfterSichuanContinue();
         chiCandidates = chi_candidates ?? new Dictionary<string, int[][]>();
@@ -42,7 +41,7 @@ public partial class NormalGameStateManager {
         currentAskCutTileId = cut_tile;
         if (action_list.Length > 0){
             allowActionList = BuildMingPaiAllowActionList(action_list);
-            SwitchCurrentPlayer("self","askMingPaiAction",remaining_time);
+            SwitchCurrentPlayer("self","askMingPaiAction",remaining_time, isTacticalRecheck: isTacticalRecheck);
         }
     }
 
@@ -62,10 +61,12 @@ public partial class NormalGameStateManager {
             return;
         }
         // isSilent：战术鸣牌申请阶段已发声/动画，实际行为仅同步状态
+        float meldRevealDelaySec = meld_reveal_delay ?? 0f;
         foreach (string action in action_list) {
 
             Debug.Log($"执行DoAction操作: {action} (silent={isSilent})");
-            if (!isSilent) {
+            bool deferMeldFeedback = !isSilent && meldRevealDelaySec > 0f && IsChiPengMingGangAction(action);
+            if (!isSilent && !deferMeldFeedback) {
                 SoundManager.Instance.PlayActionSound(GetCardPlayer, action);
                 // 切牌物理音改在 3D 出牌手牌队列中播放，避免吃牌后立刻收到 cut 消息时声音早于出牌动画
                 if (action != "cut") {
@@ -81,35 +82,19 @@ public partial class NormalGameStateManager {
                 case "deal_buhua_tile":
                     lastDealTileType = action;
                     remainTiles--; // 剩余牌数减少
-                    // 手补/手杠后的岭上摸牌：仅延迟显示，状态立即更新；追赶时跳过延迟
-                    bool isHandSettleDraw = (action == "deal_buhua_tile" && pendingBuhuaIsHandSettle)
-                                            || (action == "deal_gang_tile" && !pendingKanIsMoGang);
-                    pendingBuhuaIsHandSettle = false;
-                    pendingKanIsMoGang = true;
-                    bool delayGetCardDisplay = isHandSettleDraw && !IsCatchingUpFromBacklog();
                     if (GetCardPlayer == "self"){
                         if (!deal_tile.HasValue) {
                             Debug.LogError($"摸牌操作缺少 deal_tile: action={action}, player={action_player}");
                             break;
                         }
                         selfHandTiles.Add(deal_tile.Value);
-                        if (delayGetCardDisplay) {
-                            StartCoroutine(DelayedHandSettleGetCard(GetCardPlayer, deal_tile.Value, true));
-                        }
-                        else {
-                            GameCanvas.Instance.ChangeHandCards("GetCard", deal_tile.Value, null, null);
-                            Game3DManager.Instance.Change3DTile("GetCard", deal_tile.Value, 0, GetCardPlayer, false, null);
-                        }
+                        GameCanvas.Instance.ChangeHandCards("GetCard", deal_tile.Value, null, null);
+                        Game3DManager.Instance.Change3DTile("GetCard", deal_tile.Value, 0, GetCardPlayer, false, null);
                     }
                     else{
                         player_to_info[GetCardPlayer].hand_tiles_count++;
-                        if (delayGetCardDisplay) {
-                            StartCoroutine(DelayedHandSettleGetCard(GetCardPlayer, deal_tile ?? 0, false));
-                        }
-                        else {
-                            // 服务端对他人不下发 deal_tile；3D 仅增加背面牌，tileId 传 0
-                            Game3DManager.Instance.Change3DTile("GetCard", deal_tile ?? 0, 0, GetCardPlayer, false, null);
-                        }
+                        // 服务端对他人不下发 deal_tile；3D 仅增加背面牌，tileId 传 0
+                        Game3DManager.Instance.Change3DTile("GetCard", deal_tile ?? 0, 0, GetCardPlayer, false, null);
                     }
                     break;
                 
@@ -141,7 +126,6 @@ public partial class NormalGameStateManager {
                 case "buhua":
                     int buhua_tile_id = buhua_tile.Value;
                     bool isMoBuhua = is_mo_buhua == true;
-                    pendingBuhuaIsHandSettle = !isMoBuhua;
                     player_to_info[GetCardPlayer].huapai_list.Add(buhua_tile_id);
                     if (GetCardPlayer == "self"){
                         selfHandTiles.Remove(buhua_tile_id);
@@ -181,7 +165,6 @@ public partial class NormalGameStateManager {
                         int normJia = GameRecordMeldCodec.NormalizeCombinationTileId(combination_target);
                         int? actualJia = GameRecordMeldCodec.ExtractTileByFlag(combination_mask, 3);
                         bool isMoGang = is_mo_gang == true;
-                        pendingKanIsMoGang = isMoGang;
                         int tile_id = actualJia ?? normJia;
                         if (GetCardPlayer == "self"){
                             var removed = GameRecordMeldCodec.RemoveOneJiagangTile(
@@ -200,7 +183,6 @@ public partial class NormalGameStateManager {
                     }
                     else if (action == "angang"){
                         bool isMoGang = is_mo_gang == true;
-                        pendingKanIsMoGang = isMoGang;
                         player_to_info[GetCardPlayer].combination_tiles.Add(combination_target);
                         AppendCombinationMask(player_to_info[GetCardPlayer], combination_mask);
                         List<int> angangRemoveList = GameRecordMeldCodec.ExtractHandTilesFromMask(combination_mask);
@@ -236,14 +218,12 @@ public partial class NormalGameStateManager {
                         else{
                             player_to_info[GetCardPlayer].hand_tiles_count -= need_remove_list.Count;
                         }
-                        // 明杠均为手杠（杠的是河牌，is_mo_gang 通常为 null/false）→ 杠后岭上摸牌需显示延迟
-                        if (action == "gang") {
-                            pendingKanIsMoGang = (is_mo_gang == true);
-                        }
                         Game3DManager.Instance.Change3DTile(action, 0, need_remove_list.Count, GetCardPlayer, false, combination_mask,
-                            meldRevealDelay: meld_reveal_delay ?? 0f,
+                            meldRevealDelay: meldRevealDelaySec,
                             meldDiscarderPos: currentMeldDiscarderPos,
-                            meldClaimedTile: currentMeldClaimedTileId);
+                            meldClaimedTile: currentMeldClaimedTileId,
+                            meldFeedbackAction: deferMeldFeedback ? action : null,
+                            meldFeedbackRoomRule: deferMeldFeedback ? roomRule : null);
                     }
                     break;
                 default:
@@ -401,25 +381,6 @@ public partial class NormalGameStateManager {
         }
     }
 
-    /// <summary>手补/手杠后岭上摸牌的显示延迟协程：等待 HandSettleGetCardDelaySec 后再触发 2D/3D GetCard 显示。
-    /// 状态（selfHandTiles / hand_tiles_count / remainTiles）已在 DoAction 主流程立即更新，此处仅延迟视觉，
-    /// 与鸣牌 meldRevealDelay 同模式；追赶时由调用方判断 IsCatchingUpFromBacklog 跳过、不启动本协程。</summary>
-    private IEnumerator DelayedHandSettleGetCard(string playerPosition, int tileId, bool isSelf) {
-        yield return new WaitForSeconds(HandSettleGetCardDelaySec);
-        if (isSelf) {
-            GameCanvas.Instance.ChangeHandCards("GetCard", tileId, null, null);
-        }
-        if (Game3DManager.Instance != null) {
-            Game3DManager.Instance.Change3DTile("GetCard", tileId, 0, playerPosition, false, null);
-        }
-    }
-
-    /// <summary>网络消息队列是否积压（≥2 条未处理）：客户端正在追赶补帧时跳过装饰性显示延迟，
-    /// 避免逻辑瞬间同步完、3D/2D 却逐条卡 0.3s。与 Game3DManager.IsCatchingUpFromBacklog 同口径。</summary>
-    private static bool IsCatchingUpFromBacklog() {
-        return NetworkManager.Instance != null && NetworkManager.Instance.IsBacklogged;
-    }
-
     private static List<string> BuildMingPaiAllowActionList(string[] action_list) {
         string[] allowOtherActionCheck = new string[] {
             "chi_left", "chi_mid", "chi_right", "peng", "gang",
@@ -444,6 +405,19 @@ public partial class NormalGameStateManager {
         }
         // 申请-停顿期间隐藏本家操作按钮；可抢断玩家会在 ask_other 再次询问时重新弹出按钮。
     GameCanvas.Instance.ClearActionButton();
+    }
+
+    private static bool IsChiPengMingGangAction(string action) {
+        switch (action) {
+            case "chi_left":
+            case "chi_mid":
+            case "chi_right":
+            case "peng":
+            case "gang":
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>
