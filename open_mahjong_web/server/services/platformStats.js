@@ -3,6 +3,7 @@ const { GUOBIAO_FAN_KEYS } = require('../constants/guobiaoFanDict');
 
 const LADDER_TIERS = ['beginner', 'intermediate', 'advanced', 'mcrpl'];
 const STAT_DATE_EXPR = "((created_at AT TIME ZONE 'Asia/Shanghai') - interval '4 hours')::date";
+const CURRENT_STAT_DATE_EXPR = "((NOW() AT TIME ZONE 'Asia/Shanghai') - interval '4 hours')::date";
 
 const SCENE_METRIC_SUMS = `
   COUNT(*)::int AS total_games,
@@ -218,6 +219,8 @@ async function querySceneDailyGames({ dateFrom, dateTo, asOfDate, tier, gameType
 
 module.exports = {
   LADDER_TIERS,
+  STAT_DATE_EXPR,
+  CURRENT_STAT_DATE_EXPR,
   formatStatDate,
   mapTotalsRow,
   buildSceneTotalsQuery,

@@ -6,7 +6,11 @@ using TMPro;
 
 /// <summary>
 /// 自动操作面板：主开关 + 牌张设置子面板。
-/// 主面板各开关相互独立，无级联；牌张设置中的「不吃/不碰/不明杠」与主面板「自动过牌」语义相同（仅过滤鸣牌，不过和牌）。
+/// 「自动过牌」与牌张设置中的「不吃/不碰/不明杠」联动：
+///   - 开启自动过牌 → 级联勾选不吃、不碰、不明杠；
+///   - 三者全部勾选时视同自动过牌亮起；
+///   - 反选任一不吃/不碰/不明杠 → 自动过牌变暗。
+/// 鸣牌过滤只剔除对应鸣牌项；和牌不受影响。全部可操作项被筛除时才自动 pass。
 /// </summary>
 public class AutoAction : MonoBehaviour{
     public static AutoAction Instance { get; private set; }
@@ -14,7 +18,7 @@ public class AutoAction : MonoBehaviour{
     [SerializeField] private TMP_Text arrangeHandCardsText; // 自动排列手牌文本
     [SerializeField] private TMP_Text autoHepaiText; // 自动胡牌文本
     [SerializeField] private TMP_Text autoCutCardText; // 自动出牌文本
-    [SerializeField] private TMP_Text autoPassText; // 自动过牌（= 鸣牌时自动不吃碰杠，不过和牌）
+    [SerializeField] private TMP_Text autoPassText; // 自动过牌（级联不吃/不碰/不明杠；全部可操作项被筛除才自动 pass）
     [SerializeField] private TMP_Text autoBuhuaText; // 自动补花文本
 
     [Header("鸣牌展开")]
@@ -32,7 +36,7 @@ public class AutoAction : MonoBehaviour{
     private bool isAutoBuhua = true; // 是否自动补花
     private bool isAutoHepai = false; // 是否自动胡牌
     private bool isAutoCut = false; // 是否自动出牌
-    private bool isAutoPass = false; // 自动过牌：鸣牌询问时自动 pass，仅跳过吃/碰/明杠，有和牌选项时不过
+    private bool isAutoPass = false; // 自动过牌：与「不吃+不碰+不明杠」全选联动；筛光鸣牌后无剩余可操作项才自动 pass
     private bool isMingPaiPanelExpanded = false; // 鸣牌面板是否展开
     private bool isAutoCutLocked = false; // 立直后自动摸切锁定
 
@@ -44,7 +48,7 @@ public class AutoAction : MonoBehaviour{
     public bool IsAutoPass { get => isAutoPass; }
     public bool IsAutoCutLocked { get => isAutoCutLocked; }
 
-    // 牌张设置 · 不吃/不碰/不明杠（与主面板「自动过牌」同语义，仅过滤鸣牌）
+    // 牌张设置 · 不吃/不碰/不明杠（与「自动过牌」联动；仅过滤对应鸣牌，不过和牌）
     public bool IsPassChi => GetTilePassPanel()?.PassChi ?? false;
     public bool IsPassPeng => GetTilePassPanel()?.PassPeng ?? false;
     public bool IsPassMingGang => GetTilePassPanel()?.PassMingGang ?? false;
@@ -103,6 +107,7 @@ public class AutoAction : MonoBehaviour{
         if (tilePassSettingPanel != null) {
             tilePassSettingPanel.Initialize();
             tilePassSettingPanel.SetPanelVisible(false);
+            tilePassSettingPanel.OnMeldPassOptionsChanged = SyncAutoPassFromMeldFilters;
         }
         isMingPaiPanelExpanded = false;
 
@@ -237,9 +242,25 @@ public class AutoAction : MonoBehaviour{
         UpdateTextColor(autoCutCardText, isAutoCut);
     }
 
-    // 切换自动过牌（鸣牌时自动不吃碰杠；有和牌选项时不过，留给玩家或「自动胡牌」处理）
+    // 切换自动过牌：级联同步「不吃/不碰/不明杠」三选项
     private void ToggleAutoPass(){
-        ToggleAutoOption(ref isAutoPass, autoPassText);
+        bool enabling = !isAutoPass;
+        isAutoPass = enabling;
+        UpdateTextColor(autoPassText, isAutoPass);
+        TilePassSettingPanel panel = GetTilePassPanel();
+        if (panel != null) {
+            panel.SetMeldPassOptions(enabling, enabling, enabling);
+        }
+    }
+
+    /// <summary>根据牌张设置中「不吃/不碰/不明杠」是否全选，同步主面板「自动过牌」显示。</summary>
+    private void SyncAutoPassFromMeldFilters() {
+        bool allMeldPassOn = IsPassChi && IsPassPeng && IsPassMingGang;
+        if (isAutoPass == allMeldPassOn) {
+            return;
+        }
+        isAutoPass = allMeldPassOn;
+        UpdateTextColor(autoPassText, isAutoPass);
     }
 
     // 切换自动补花

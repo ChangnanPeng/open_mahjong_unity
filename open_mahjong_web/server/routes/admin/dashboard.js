@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/database');
+const { STAT_DATE_EXPR, CURRENT_STAT_DATE_EXPR } = require('../../services/platformStats');
 
 router.get('/summary', async (req, res) => {
   try {
@@ -15,7 +16,7 @@ router.get('/summary', async (req, res) => {
     const gamesToday = await pool.query(`
       SELECT COUNT(*)::int AS cnt
       FROM game_records
-      WHERE created_at >= CURRENT_DATE
+      WHERE ${STAT_DATE_EXPR} = ${CURRENT_STAT_DATE_EXPR}
     `);
 
     const rankPlayers = await pool.query(`

@@ -54,7 +54,7 @@ public partial class NormalGameStateManager {
             GameCanvas.Instance.SetActionButton(allowActionList);
             // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
             GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
-            // 鸣牌询问：自动过牌(=不吃碰杠) / 自动胡牌 / 牌张设置 任一相关项开启则启动协程
+            // 鸣牌询问：自动过牌 / 自动胡牌 / 牌张设置 / 任一鸣牌过滤项 开启则启动协程
             if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
                 StartWaitAutoAction("AutoMingPaiAction");
             }
