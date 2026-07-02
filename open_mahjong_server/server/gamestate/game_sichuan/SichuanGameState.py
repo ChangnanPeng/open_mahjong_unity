@@ -29,6 +29,7 @@ from .boardcast import (
 from ..public.logic_common import next_current_num, assign_strict_final_ranks
 from .init_tiles import init_sichuan_tiles
 from ..public.spectator_rules import too_many_ai_for_spectator
+from ..public.vote_manager import vote_checkpoint
 from ..public.game_record_manager import (
     init_game_record, init_game_round, player_action_record_deal,
     player_action_record_round_end, end_game_record, capture_player_entry_order,
@@ -150,6 +151,8 @@ class SichuanGameState:
         self.room_rule = room_data["room_rule"]
         self.room_type = room_data["room_type"]
         self.sub_rule = room_data.get("sub_rule", "sichuan/standard")
+        self.match_tier = room_data.get("match_tier")
+        self.event_id = room_data.get("event_id")
 
         self.room_random_seed = room_data.get("random_seed", 0)
         self.open_cuohe = False
@@ -158,8 +161,8 @@ class SichuanGameState:
         self.claim_protection = room_data.get("claim_protection", True)
         self.tactical_pre_grace_delay = room_data.get("tactical_pre_grace_delay", 0.5)
         self.tactical_grace_seconds = room_data.get("tactical_grace_seconds", 5.0)
-        self.claim_protect_delay = room_data.get("claim_protect_delay", 0.5)
-        self.claim_meld_followup_gap = room_data.get("claim_meld_followup_gap", 0.5)
+        self.claim_protect_delay = room_data.get("claim_protect_delay", 1.3)
+        self.claim_meld_followup_gap = room_data.get("claim_meld_followup_gap", 0.8)
         self.blood_battle = room_data.get("blood_battle", True)
         self.hepai_limit = 1
         self.tourist_limit = room_data.get("tourist_limit", False)
@@ -312,6 +315,10 @@ class SichuanGameState:
         init_game_record(self)
         self.game_record["game_title"]["sub_rule"] = self.sub_rule
         self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
+        if self.match_tier is not None:
+            self.game_record["game_title"]["match_tier"] = self.match_tier
+        if self.event_id is not None:
+            self.game_record["game_title"]["event_id"] = self.event_id
         self.dealer_index = 0
 
         while self.current_round <= self.max_round * 4:
@@ -332,6 +339,7 @@ class SichuanGameState:
             await self.wait_action()
 
             while self.game_status != "END":
+                await vote_checkpoint(self)
                 match self.game_status:
                     case "deal_card":
                         nxt = self._next_active_index(self.current_player_index)

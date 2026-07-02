@@ -6,6 +6,10 @@ using UnityEngine;
 public partial class NormalGameStateManager {
     private Coroutine waitAutoActionCoroutine;
 
+    private static readonly HashSet<string> HuActionNames = new HashSet<string> {
+        "hu", "hu_first", "hu_second", "hu_third"
+    };
+
     /// <summary>取消未完成的自动操作协程，避免手动/自动 ChooseAction 后过期协程再次 ClearAction。</summary>
     public void CancelWaitAutoAction(string reason) {
         if (waitAutoActionCoroutine == null) {
@@ -25,7 +29,56 @@ public partial class NormalGameStateManager {
         waitAutoActionCoroutine = null;
     }
 
-    // 等待自动操作
+    private static bool IsHuAction(string action) {
+        return HuActionNames.Contains(action);
+    }
+
+    private static string GetFirstHuAction(IEnumerable<string> actions) {
+        return actions.FirstOrDefault(IsHuAction);
+    }
+
+    /// <summary>
+    /// 鸣牌询问：应用「不吃/不碰/不明杠」逐项过滤后，仍可供选择的操作（不含 pass）。
+    /// 和牌 action 不参与鸣牌过滤，始终保留在结果中。
+    /// </summary>
+    private static List<string> BuildRemainingActionsAfterMeldFilter(List<string> source) {
+        List<string> remaining = new List<string>(source);
+        remaining.RemoveAll(a => a == "pass");
+        if (AutoAction.Instance.IsPassChi) {
+            remaining.RemoveAll(a => a == "chi_left" || a == "chi_mid" || a == "chi_right");
+        }
+        if (AutoAction.Instance.IsPassPeng) {
+            remaining.RemoveAll(a => a == "peng");
+        }
+        if (AutoAction.Instance.IsPassMingGang) {
+            remaining.RemoveAll(a => a == "gang");
+        }
+        return remaining;
+    }
+
+    /// <summary>
+    /// 鸣牌询问是否应自动 pass：仅当服务器给出的全部可操作项（不含 pass）均被筛除时为 true。
+    /// 例：可吃可碰可和且只开「不吃/不碰」→ 和牌仍在，返回 false，等待玩家或「自动胡牌」。
+    /// 「不吃+不碰+不明杠」全开启等效于主面板「自动过牌」，但仍不因和牌选项而自动 pass。
+    /// </summary>
+    private static bool ShouldAutoPassMingPaiAsk(List<string> allowActions) {
+        bool hasOfferedAction = allowActions.Any(a => a != "pass");
+        if (!hasOfferedAction) {
+            return false;
+        }
+        return BuildRemainingActionsAfterMeldFilter(allowActions).Count == 0;
+    }
+
+    /// <summary>
+    /// 等待并执行自动操作协程。
+    /// AutoMingPaiAction（他人切牌/加杠后的鸣牌询问）优先级：
+    ///   1. 牌张设置命中 → 直接 pass（含荣和，最高优先级）
+    ///   2. 自动和牌（受不点和/不抢杠约束）
+    ///   3. 鸣牌过滤后无任何剩余可操作项 → 自动 pass
+    ///   4. 仍有剩余项（含手动和牌）→ 不自动操作，等待玩家
+    /// AutoHandAction（自己回合手牌询问）优先级：
+    ///   1. 自动自摸（受不自摸约束） 2. 自动补花 3. 自动出牌
+    /// </summary>
     private IEnumerator WaitAutoAction(string action){
         if (IsRealtimeSpectator) {
             yield break;
@@ -34,43 +87,34 @@ public partial class NormalGameStateManager {
         try {
             // 鸣牌操作自动执行
             if (action == "AutoMingPaiAction"){
-                List<string> allowHupaiAction = new List<string>{"hu", "hu_first", "hu_second", "hu_third"};
-                string actualHupaiAction = allowActionList.FirstOrDefault(a => allowHupaiAction.Contains(a));
+                string actualHupaiAction = GetFirstHuAction(allowActionList);
+                bool hasHuAction = !string.IsNullOrEmpty(actualHupaiAction);
 
-                // 牌张设置：勾选牌自动过（含荣和；抢杠且未开「无视抢杠」时仍正常询问）
+                // 牌张设置最优先：命中牌张时不询问任何操作（含荣和）
                 if (AutoAction.Instance.ShouldAutoPassForCurrentDiscard()){
                     yield return new WaitForSeconds(0.2f);
                     GameCanvas.Instance.ChooseAction("pass", 0);
                     yield break;
                 }
-                // 自动荣和（牌张未命中时）
-                else if (AutoAction.Instance.ShouldAutoWinRon() && !string.IsNullOrEmpty(actualHupaiAction)){
-                    yield return new WaitForSeconds(0.2f);
-                    GameCanvas.Instance.ChooseAction(actualHupaiAction, 0);
-                    yield break;
-                }
-                // 无和牌选项时的其余自动过逻辑
-                else if (string.IsNullOrEmpty(actualHupaiAction)){
-                    if (AutoAction.Instance.IsAutoPass){
+
+                // 自动和牌
+                if (hasHuAction){
+                    bool isQiangGangAsk = Instance != null && IsQiangGangAsk;
+                    bool shouldAutoWin = isQiangGangAsk
+                        ? AutoAction.Instance.ShouldAutoWinRobKong()
+                        : AutoAction.Instance.ShouldAutoWinRon();
+                    if (shouldAutoWin){
                         yield return new WaitForSeconds(0.2f);
-                        GameCanvas.Instance.ChooseAction("pass", 0);
+                        GameCanvas.Instance.ChooseAction(actualHupaiAction, 0);
                         yield break;
                     }
-                    else{
-                        List<string> remaining = new List<string>(allowActionList);
-                        if (AutoAction.Instance.IsAutoPassChi)
-                            remaining.RemoveAll(a => a == "chi_left" || a == "chi_mid" || a == "chi_right");
-                        if (AutoAction.Instance.IsAutoPassPeng)
-                            remaining.RemoveAll(a => a == "peng");
-                        if (AutoAction.Instance.IsAutoPassGang)
-                            remaining.RemoveAll(a => a == "gang");
-                        remaining.RemoveAll(a => a == "pass");
-                        if (remaining.Count == 0){
-                            yield return new WaitForSeconds(0.2f);
-                            GameCanvas.Instance.ChooseAction("pass", 0);
-                            yield break;
-                        }
-                    }
+                }
+
+                // 不吃/不碰/不明杠 只逐项剔除对应鸣牌；全部可操作项被筛光才自动 pass（和牌不会被剔除）
+                if (ShouldAutoPassMingPaiAsk(allowActionList)) {
+                    yield return new WaitForSeconds(0.2f);
+                    GameCanvas.Instance.ChooseAction("pass", 0);
+                    yield break;
                 }
 
                 yield return null;
@@ -80,7 +124,7 @@ public partial class NormalGameStateManager {
             else if (action == "AutoHandAction"){
                 // 如果允许操作列表有hu_self
                 if (allowActionList.Contains("hu_self")){
-                    // 开启自动胡牌且未限制为只和荣和/只和自摸时，执行自动自摸
+                    // 自动胡牌开启且未勾选「不自摸」时执行自动自摸
                     if (AutoAction.Instance.ShouldAutoWinTsumo()){
                         yield return new WaitForSeconds(0.2f);
                         GameCanvas.Instance.ChooseAction("hu_self", 0);

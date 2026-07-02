@@ -10,21 +10,22 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
   },
   "dependencies": {
-    "vue": "^3.3.8",
-    "vue-router": "^4.2.5",
-    "pinia": "^2.1.7",
-    "axios": "^1.6.2",
-    "element-plus": "^2.4.4",
     "@element-plus/icons-vue": "^2.1.0",
-    "socket.io-client": "^4.7.4"
+    "axios": "^1.6.2",
+    "echarts": "^5.6.0",
+    "element-plus": "^2.4.4",
+    "pinia": "^2.1.7",
+    "socket.io-client": "^4.7.4",
+    "vue": "^3.3.8",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
-    "vite": "^6.4.1",
+    "@vue/eslint-config-prettier": "^8.0.0",
     "eslint": "^8.54.0",
     "eslint-plugin-vue": "^9.18.1",
-    "@vue/eslint-config-prettier": "^8.0.0",
     "prettier": "^3.1.0",
-    "sass": "^1.69.5"
+    "sass": "^1.69.5",
+    "vite": "^6.4.1"
   }
-} 
+}

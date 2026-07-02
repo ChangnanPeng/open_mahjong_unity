@@ -121,10 +121,10 @@ public partial class Game3DManager {
 
     private IEnumerator RemoveHandCardsFromQueue(Transform cardPosition, HandAnimOp op) {
         if (IsSelfCardsPosition(cardPosition)) {
-            yield return RemoveSelfHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true);
+            yield return RemoveSelfHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true, op.PlayerPosition);
         }
         else {
-            yield return RemoveHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true);
+            yield return RemoveHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true, op.PlayerPosition);
         }
     }
 
@@ -172,28 +172,56 @@ public partial class Game3DManager {
         });
     }
 
-    /// <summary>吃碰明杠等：被鸣牌来自河牌时回收 lastCutJiagang3DObject（加杠/暗杠除外）。</summary>
-    private void TryReturnLastCutTileForMeld(string actionType) {
-        if (lastCutJiagang3DObject == null || actionType == "jiagang" || actionType == "angang") {
+    /// <summary>
+    /// 吃碰明杠等：被鸣牌来自河牌时回收河牌切子（加杠/暗杠除外）。
+    /// 旧实现依赖全局 lastCutJiagang3DObject，一旦「吃→立刻出牌」紧邻发生，全局引用会被新切牌覆盖，
+    /// 导致误回收新切牌而河牌残留；这里改为按「打牌者位置 + 被鸣牌张 id」在河里精确查找要回收的对象，
+    /// 并只终止该打牌者的飞牌协程（按玩家隔离），不再触碰他家飞牌与全局引用。
+    /// 打牌者位置 + 被鸣牌张优先取 NormalGameStateManager 由 action_tick 回查得到的
+    /// currentMeldDiscarderPos / currentMeldClaimedTileId（乱序下比 lastDiscardPlayerPosition 可靠），
+    /// 回退到 lastDiscardPlayerPosition / currentAskCutTileId 兼容回放/边界。
+    /// </summary>
+    private void TryReturnLastCutTileForMeld(string actionType, string discarderPosOverride = null, int claimedTileOverride = 0) {
+        if (actionType == "jiagang" || actionType == "angang") {
             return;
         }
-        if (_currentDiscardMoveCoroutine != null) {
-            StopCoroutine(_currentDiscardMoveCoroutine);
-            _currentDiscardMoveCoroutine = null;
+        string discarderPos = discarderPosOverride;
+        int claimedTile = claimedTileOverride;
+
+        // override 缺失（牌谱回放路径）时，退回共享字段解析 discarder/tile。
+        if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
+            discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
+            if (string.IsNullOrEmpty(discarderPos)) {
+                discarderPos = NormalGameStateManager.Instance.lastDiscardPlayerPosition;
+            }
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
         }
-        MahjongObjectPool.Instance.Return(-1, lastCutJiagang3DObject);
-        lastCutJiagang3DObject = null;
+
+        // 1) 优先用「该家最新弃牌」的登记对象（出牌 3D Spawn 时登记），校验 tileId 一致；
+        //    退回河里精确搜索，再退全局 lastCutJiagang3DObject。消除同类牌歧义与新弃牌未就位认错旧牌。
+        GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
+        if (obj == null) {
+            return;
+        }
+
+        // 停掉该打牌者的飞牌协程并清登记，避免被认走的牌仍在飞行/落到河里或被重复认走。
+        OnLastDiscardTaken(discarderPos);
+        MahjongObjectPool.Instance.Return(-1, obj);
+        if (lastCutJiagang3DObject == obj) {
+            lastCutJiagang3DObject = null;
+        }
     }
 
     /// <summary>吃碰明杠等：回收河牌切子并启动副露动画（不进入暗杠手牌队列）。</summary>
-    private void StartMeldPresentation(string actionType, string playerPosition, int[] combinationMask) {
-        TryReturnLastCutTileForMeld(actionType);
+    private void StartMeldPresentation(string actionType, string playerPosition, int[] combinationMask, string discarderPosOverride = null, int claimedTileOverride = 0) {
+        TryReturnLastCutTileForMeld(actionType, discarderPosOverride, claimedTileOverride);
         StartCoroutine(ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true));
     }
 
     private IEnumerator RecordDiscardShowCardsCoroutine(string playerPosition, int tileId, bool fromDrawSlot, bool isRiichi) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot);
+        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot, playerPosition);
         if (fromDrawSlot) {
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
@@ -204,7 +232,7 @@ public partial class Game3DManager {
 
     private IEnumerator RecordBuhuaShowCardsCoroutine(string playerPosition, int tileId, bool fromDrawSlot) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot);
+        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot, playerPosition);
         if (fromDrawSlot) {
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
@@ -219,14 +247,18 @@ public partial class Game3DManager {
         string actionType,
         int[] combinationMask,
         bool removeDrawSlotFirst = false,
-        int drawSlotTileId = 0) {
+        int drawSlotTileId = 0,
+        string discarderPos = null,
+        int claimedTile = 0) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        TryReturnLastCutTileForMeld(actionType);
+        // 透传 discarder+tile：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
+        // 必须显式传入才能正确认走「该家最新弃牌」并停掉其飞牌协程，避免被鸣牌仍落到河里。
+        TryReturnLastCutTileForMeld(actionType, discarderPos, claimedTile);
         if (removeDrawSlotFirst) {
-            yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true);
+            yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true, playerPosition);
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
-        yield return RemoveRecordShowHandCardsByMaskCoroutine(panel.ShowCardsPosition, combinationMask);
+        yield return RemoveRecordShowHandCardsByMaskCoroutine(panel.ShowCardsPosition, combinationMask, playerPosition);
         yield return ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true);
         ClearRecordPlayerDrawSlotState(playerPosition);
         yield return RearrangeRecordShowMergeAllWithAnimation(panel.ShowCardsPosition, playerPosition);

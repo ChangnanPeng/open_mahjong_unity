@@ -554,6 +554,14 @@ public partial class Game3DManager {
 
     private GameObject PeekLastDiscardObject(string discarderPos) {
 
+        // 优先用「该家最新弃牌」的登记对象（即被荣和的那张），避免开启鸣牌保护时荣和太快、
+        // 新弃牌 3D 未就位而取到上一张出牌。
+        if (!string.IsNullOrEmpty(discarderPos)
+            && _lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
+            && regObj != null && regObj.activeInHierarchy) {
+            return regObj;
+        }
+
         if (string.IsNullOrEmpty(discarderPos)) {
 
             return lastCutJiagang3DObject;
@@ -581,6 +589,9 @@ public partial class Game3DManager {
         if (obj == null) return null;
 
         obj.transform.SetParent(null, worldPositionStays: true);
+
+        // 停掉该打牌者飞牌协程并清登记，避免被荣和的牌仍在飞行/落到河里。
+        OnLastDiscardTaken(discarderPos);
 
         if (lastCutJiagang3DObject == obj) {
 

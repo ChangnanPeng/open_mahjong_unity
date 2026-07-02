@@ -196,6 +196,21 @@ public partial class GameRecordManager {
 
 
 
+    /// <summary>
+    /// 仅重涂自家 2D 手牌的铳张遮罩（用当前已计算的危险牌集合按 self 重算），
+    /// 不清 3D 明牌、不重算全局危险牌。用于摸牌/初始化新张创建后补涂，
+    /// 避免 ChangeHandCards 异步队列导致新张在动画期间缺失铳张提示。
+    /// </summary>
+    public void ReapplySelf2DHandChongOverlay() {
+        if (!ShouldApplyRecordChongHint()) return;
+        if (GameCanvas.Instance == null || GameCanvas.Instance.HandCardsContainer == null) return;
+        TryGetActiveRecordRuleContext(out string roomRule, out _);
+        var hiddenHands = GetChongHintHiddenHandPositions();
+        ApplyChongToSelf2DHand(roomRule, hiddenHands);
+    }
+
+
+
     private void ClearSelf2DHandDangerOverlays() {
 
         if (GameCanvas.Instance == null || GameCanvas.Instance.HandCardsContainer == null) return;

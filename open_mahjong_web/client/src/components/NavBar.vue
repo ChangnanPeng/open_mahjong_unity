@@ -32,7 +32,7 @@
 
         <el-menu-item index="/player-data">
           <el-icon><User /></el-icon>
-          <span>玩家数据</span>
+          <span>玩家/平台数据站</span>
         </el-menu-item>
 
         <el-menu-item index="/paili">
@@ -86,6 +86,7 @@ const activeMenu = computed(() => {
   if (p === '/' || p === '') return '/'
   if (p.startsWith('/rulebook')) return '/rulebook'
   if (p === '/github') return '/github'
+  if (p.startsWith('/player-data')) return '/player-data'
   if (p === '/mobile-download') return '/mobile-download'
   return p
 })
