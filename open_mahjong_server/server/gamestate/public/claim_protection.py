@@ -3,18 +3,18 @@
 目的：可被鸣牌的出牌，对「不能鸣牌的家」延迟广播出牌，隐藏「是否有人能鸣牌」这一信息。
 玩家最多只能推断出「有人可以鸣牌」，无法得知是谁（因为只有能鸣牌者自己会收到询问）。
 
-规则（claimable_only 触发 + B 方案 + 1.5s 上限）：
+规则（claimable_only 触发 + B 方案 + 1.3s 上限）：
 - 仅当打出的牌能被任意他家吃/碰/杠/荣和时才启用本区间。
 - 出牌者、能鸣牌者：立即收到出牌；能鸣牌者同时收到 ask_other 可立即决策。
 - 受保护观众（既不能鸣牌、又不是出牌者）：出牌(cut) 进入暂存，延迟发送。
   触发把暂存 cut 发给受保护观众的时机，取最早：
     1) 有人实际鸣牌/荣和 -> 立即 flush cut（若尚未揭示），再按「cut 揭示时刻 + MELD_FOLLOWUP_GAP」
-       计算剩余延迟后把鸣牌发给受保护观众（1.5s~1.8s 内鸣牌对齐到 1.8s，1.8s 后立即发送）；
+       计算剩余延迟后把鸣牌发给受保护观众（1.3s~2.1s 内鸣牌对齐到 2.1s，2.1s 后立即发送）；
     2) 能鸣牌者全部 pass / 超时无人鸣牌 -> 立即 flush cut（区间结束，无鸣牌）；
     3) MELD_PROTECT_DELAY 超时 -> flush cut（此后「暴露有人可鸣牌」是允许的，但仍不知是谁）。
 - 与战术鸣牌正交：
   - 受保护观众尚未看到出牌：战术 is_claim 不发送；flush cut 正常发声，间隔 gap 后实际鸣牌也正常发声。
-  - 受保护观众已看到出牌（1.5s 超时 flush 或鸣牌前 flush）：可收到战术 is_claim；
+  - 受保护观众已看到出牌（1.3s 超时 flush 或鸣牌前 flush）：可收到战术 is_claim；
     实际鸣牌尊重 silent（战术申请后静默执行），避免「申请 + 执行」双响。
 """
 from __future__ import annotations
@@ -27,9 +27,9 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 # 受保护观众看到出牌的最大延迟（秒）——默认值，可被 game_state.claim_protect_delay 覆盖
-MELD_PROTECT_DELAY = 1.5
+MELD_PROTECT_DELAY = 1.3
 # 出牌与紧随其后的鸣牌之间，对受保护观众的间隔（秒）——默认值，可被 game_state.claim_meld_followup_gap 覆盖
-MELD_FOLLOWUP_GAP = 0.5
+MELD_FOLLOWUP_GAP = 0.8
 
 # 真实鸣牌行为（不含 is_claim 申请、不含和牌/抢杠的终结结算）
 REAL_MELD_ACTIONS = frozenset({"chi_left", "chi_mid", "chi_right", "peng", "gang"})
@@ -53,8 +53,8 @@ def compute_protected_meld_delay(game_state) -> float:
     """受保护观众鸣牌/和牌相对当下的剩余追赶延迟（秒）。
 
     保证 cut 揭示与紧随鸣牌之间至少相隔 claim_meld_followup_gap：
-    - cut 刚 flush：返回 gap（如 0.5s）；
-    - cut 在 1.5s 超时揭示、鸣牌在 1.6s：返回 0.2s（对齐 1.8s）；
+    - cut 刚 flush：返回 gap（如 0.8s）；
+    - cut 在 1.3s 超时揭示、鸣牌在 1.4s：返回 0.7s（对齐 2.1s）；
     - 鸣牌在 cut 揭示 + gap 之后：返回 0（立即）。
     """
     flush_time = getattr(game_state, "_cp_cut_flush_time", None)
@@ -130,7 +130,7 @@ def stash_protected_cut_payload(game_state, viewer_index: int, payload: dict) ->
 
 
 def arm_claim_protection_timer(game_state, send_fn) -> None:
-    """广播 cut 后启动 1.5s 超时定时器：到点把暂存 cut 发给受保护观众。"""
+    """广播 cut 后启动 claim_protect_delay 超时定时器：到点把暂存 cut 发给受保护观众。"""
     if not getattr(game_state, "_cp_active", False):
         return
     if not getattr(game_state, "_cp_pending_cut", None):

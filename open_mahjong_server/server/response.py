@@ -116,7 +116,7 @@ class Do_action_info(BaseModel):
     # 客户端据此精确移除对应玩家牌河的弃牌，消除乱序/双同牌歧义。cut/摸牌等帧为 None。
     cut_from_player: Optional[int] = None
     # 受保护观众鸣牌的显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画/声音，
-    # 复现“出牌→0.5s→鸣牌”视觉间隔且不破坏 wire 顺序。非受保护观众为 None。
+    # 客户端 display/音效/3D 一并延后，复现“出牌→claim_meld_followup_gap→鸣牌”间隔且不破坏 wire 顺序。非受保护观众为 None。
     meld_reveal_delay: Optional[float] = None
     is_riichi_horizontal: Optional[bool] = None  # 立直规则：本张弃牌是否横置（含立直宣告 + 立直牌被吃后续横）
     # 战术鸣牌（国标/青雀）：is_claim 仅播放发声与字体动画，不应用任何状态变化

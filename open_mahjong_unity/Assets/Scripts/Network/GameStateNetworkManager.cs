@@ -184,7 +184,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             askresponse.remaining_time,
             askresponse.action_list,
             askresponse.cut_tile,
-            askresponse.chi_candidates
+            askresponse.chi_candidates,
+            askresponse.is_tactical_recheck == true
         );
     }
     
@@ -432,12 +433,39 @@ public class GameStateNetworkManager : MonoBehaviour {
 
     private void HandleVoteUpdate(Response response) {
         VotePanel.Instance?.ApplyState(response.vote_info);
+        ClearGameTimerIfVoteRequires(response.vote_info);
     }
 
     private void HandleVoteEnd(Response response) {
         VotePanel.Instance?.Hide();
+        ClearGameActionTimer();
         // 投票结束对局通过：直接回主菜单（强制清理对局场景）
         PostGameNavigator.ExitToLobby(forceTeardown: true);
+    }
+
+    /// <summary>
+    /// 投票通过后的阶段（结束倒计时、待暂停、已暂停等）须停掉步时/切牌计时，避免计时板继续走表。
+    /// </summary>
+    private static void ClearGameTimerIfVoteRequires(VoteInfo info) {
+        if (info == null || string.IsNullOrEmpty(info.phase)) return;
+        switch (info.phase) {
+            case "end_countdown":
+            case "pause_pending":
+            case "paused":
+            case "resume_voting":
+            case "resume_countdown":
+                ClearGameActionTimer();
+                break;
+        }
+    }
+
+    private static void ClearGameActionTimer() {
+        if (NormalGameStateManager.Instance != null) {
+            NormalGameStateManager.Instance.SwitchCurrentPlayer("None", "ClearAction", 0);
+        } else {
+            GameCanvas.Instance?.StopTimeRunning();
+            GameCanvas.Instance?.ClearActionButton();
+        }
     }
 
     /// <summary>发起投票（vote_type: "pause" / "end"）。仅自定义房间对局真人玩家可发。</summary>

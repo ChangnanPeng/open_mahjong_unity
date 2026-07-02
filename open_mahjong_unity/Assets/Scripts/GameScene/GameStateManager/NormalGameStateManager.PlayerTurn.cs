@@ -2,7 +2,7 @@ using UnityEngine;
 
 public partial class NormalGameStateManager {
     // 切换玩家状态
-    public void SwitchCurrentPlayer(string GetCardPlayer, string SwitchType, int remaining_time, int askHandPlayerIndex = -1) {
+    public void SwitchCurrentPlayer(string GetCardPlayer, string SwitchType, int remaining_time, int askHandPlayerIndex = -1, bool isTacticalRecheck = false) {
 
         // 询问手牌操作
         if (SwitchType == "askHandAction"){
@@ -22,7 +22,7 @@ public partial class NormalGameStateManager {
                 if (AutoAction.Instance != null) {
                     AutoAction.Instance.SetAutoCutLocked(IsSelfRiichi());
                 }
-                // 如果开启自动和牌/自摸、自动补花或者自动出牌，则启动协程
+                // 手牌询问：自动自摸 / 自动补花 / 自动出牌 任一开启则启动协程
                 if (AutoAction.Instance != null && (AutoAction.Instance.ShouldAutoWinTsumo() || AutoAction.Instance.IsAutoBuhua || AutoAction.Instance.IsAutoCut)){
                     StartWaitAutoAction("AutoHandAction");
                 }
@@ -52,8 +52,9 @@ public partial class NormalGameStateManager {
         else if (SwitchType == "askMingPaiAction"){
             GameCanvas.Instance.ClearActionButton();
             GameCanvas.Instance.SetActionButton(allowActionList);
-            GameCanvas.Instance.LoadingRemianTime(remaining_time,roomStepTime);
-            // 如果开启自动过牌、自动胡牌或牌张设置中的鸣牌选项，则启动协程
+            // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
+            GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
+            // 鸣牌询问：自动过牌(=不吃碰杠) / 自动胡牌 / 牌张设置 任一相关项开启则启动协程
             if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
                 StartWaitAutoAction("AutoMingPaiAction");
             }

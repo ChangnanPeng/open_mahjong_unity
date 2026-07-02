@@ -9,6 +9,10 @@ require('dotenv').config(); // 引入dotenv 加载环境变量
 const config = require('./config/config');
 
 const app = express(); // 创建express应用
+// 生产环境在 Nginx 反代后需信任代理，否则 req.ip 全是反代 IP，全站共用限流桶
+if (config.isProduction) {
+  app.set('trust proxy', 1);
+}
 const server = http.createServer(app); // 创建http服务器 将 Express 的 app 作为请求处理器传入
 
 // Socket.IO 配置（从统一配置模块读取）
@@ -28,25 +32,27 @@ const db = require('./config/database');
 // 路由
 const mahjongRoutes = require('./routes/mahjong'); // mahjongRoutes: 处理麻将游戏相关的 API（如创建房间、开始游戏等）
 const playerRoutes = require('./routes/player'); // playerRoutes: 处理玩家数据查询相关的 API
+const platformRoutes = require('./routes/platform');
 const adminRoutes = require('./routes/admin');
-const { createWindowLimiter } = require('./middleware/rateLimit');
+const { createWindowLimiter, getClientIp } = require('./middleware/rateLimit');
 const { ensureAuditTable } = require('./utils/audit');
 
-// 数据库与多表聚合查询较贵：每 IP 每分钟约 24 次
-const playerQueryLimiter = createWindowLimiter({
-  windowMs: 60_000,
-  max: 24,
-  keyFn: (req) => `${req.ip || 'unknown'}:player`,
-});
 // 牌理 / 听牌 / 国标算分等转发 Python：每 IP 每分钟约 40 次
 const mahjongCalcLimiter = createWindowLimiter({
   windowMs: 60_000,
   max: 40,
-  keyFn: (req) => `${req.ip || 'unknown'}:mahjong`,
+  keyFn: (req) => `${getClientIp(req)}:mahjong`,
 });
 
 app.use('/api/mahjong', mahjongCalcLimiter, mahjongRoutes);
-app.use('/api/player', playerQueryLimiter, playerRoutes);
+// 玩家查询限流按路由粒度挂载（见 routes/player.js），热点/排行榜等轻量接口不受重查询限流
+app.use('/api/player', playerRoutes);
+const platformStatsLimiter = createWindowLimiter({
+  windowMs: 60_000,
+  max: 30,
+  keyFn: (req) => `${getClientIp(req)}:platform-stats`,
+});
+app.use('/api/platform', platformStatsLimiter, platformRoutes);
 app.use('/api/admin', adminRoutes);
 
 // WebSocket连接处理

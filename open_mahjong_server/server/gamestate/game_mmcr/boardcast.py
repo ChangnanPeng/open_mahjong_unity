@@ -378,7 +378,7 @@ def _build_do_action_payload(
         "is_claim": True if is_claim else None,
         "silent": True if silent else None,
         "is_mo_gang": is_mo_gang,
-        # 受保护观众鸣牌显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画，复现 0.5s 间隔。
+        # 受保护观众鸣牌显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画，复现 claim_meld_followup_gap 间隔。
         "meld_reveal_delay": meld_reveal_delay,
     }
 

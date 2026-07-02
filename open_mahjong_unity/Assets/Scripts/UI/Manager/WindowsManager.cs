@@ -226,14 +226,28 @@ public class WindowsManager : MonoBehaviour {
         WindowFadeTransition.PrepareFadeIn(fadeIn); // 统一淡入初态
         WindowFadeTransition.PrepareFadeOut(fadeOut); // 统一淡出初态
         if (fadeOut.Count == 0 && fadeIn.Count == 0) {
-            if (targetWindow == "menu") RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false); // 仅主界面刷新房间列表
+            RefreshLobbyDataOnSwitch(targetWindow);
             _switchRoutine = null; // 清理协程引用
             yield break;
         }
         float duration = windowFadeDuration <= 0f ? 0f : windowFadeDuration; // 渐变时长
         yield return WindowFadeTransition.Fade(fadeOut, fadeIn, duration); // 执行渐隐渐显
-        if (targetWindow == "menu") RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false); // 渐变完成后刷新列表
+        RefreshLobbyDataOnSwitch(targetWindow);
         _switchRoutine = null; // 协程结束
+    }
+
+    /// <summary>
+    /// 切换到大厅页后立即拉取一次最新数据（与轮询互补，重复进入同一页也会刷新）。
+    /// </summary>
+    private static void RefreshLobbyDataOnSwitch(string targetWindow) {
+        switch (targetWindow) {
+            case "menu":
+                RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false);
+                break;
+            case "match":
+                MatchNetworkManager.Instance?.RequestQueueStatusForMatchPanel();
+                break;
+        }
     }
 
     private void ApplyHeaderPanelInstant(HashSet<GameObject> was, HashSet<GameObject> will) {

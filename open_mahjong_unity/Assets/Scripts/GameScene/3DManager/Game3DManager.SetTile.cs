@@ -105,6 +105,8 @@ public partial class Game3DManager : MonoBehaviour {
         }
         if (SetType == "Discard") {
             lastCutJiagang3DObject = cardObj;
+            // 登记为该家最新弃牌对象：鸣牌认走时直接用此确切对象，避免河里同类牌歧义与共享字段失效。
+            RegisterLastDiscard(PlayerPosition, cardObj, tileId);
         }
         // 立直横置标记写入 Tile3D，归还对象池时会被清掉
         Tile3D tile3D = cardObj.GetComponent<Tile3D>();

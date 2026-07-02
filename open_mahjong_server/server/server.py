@@ -105,15 +105,17 @@ async def _online_sampler_loop() -> None:
     while True:
         try:
             current = len(game_server.players) if game_server else 0
+            from .database.daily_aggregator import current_stat_date
+            stat_today = current_stat_date()
             conn = db_manager._get_connection()
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO daily_online_cache (stat_date, max_online, updated_at)
-                VALUES (CURRENT_DATE, %s, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (stat_date) DO UPDATE SET
                     max_online = GREATEST(daily_online_cache.max_online, EXCLUDED.max_online),
                     updated_at = CURRENT_TIMESTAMP
-            """, (current,))
+            """, (stat_today, current))
             conn.commit()
             cursor.close()
             db_manager._put_connection(conn)
@@ -135,21 +137,21 @@ async def _daily_stats_loop() -> None:
             next_reset += timedelta(days=1)
         await asyncio.sleep((next_reset - now).total_seconds())
         try:
-            yesterday = (datetime.now(tz) - timedelta(days=1)).date()
-            from .database.daily_aggregator import run_daily_aggregation
+            from .database.daily_aggregator import run_daily_aggregation, current_stat_date
+            yesterday = current_stat_date() - timedelta(days=1)
             run_daily_aggregation(db_manager, yesterday)
             logging.info("每日统计已聚合 %s", yesterday)
         except Exception as e:
             logging.error("每日统计聚合失败: %s", e, exc_info=True)
 
 
-async def _daily_stats_catchup_once() -> None:
-    """启动时补齐缺失的每日统计（凌晨停机重启自愈）。"""
+async def _daily_stats_startup_restore() -> None:
+    """启动时在后台做统计维护（首次全量 / 之后轻量补齐）。"""
     try:
-        from .database.daily_aggregator import run_catchup_aggregation
-        run_catchup_aggregation(db_manager, days=7)
+        from .database.daily_aggregator import run_startup_stats_restore
+        await asyncio.to_thread(run_startup_stats_restore, db_manager)
     except Exception as e:
-        logging.error("每日统计补齐失败: %s", e, exc_info=True)
+        logging.error("每日统计启动维护失败: %s", e, exc_info=True)
 
 
 @asynccontextmanager
@@ -165,17 +167,17 @@ async def lifespan(app: FastAPI):
     reset_task = asyncio.create_task(_daily_ip_limit_reset_loop())
     sampler_task = asyncio.create_task(_online_sampler_loop())
     stats_task = asyncio.create_task(_daily_stats_loop())
-    catchup_task = asyncio.create_task(_daily_stats_catchup_once())
+    restore_task = asyncio.create_task(_daily_stats_startup_restore())
     yield
     reset_task.cancel()
     sampler_task.cancel()
     stats_task.cancel()
-    catchup_task.cancel()
+    restore_task.cancel()
     try:
         await reset_task
         await sampler_task
         await stats_task
-        await catchup_task
+        await restore_task
     except asyncio.CancelledError:
         pass
     # 关闭时执行（如果需要清理资源，在这里添加）

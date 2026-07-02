@@ -40,11 +40,12 @@
         class="search-input"
         placeholder="输入 ID 或用户名"
         clearable
-        @keyup.enter="searchPlayer"
+        @keyup.enter="searchPlayer()"
       />
-      <el-button type="primary" size="small" @click="searchPlayer" :loading="loading">查询</el-button>
+      <el-button type="primary" size="small" @click="searchPlayer()" :loading="loading">查询</el-button>
       <el-button size="small" @click="resetForm">重置</el-button>
     </div>
+    <p class="page-quota-tip">每日分析每个 IP 仅 1 次机会（凌晨 4 点刷新）；牌谱下载每个 IP 限 10 次/天</p>
 
     <div v-if="playerInfo" class="data-display">
       <!-- 用户信息条 -->
@@ -129,13 +130,14 @@
         </template>
         <template v-else>
           <div class="no-prestored">
-            <span>没有预存数据</span>
+            <span>没有预存数据，可使用「每日分析」在本地计算统计</span>
+            <p class="quota-tip analyze-quota">每个 IP 每天仅 1 次分析机会，凌晨 4 点刷新；单次最多 500 局</p>
             <el-button
               size="small"
               type="primary"
               :loading="analyzing"
               @click="runDailyAnalysis"
-            >每日分析</el-button>
+            >每日分析（今日 1 次）</el-button>
           </div>
         </template>
       </div>
@@ -306,6 +308,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { analyzeRecords } from '../utils/recordAnalyzer'
+import { buildStatsRows } from '../utils/statsDisplay'
 
 const RULE_DEFS = [
   { key: 'guobiao', label: '国标', statsField: 'guobiao_stats', fanField: 'guobiao' },
@@ -373,6 +376,7 @@ const recentRecords = ref([])  // 玩家最近 20 局（独立于筛选，用于
 const recordsTotal = ref(0)
 const searched = ref(false)
 const loading = ref(false)
+let searchSeq = 0
 const downloading = ref(false)
 const analyzing = ref(false)
 
@@ -563,38 +567,6 @@ const fanEntries = computed(() => {
 
 const getFanValue = (fanKey) => activeStats.value?.fan_stats?.[fanKey] || 0
 
-const ratio = (n, d, suffix = '%') => (!d || d <= 0 ? '0.00' + suffix : ((n / d) * 100).toFixed(2) + suffix)
-const avg = (n, d) => (d === undefined || !d || d <= 0 ? '0.00' : (n / d).toFixed(2))
-
-const avgRank = (s) => {
-  const games = s.total_games || 0
-  if (!games) return '0.00'
-  const weighted = (s.first_place_count || 0) * 1
-    + (s.second_place_count || 0) * 2
-    + (s.third_place_count || 0) * 3
-    + (s.fourth_place_count || 0) * 4
-  return (weighted / games).toFixed(2)
-}
-
-const buildStatsRows = (s) => [
-  { label: '总对局', value: String(s.total_games || 0) },
-  { label: '总回合', value: String(s.total_rounds || 0) },
-  { label: '平均顺位', value: avgRank(s) },
-  { label: '局均点', value: avg(s.total_round_score, s.total_games) },
-  { label: '一位率', value: ratio(s.first_place_count, s.total_games) },
-  { label: '二位率', value: ratio(s.second_place_count, s.total_games) },
-  { label: '三位率', value: ratio(s.third_place_count, s.total_games) },
-  { label: '四位率', value: ratio(s.fourth_place_count, s.total_games) },
-  { label: '和牌率', value: ratio(s.win_count, s.total_rounds) },
-  { label: '自摸率', value: ratio(s.self_draw_count, s.win_count) },
-  { label: '放铳率', value: ratio(s.deal_in_count, s.total_rounds) },
-  { label: '错和率', value: ratio(s.cuohe_count, s.total_rounds) },
-  { label: '副露率', value: ratio(s.fulu_round_count, s.total_rounds) },
-  { label: '平均和番', value: avg(s.total_fan_score, s.win_count) },
-  { label: '平均和巡', value: avg(s.total_win_turn, s.win_count) },
-  { label: '平均铳番', value: avg(s.total_fangchong_score, s.deal_in_count) }
-]
-
 const switchRule = (rule) => {
   currentRule.value = rule
   analyzedResult.value = null
@@ -693,12 +665,25 @@ const loadRecentRanks = async () => {
 const handleAxiosError = (e, fallback) => {
   const status = e?.response?.status
   if (status === 429) {
-    ElMessage.error('搜索/请求过于频繁，请稍后再试')
+    const retry = e?.response?.headers?.['retry-after']
+    ElMessage.error(
+      retry
+        ? `请求过于频繁，请 ${retry} 秒后再试`
+        : '请求过于频繁，请稍后再试'
+    )
   } else if (status === 404) {
     ElMessage.error('未找到该玩家')
   } else {
     ElMessage.error(fallback || '请求失败')
   }
+}
+
+const hasPrestoredStats = (info) => {
+  if (!info) return false
+  return RULE_DEFS.some((d) => {
+    const rows = info[d.statsField] || []
+    return rows.some((r) => (r.total_games || 0) > 0)
+  })
 }
 
 const onFilterChange = () => {
@@ -744,8 +729,8 @@ const runDailyAnalysis = async () => {
   if (!userId) return
   try {
     await ElMessageBox.confirm(
-      '将下载当前筛选下的牌谱并在本地分析，请确保已保存好需要的数据。每次分析机会每日 4 点刷新，单次最多 500 局。',
-      '每日分析',
+      '将下载当前筛选下的牌谱并在本地分析。\n\n每个 IP 每天仅 1 次分析机会，凌晨 4 点刷新；单次最多 500 局。请确认筛选条件后再开始。',
+      '每日分析（今日仅 1 次）',
       { confirmButtonText: '开始分析', cancelButtonText: '取消', type: 'warning' }
     )
   } catch (_) {
@@ -779,7 +764,7 @@ const runDailyAnalysis = async () => {
       body: JSON.stringify({ user_id: userId, ...filterPayload() })
     })
     if (resp.status === 429) {
-      ElMessage.error('今日分析次数已达上限，每日 4 点刷新')
+      ElMessage.error('今日分析次数已用完（每个 IP 每天仅 1 次，凌晨 4 点刷新）')
       analyzing.value = false
       return
     }
@@ -896,6 +881,7 @@ const logSearch = async (key, info) => {
 }
 
 const searchPlayer = async (rawKey, isManual = true) => {
+  if (loading.value) return
   // rawKey 为字符串时（quickSearch）直接用；为 Event/undefined 时回退输入框
   const raw = String((typeof rawKey === 'string' && rawKey) ? rawKey : (searchForm.key ?? '')).trim()
   if (!raw) {
@@ -905,8 +891,10 @@ const searchPlayer = async (rawKey, isManual = true) => {
   searchForm.key = raw
   loading.value = true
   searched.value = true
+  const searchToken = ++searchSeq
   try {
     const infoResp = await axios.get(`/api/player/info/${encodeURIComponent(raw)}`)
+    if (searchToken !== searchSeq) return
     if (infoResp.data.success) {
       playerInfo.value = infoResp.data.data
       const defaultRule = RULE_DEFS.find(d => (playerInfo.value[d.statsField] || []).length > 0)
@@ -920,10 +908,14 @@ const searchPlayer = async (rawKey, isManual = true) => {
       page.size = 20
       selectedIds.value = []
       await loadRecords()
-      loadRecentRanks()
+      if (searchToken !== searchSeq) return
+      if (hasPrestoredStats(playerInfo.value)) {
+        loadRecentRanks()
+      } else {
+        recentRecords.value = []
+      }
       // 仅手动输入并点查询才计入热点；点击热点/排行榜 chip 不计
       if (isManual) logSearch(raw, playerInfo.value)
-      loadQuickLists()
     } else {
       ElMessage.error(infoResp.data.message || '获取玩家信息失败')
       playerInfo.value = null
@@ -932,13 +924,14 @@ const searchPlayer = async (rawKey, isManual = true) => {
       recordsTotal.value = 0
     }
   } catch (error) {
+    if (searchToken !== searchSeq) return
     handleAxiosError(error, '查询失败，请检查网络连接')
     playerInfo.value = null
     gameRecords.value = []
     recentRecords.value = []
     recordsTotal.value = 0
   } finally {
-    loading.value = false
+    if (searchToken === searchSeq) loading.value = false
   }
 }
 
@@ -968,15 +961,22 @@ const resetForm = () => {
 }
 
 // ===== 顶部快捷列表 =====
-const loadQuickLists = async () => {
-  try {
-    const [hot, lb] = await Promise.all([
-      axios.get('/api/player/hot', { params: { limit: 10 } }),
-      axios.get('/api/player/leaderboard', { params: { limit: 10 } })
-    ])
-    hotList.value = hot.data.success ? (hot.data.data || []) : []
-    leaderList.value = lb.data.success ? (lb.data.data || []) : []
-  } catch (_) { /* 静默 */ }
+let quickListsPromise = null
+const loadQuickLists = () => {
+  if (quickListsPromise) return quickListsPromise
+  quickListsPromise = (async () => {
+    try {
+      const [hot, lb] = await Promise.all([
+        axios.get('/api/player/hot', { params: { limit: 10 } }),
+        axios.get('/api/player/leaderboard', { params: { limit: 10 } })
+      ])
+      hotList.value = hot.data.success ? (hot.data.data || []) : []
+      leaderList.value = lb.data.success ? (lb.data.data || []) : []
+    } catch (_) { /* 静默 */ }
+  })().finally(() => {
+    quickListsPromise = null
+  })
+  return quickListsPromise
 }
 
 onMounted(() => {
@@ -1003,6 +1003,12 @@ onMounted(() => {
 }
 .search-label { font-size: 13px; font-weight: 600; color: #475569; flex-shrink: 0; }
 .search-input { width: 220px; max-width: 100%; }
+.page-quota-tip {
+  margin: -6px 0 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
 
 /* 顶部快捷 */
 .quick-bar {
@@ -1110,12 +1116,14 @@ onMounted(() => {
 }
 .no-prestored {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   color: #94a3b8;
   font-size: 13px;
   padding: 10px 0;
 }
+.analyze-quota { margin: 0; line-height: 1.5; }
 
 /* 汇总指标：紧凑网格 */
 .stats-table {

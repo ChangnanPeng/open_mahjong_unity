@@ -41,6 +41,8 @@ public static class GameSceneTeardown {
             ExitButtonManager.Instance.HideAll();
         }
 
+        VotePanel.Instance?.Hide();
+
         if (RankChangePanel.Instance != null) {
             RankChangePanel.Instance.gameObject.SetActive(false);
         }

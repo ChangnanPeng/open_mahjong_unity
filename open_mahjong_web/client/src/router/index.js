@@ -5,6 +5,7 @@ import PlayerDataLayout from '@/layouts/PlayerDataLayout.vue'
 import Home from '@/views/Home.vue'
 import ChineseMahjong from '@/views/ChineseMahjong.vue'
 import PlayerData from '@/views/PlayerData.vue'
+import PlatformData from '@/views/PlatformData.vue'
 import UnityGame from '@/views/UnityGame.vue'
 import Rulebook from '@/views/Rulebook.vue'
 import Paili from '@/views/Paili.vue'
@@ -86,6 +87,12 @@ const routes = [
         name: 'PlayerData',
         component: PlayerData,
         meta: { title: '玩家数据统计 - salasasa.cn' }
+      },
+      {
+        path: 'platform',
+        name: 'PlatformData',
+        component: PlatformData,
+        meta: { title: '平台数据统计 - salasasa.cn' }
       }
     ]
   },

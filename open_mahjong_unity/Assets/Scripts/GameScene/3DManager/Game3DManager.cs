@@ -29,6 +29,47 @@ public partial class Game3DManager : MonoBehaviour {
         { "self", Vector3.zero }, { "left", Vector3.zero },
         { "top", Vector3.zero }, { "right", Vector3.zero },
     };
+
+    // 每家「最新弃牌」的 3D 对象 + 牌 id：在 Set3DTileCoroutine 的 Discard 分支 Spawn 时登记。
+    // 鸣牌认走弃牌时优先用这个确切对象（校验 tileId），避免河里同类牌歧义（两张 7p 认错旧的）
+    // 以及共享字段 lastDiscardPlayerPosition/lastCutJiagang3DObject 在乱序/回放下的失效。
+    private readonly Dictionary<string, GameObject> _lastDiscardObjByPlayer = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, int> _lastDiscardTileIdByPlayer = new Dictionary<string, int>();
+
+    private void RegisterLastDiscard(string playerPosition, GameObject obj, int tileId) {
+        if (string.IsNullOrEmpty(playerPosition)) return;
+        _lastDiscardObjByPlayer[playerPosition] = obj;
+        _lastDiscardTileIdByPlayer[playerPosition] = tileId;
+    }
+
+    private void ClearLastDiscard(string playerPosition) {
+        if (string.IsNullOrEmpty(playerPosition)) return;
+        _lastDiscardObjByPlayer[playerPosition] = null;
+    }
+
+    /// <summary>认走/荣和取走弃牌时，解析「该家最新弃牌」的确切 3D 对象：
+    /// 优先用 Spawn 时登记的 per-player 对象（校验 tileId），退回河里精确搜索，再退全局 lastCutJiagang3DObject。
+    /// 消除同类牌歧义与新弃牌 3D 未就位时认错上一张牌的问题（碰牌/荣和共用）。
+    /// 仅解析，不停协程/不清登记（由调用方按需 OnLastDiscardTaken 处理）。</summary>
+    private GameObject ResolveLastDiscardObject(string discarderPos, int expectedTileId) {
+        if (!string.IsNullOrEmpty(discarderPos)
+            && _lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
+            && regObj != null && regObj.activeInHierarchy
+            && _lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int regTile)
+            && (expectedTileId <= 0 || regTile == expectedTileId)) {
+            return regObj;
+        }
+        GameObject found = FindDiscardTileObject(discarderPos, expectedTileId);
+        return found ?? lastCutJiagang3DObject;
+    }
+
+    /// <summary>认走/荣和取走弃牌后：停掉该打牌者飞牌协程并清掉登记，
+    /// 避免被取走的牌仍在飞行/后续落到河里，或被后续鸣牌/荣和重复认走。</summary>
+    private void OnLastDiscardTaken(string discarderPos) {
+        StopDiscardMoveCoroutine(discarderPos);
+        ClearLastDiscard(discarderPos);
+    }
+
     private Dictionary<int,Vector3> pengToJiagangPosDict = new Dictionary<int,Vector3>(); // 碰牌的加杠预留指针
 
     private void SetLastRemovePos(string playerPosition, Vector3 pos) {
@@ -272,7 +313,7 @@ public partial class Game3DManager : MonoBehaviour {
         return NetworkManager.Instance != null && NetworkManager.Instance.IsBacklogged;
     }
 
-    public void Change3DTile(string actionType,int tileId,int removeCount,string PlayerPosition,bool cut_class,int[] combination_mask, bool isRiichi = false, bool isMoGang = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0){
+    public void Change3DTile(string actionType,int tileId,int removeCount,string PlayerPosition,bool cut_class,int[] combination_mask, bool isRiichi = false, bool isMoGang = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0, string meldFeedbackAction = null, string meldFeedbackRoomRule = null){
         // 牌谱重建/重连的无动画分支直接执行，避免队列协程逐帧处理
         if (actionType == "SetDiscardWithoutAnimation" || actionType == "SetBuhuacardWithoutAnimation" || actionType == "SetRecordDiscardWithoutAnimation"){
             PosPanel3D panel = GetPosPanel(PlayerPosition);
@@ -310,7 +351,14 @@ public partial class Game3DManager : MonoBehaviour {
             return;
         }
 
-        StartCoroutine(Change3DTileCoroutine(actionType, tileId, removeCount, PlayerPosition, cut_class, combination_mask, isRiichi, playCutPhysicsSound, meldRevealDelay, meldDiscarderPos, meldClaimedTile));
+        StartCoroutine(Change3DTileCoroutine(actionType, tileId, removeCount, PlayerPosition, cut_class, combination_mask, isRiichi, playCutPhysicsSound, meldRevealDelay, meldDiscarderPos, meldClaimedTile, meldFeedbackAction, meldFeedbackRoomRule));
+    }
+
+    private static void PlayDeferredMeldFeedback(string playerPosition, string action, string roomRule) {
+        if (string.IsNullOrEmpty(action)) return;
+        SoundManager.Instance.PlayActionSound(playerPosition, action);
+        SoundManager.Instance.PlayPhysicsSound(action);
+        GameCanvas.Instance.ShowActionDisplay(playerPosition, action, roomRule);
     }
 
     // 同步初始化各家手牌：清空当前 cardsPosition，按 player_to_info 与 selfHandTiles 立即生成
@@ -364,20 +412,23 @@ public partial class Game3DManager : MonoBehaviour {
         }
     }
     
-    public IEnumerator Change3DTileCoroutine(string actionType, int tileId, int removeCount, string PlayerPosition, bool cut_class, int[] combination_mask, bool isRiichi = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0) {
+    public IEnumerator Change3DTileCoroutine(string actionType, int tileId, int removeCount, string PlayerPosition, bool cut_class, int[] combination_mask, bool isRiichi = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0, string meldFeedbackAction = null, string meldFeedbackRoomRule = null) {
         PosPanel3D panel = GetPosPanel(PlayerPosition);
         if (panel == null) {
             yield break;
         }
 
-        // 受保护观众鸣牌的显示层间隔：服务器已按序发送（wire 不乱序），此处仅把鸣牌 3D 动画/声音
-        // 延后 meldRevealDelay 秒，复现“出牌→0.5s→鸣牌”视觉间隔。仅鸣牌帧会传入 >0 的延迟。
+        // 受保护观众鸣牌：服务器已按序发送（wire 不乱序），此处把 display/音效/3D 一并延后
+        // meldRevealDelay 秒，复现“出牌→鸣牌”间隔（由服务端 claim_meld_followup_gap 下发）。
         // 认走的打牌者+牌张在派发时即捕获（meldDiscarderPos/meldClaimedTile），不读共享字段，
         // 避免延迟期间被后续鸣牌覆盖导致回收错河牌。
         // 补帧例外：web 后台降帧切回时队列积压，客户端在连续追赶同步现场，此时固定墙钟延迟会
-        // 让逻辑瞬间同步完、3D 却逐条卡 0.5s，非常诡异——故检测到队列仍有积压时跳过该纯装饰延迟。
+        // 让逻辑瞬间同步完、呈现却逐条卡住，非常诡异——故检测到队列仍有积压时跳过该纯装饰延迟。
         if (meldRevealDelay > 0f && !IsCatchingUpFromBacklog()) {
             yield return new WaitForSeconds(meldRevealDelay);
+        }
+        if (!string.IsNullOrEmpty(meldFeedbackAction)) {
+            PlayDeferredMeldFeedback(PlayerPosition, meldFeedbackAction, meldFeedbackRoomRule);
         }
 
         if (actionType == "GetCard") {
@@ -434,7 +485,7 @@ public partial class Game3DManager : MonoBehaviour {
         if (IsMeldHandAction(actionType)) {
             if (IsRecordShowCardsModeActive() && PlayerPosition != "self") {
                 bool removeDrawFirst = (actionType == "angang" || actionType == "jiagang") && cut_class;
-                yield return RecordMeldShowCardsCoroutine(PlayerPosition, actionType, combination_mask, removeDrawFirst, tileId);
+                yield return RecordMeldShowCardsCoroutine(PlayerPosition, actionType, combination_mask, removeDrawFirst, tileId, meldDiscarderPos, meldClaimedTile);
                 yield break;
             }
             StartMeldPresentation(actionType, PlayerPosition, combination_mask, meldDiscarderPos, meldClaimedTile);

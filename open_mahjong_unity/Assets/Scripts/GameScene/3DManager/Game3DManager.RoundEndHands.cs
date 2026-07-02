@@ -344,6 +344,8 @@ public partial class Game3DManager {
         Transform river = panel?.discardsPosition;
         if (river == null || river.childCount == 0) return null;
 
+        // 指定了 tileId：只认匹配的最新一张；找不到就返回 null（不退回任意末张），
+        // 避免河里有同类牌时把旧牌/无关末张误当被鸣牌（如两张 7p 认错旧的那张）。
         if (expectedTileId >= 10) {
             for (int i = river.childCount - 1; i >= 0; i--) {
                 Tile3D tile3D = river.GetChild(i).GetComponent<Tile3D>();
@@ -351,8 +353,10 @@ public partial class Game3DManager {
                     return tile3D.gameObject;
                 }
             }
+            return null;
         }
 
+        // 未指定 tileId（边界/回放）：取末张兜底。
         return river.GetChild(river.childCount - 1).gameObject;
     }
 
@@ -360,15 +364,14 @@ public partial class Game3DManager {
 
     private GameObject TryTakeLastDiscardObjectForRon(int expectedTileId, string discardPlayerPosition) {
 
-        GameObject obj = lastCutJiagang3DObject;
-        if (obj == null) {
-            obj = FindDiscardTileObject(discardPlayerPosition, expectedTileId);
-        }
+        // 优先用「该家最新弃牌」的登记对象（校验 tileId），退回河里精确搜索，再退全局引用；
+        // 避免开启鸣牌保护时荣和太快、新弃牌 3D 未就位而取到上一张出牌。
+        GameObject obj = ResolveLastDiscardObject(discardPlayerPosition, expectedTileId);
         if (obj == null) return null;
 
         Tile3D tile3D = obj.GetComponent<Tile3D>();
 
-        if (tile3D != null && tile3D.GetTileId() != expectedTileId) {
+        if (tile3D != null && expectedTileId >= 10 && tile3D.GetTileId() != expectedTileId) {
 
             Debug.LogWarning($"河牌最后一张 id={tile3D.GetTileId()} 与和牌张 {expectedTileId} 不一致，仍使用该对象做演出");
 
@@ -377,6 +380,8 @@ public partial class Game3DManager {
 
 
         lastCutJiagang3DObject = null;
+        // 停掉该打牌者飞牌协程并清登记，避免被荣和的牌仍在飞行/落到河里。
+        OnLastDiscardTaken(discardPlayerPosition);
 
         return obj;
 

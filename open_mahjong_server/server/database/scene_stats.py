@@ -47,6 +47,12 @@ def record_game_metrics(
         player_list: 玩家列表，每个玩家含 record_counter
         scene: {rule, sub_rule, room_type, match_tier, event_id, match_type}
     """
+    room_type = scene.get("room_type")
+    match_tier = scene.get("match_tier")
+    # 场次指标仅记录天梯四档，减少写入开销
+    if room_type != "match" or match_tier not in ("beginner", "intermediate", "advanced", "mcrpl"):
+        return
+
     conn = None
     try:
         # 含机器人或无注册玩家时不记录
