@@ -37,21 +37,13 @@ public partial class NormalGameStateManager {
         return actions.FirstOrDefault(IsHuAction);
     }
 
-    private static bool IsMeldAction(string action) {
-        return action == "chi_left" || action == "chi_mid" || action == "chi_right"
-            || action == "peng" || action == "gang";
-    }
-
-    private static bool HasMeldAction(IEnumerable<string> actions) {
-        return actions.Any(IsMeldAction);
-    }
-
     /// <summary>
-    /// 从允许操作列表中剔除已勾选「不吃/不碰/不明杠/自动过牌」对应的鸣牌项。
-    /// 和牌 action 不参与此过滤；有和牌时由调用方单独处理，不自动 pass。
+    /// 鸣牌询问：应用「不吃/不碰/不明杠」逐项过滤后，仍可供选择的操作（不含 pass）。
+    /// 和牌 action 不参与鸣牌过滤，始终保留在结果中。
     /// </summary>
-    private static List<string> BuildRemainingMeldActions(List<string> source) {
+    private static List<string> BuildRemainingActionsAfterMeldFilter(List<string> source) {
         List<string> remaining = new List<string>(source);
+        remaining.RemoveAll(a => a == "pass");
         if (AutoAction.Instance.IsPassChi) {
             remaining.RemoveAll(a => a == "chi_left" || a == "chi_mid" || a == "chi_right");
         }
@@ -61,8 +53,20 @@ public partial class NormalGameStateManager {
         if (AutoAction.Instance.IsPassMingGang) {
             remaining.RemoveAll(a => a == "gang");
         }
-        remaining.RemoveAll(a => a == "pass" || IsHuAction(a));
         return remaining;
+    }
+
+    /// <summary>
+    /// 鸣牌询问是否应自动 pass：仅当服务器给出的全部可操作项（不含 pass）均被筛除时为 true。
+    /// 例：可吃可碰可和且只开「不吃/不碰」→ 和牌仍在，返回 false，等待玩家或「自动胡牌」。
+    /// 「不吃+不碰+不明杠」全开启等效于主面板「自动过牌」，但仍不因和牌选项而自动 pass。
+    /// </summary>
+    private static bool ShouldAutoPassMingPaiAsk(List<string> allowActions) {
+        bool hasOfferedAction = allowActions.Any(a => a != "pass");
+        if (!hasOfferedAction) {
+            return false;
+        }
+        return BuildRemainingActionsAfterMeldFilter(allowActions).Count == 0;
     }
 
     /// <summary>
@@ -70,8 +74,8 @@ public partial class NormalGameStateManager {
     /// AutoMingPaiAction（他人切牌/加杠后的鸣牌询问）优先级：
     ///   1. 牌张设置命中 → 直接 pass（含荣和，最高优先级）
     ///   2. 自动和牌（受不点和/不抢杠约束）
-    ///   3. 有和牌但未自动和：仍有鸣牌 → 不跳过；鸣牌已全部过滤 → 跳过
-    ///   4. 无和牌：鸣牌过滤光 / 自动过牌 → 跳过
+    ///   3. 鸣牌过滤后无任何剩余可操作项 → 自动 pass
+    ///   4. 仍有剩余项（含手动和牌）→ 不自动操作，等待玩家
     /// AutoHandAction（自己回合手牌询问）优先级：
     ///   1. 自动自摸（受不自摸约束） 2. 自动补花 3. 自动出牌
     /// </summary>
@@ -106,28 +110,8 @@ public partial class NormalGameStateManager {
                     }
                 }
 
-                List<string> remainingMelds = BuildRemainingMeldActions(allowActionList);
-                bool hadMeldOptions = HasMeldAction(allowActionList);
-                bool allMeldsFiltered = hadMeldOptions && remainingMelds.Count == 0;
-
-                // 有和牌但未自动和：仍有未过滤鸣牌 → 不跳过；鸣牌已全部过滤 → 跳过
-                if (hasHuAction) {
-                    if (remainingMelds.Count > 0) {
-                        yield return null;
-                        yield break;
-                    }
-                    if (allMeldsFiltered) {
-                        yield return new WaitForSeconds(0.2f);
-                        GameCanvas.Instance.ChooseAction("pass", 0);
-                        yield break;
-                    }
-                    // 仅有和牌、无鸣牌选项（如不点和但可手动荣和）→ 不跳过
-                    yield return null;
-                    yield break;
-                }
-
-                // 无和牌选项时：鸣牌已全部过滤 或 开启自动过牌（= 不吃碰杠）→ pass
-                if (remainingMelds.Count == 0 || AutoAction.Instance.IsAutoPass){
+                // 不吃/不碰/不明杠 只逐项剔除对应鸣牌；全部可操作项被筛光才自动 pass（和牌不会被剔除）
+                if (ShouldAutoPassMingPaiAsk(allowActionList)) {
                     yield return new WaitForSeconds(0.2f);
                     GameCanvas.Instance.ChooseAction("pass", 0);
                     yield break;

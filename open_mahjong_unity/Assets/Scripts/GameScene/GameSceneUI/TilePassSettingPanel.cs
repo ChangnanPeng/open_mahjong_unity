@@ -6,7 +6,7 @@ using TMPro;
 /// <summary>
 /// 牌张设置子面板。
 /// - 勾选牌张：命中河牌/加杠牌时不询问任何操作（含荣和/抢杠）。
-/// - 不吃/不碰/不明杠：与主面板「自动过牌」同语义，仅过滤鸣牌，不过和牌。
+/// - 不吃/不碰/不明杠：逐项过滤对应鸣牌，不过和牌；三者全选时与主面板「自动过牌」联动。
 /// - 不点和/不自摸/不抢杠：仅在「自动胡牌」开启时，分别阻止自动荣和/自摸/抢杠和。
 /// </summary>
 public class TilePassSettingPanel : MonoBehaviour {
@@ -60,6 +60,7 @@ public class TilePassSettingPanel : MonoBehaviour {
     private readonly Dictionary<int, Toggle> tileToggles = new Dictionary<int, Toggle>();
     private bool isWired;
     private bool isUpdatingSelectAll;
+    private bool isSyncingMeldPassOptions;
     private bool passChi;
     private bool passPeng;
     private bool passMingGang;
@@ -76,6 +77,24 @@ public class TilePassSettingPanel : MonoBehaviour {
 
     public bool HasAnyMingPaiPassOption =>
         passChi || passPeng || passMingGang || passTileIds.Count > 0;
+
+    /// <summary>「不吃/不碰/不明杠」变更时通知 AutoAction 同步「自动过牌」显示。</summary>
+    public System.Action OnMeldPassOptionsChanged;
+
+    public bool AreAllMeldPassOptionsEnabled => passChi && passPeng && passMingGang;
+
+    /// <summary>批量设置鸣牌过滤项；供主面板「自动过牌」级联调用。</summary>
+    public void SetMeldPassOptions(bool chi, bool peng, bool mingGang) {
+        isSyncingMeldPassOptions = true;
+        passChi = chi;
+        passPeng = peng;
+        passMingGang = mingGang;
+        SetSelectAllSilently(passChiToggle, chi);
+        SetSelectAllSilently(passPengToggle, peng);
+        SetSelectAllSilently(passMingGangToggle, mingGang);
+        isSyncingMeldPassOptions = false;
+        OnMeldPassOptionsChanged?.Invoke();
+    }
 
     public void Initialize() {
         WireIfNeeded();
@@ -141,9 +160,9 @@ public class TilePassSettingPanel : MonoBehaviour {
         WireSelectAllToggle(selectAllRedDoraToggle, RedDoraTileIds);
         WireSelectAllTilesToggle();
 
-        WireBehaviorToggle(passChiToggle, value => passChi = value);
-        WireBehaviorToggle(passPengToggle, value => passPeng = value);
-        WireBehaviorToggle(passMingGangToggle, value => passMingGang = value);
+        WireMeldPassToggle(passChiToggle, value => passChi = value);
+        WireMeldPassToggle(passPengToggle, value => passPeng = value);
+        WireMeldPassToggle(passMingGangToggle, value => passMingGang = value);
         WireBehaviorToggle(noRonToggle, value => noRon = value);
         WireBehaviorToggle(noTsumoToggle, value => noTsumo = value);
         WireBehaviorToggle(noRobKongToggle, value => noRobKong = value);
@@ -284,6 +303,17 @@ public class TilePassSettingPanel : MonoBehaviour {
         if (toggle == null || tileIds == null) return;
         toggle.onValueChanged.RemoveAllListeners();
         toggle.onValueChanged.AddListener(isOn => OnSelectAllChanged(tileIds, isOn));
+    }
+
+    private void WireMeldPassToggle(Toggle toggle, System.Action<bool> setter) {
+        if (toggle == null || setter == null) return;
+        toggle.onValueChanged.RemoveAllListeners();
+        toggle.onValueChanged.AddListener(isOn => {
+            setter(isOn);
+            if (!isSyncingMeldPassOptions) {
+                OnMeldPassOptionsChanged?.Invoke();
+            }
+        });
     }
 
     private static void WireBehaviorToggle(Toggle toggle, System.Action<bool> setter) {
