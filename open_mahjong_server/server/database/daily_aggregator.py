@@ -1,6 +1,6 @@
 """
 每日 04:00 聚合任务（统计日 = 北京时间当日 04:00 ~ 次日 04:00）：
-- daily_stats：每日对局数 / 用户量 / 最大在线
+- daily_stats：每日对局数 / 日活 / 活跃用户 / 最大在线
 - scene_daily_stats：各场次（room_type/match_tier/event_id/rule/game_type）聚合
 """
 import logging
@@ -20,6 +20,7 @@ DEFAULT_RESTORE_SINCE = date(2026, 6, 6)
 MATCH_TIERS = ("beginner", "intermediate", "advanced", "mcrpl")
 MATCH_TIER_SQL = ", ".join(f"'{t}'" for t in MATCH_TIERS)
 FULL_BACKFILL_META_KEY = "scene_stats_full_backfill_v1"
+DAU_METRIC_BACKFILL_META_KEY = "daily_stats_dau_v1"
 
 _SCENE_METRIC_COLUMNS = [
     "total_games", "total_rounds", "win_count", "self_draw_count", "deal_in_count",
@@ -41,7 +42,7 @@ def current_stat_date() -> date:
 
 
 def aggregate_daily_stats(db_manager, stat_date: date, max_online: int = None) -> None:
-    """聚合某统计日的 daily_stats（对局数/用户量/最大在线），UPSERT。"""
+    """聚合某统计日的 daily_stats（对局数/日活/活跃用户/最大在线），UPSERT。"""
     conn = None
     try:
         conn = db_manager._get_connection()
@@ -53,16 +54,23 @@ def aggregate_daily_stats(db_manager, stat_date: date, max_online: int = None) -
         )
         game_count = int(cursor.fetchone()[0] or 0)
 
+        cursor.execute(
+            """
+            SELECT COUNT(*)::int
+            FROM daily_login_users
+            WHERE stat_date = %s AND user_id > %s
+            """,
+            (stat_date, REGISTERED_USER_ID_MIN),
+        )
+        dau = int(cursor.fetchone()[0] or 0)
+
         cursor.execute(f"""
             SELECT COUNT(DISTINCT gpr.user_id)
             FROM game_player_records gpr
             INNER JOIN game_records gr ON gr.game_id = gpr.game_id
             WHERE {date_expr_gr} = %s
               AND gpr.user_id > %s
-              AND gpr.game_id NOT IN (
-                  SELECT DISTINCT game_id FROM game_player_records WHERE user_id <= %s
-              )
-        """, (stat_date, REGISTERED_USER_ID_MIN, REGISTERED_USER_ID_MIN))
+        """, (stat_date, REGISTERED_USER_ID_MIN))
         active_users = int(cursor.fetchone()[0] or 0)
 
         if max_online is None:
@@ -75,18 +83,19 @@ def aggregate_daily_stats(db_manager, stat_date: date, max_online: int = None) -
         else:
             max_online = int(max_online)
         cursor.execute("""
-            INSERT INTO daily_stats (stat_date, game_count, active_users, max_online, updated_at)
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO daily_stats (stat_date, game_count, dau, active_users, max_online, updated_at)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (stat_date) DO UPDATE SET
                 game_count = EXCLUDED.game_count,
+                dau = EXCLUDED.dau,
                 active_users = EXCLUDED.active_users,
                 max_online = GREATEST(daily_stats.max_online, EXCLUDED.max_online),
                 updated_at = CURRENT_TIMESTAMP
-        """, (stat_date, game_count, active_users, max_online))
+        """, (stat_date, game_count, dau, active_users, max_online))
         conn.commit()
         logger.info(
-            "daily_stats 已聚合 %s: games=%s users=%s max_online=%s",
-            stat_date, game_count, active_users, max_online,
+            "daily_stats 已聚合 %s: games=%s dau=%s active=%s max_online=%s",
+            stat_date, game_count, dau, active_users, max_online,
         )
     except Error as e:
         logger.error("聚合 daily_stats 失败 %s: %s", stat_date, e, exc_info=True)
@@ -188,6 +197,97 @@ def run_daily_aggregation(db_manager, stat_date: date, max_online: int = None) -
     """一次聚合某统计日的 daily_stats 与 scene_daily_stats（各单日，轻量）。"""
     aggregate_daily_stats(db_manager, stat_date, max_online)
     aggregate_scene_daily_stats(db_manager, stat_date)
+
+
+def run_dau_metric_backfill_once(db_manager) -> None:
+    """一次性：为已有统计日重算日活与修正后的活跃用户（含游客对局）。"""
+    if _is_meta_done(db_manager, DAU_METRIC_BACKFILL_META_KEY):
+        return
+    conn = None
+    dates: list = []
+    try:
+        conn = db_manager._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT stat_date FROM daily_stats
+            UNION
+            SELECT DISTINCT stat_date FROM daily_login_users
+            ORDER BY stat_date
+            """
+        )
+        dates = [r[0] for r in cursor.fetchall()]
+        if not dates:
+            end = current_stat_date()
+            start = end - timedelta(days=30)
+            current = start
+            while current <= end:
+                dates.append(current)
+                current += timedelta(days=1)
+    except Error as e:
+        logger.error("查询日活回填日期失败: %s", e, exc_info=True)
+        return
+    finally:
+        if conn:
+            cursor.close()
+            db_manager._put_connection(conn)
+
+    for stat_date in dates:
+        aggregate_daily_stats(db_manager, stat_date)
+    _mark_meta_done(db_manager, DAU_METRIC_BACKFILL_META_KEY)
+    logger.info("日活指标一次性回填完成，共 %d 个统计日", len(dates))
+
+
+def _is_meta_done(db_manager, meta_key: str) -> bool:
+    conn = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT meta_value FROM app_meta WHERE meta_key = %s",
+            (meta_key,),
+        )
+        row = cursor.fetchone()
+        return row is not None and row[0] == "1"
+    except Exception:
+        return False
+    finally:
+        if conn:
+            cursor.close()
+            db_manager._put_connection(conn)
+
+
+def _mark_meta_done(db_manager, meta_key: str) -> None:
+    conn = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS app_meta (
+                   meta_key VARCHAR(100) PRIMARY KEY,
+                   meta_value TEXT,
+                   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+               )"""
+        )
+        cursor.execute(
+            """
+            INSERT INTO app_meta (meta_key, meta_value)
+            VALUES (%s, %s)
+            ON CONFLICT (meta_key) DO UPDATE SET
+                meta_value = EXCLUDED.meta_value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (meta_key, "1"),
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error("标记 meta %s 失败: %s", meta_key, e, exc_info=True)
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            cursor.close()
+            db_manager._put_connection(conn)
 
 
 def _is_full_backfill_done(db_manager) -> bool:
@@ -314,23 +414,24 @@ def run_startup_stats_restore(
             logger.warning("scene_tier_fan_daily 全量重建失败: %s", e)
         _mark_full_backfill_done(db_manager)
         logger.info("首次全量回填完成：metrics %d 行，聚合 %s ~ %s", rows, since_date, date_to)
-        return
+    else:
+        logger.info("统计维护：轻量补齐缺失日（自 %s）", since_date)
+        run_catchup_aggregation(db_manager, since_date=since_date, date_to=date_to)
+        try:
+            conn = db_manager._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM scene_tier_fan_daily")
+            fan_rows = int(cursor.fetchone()[0] or 0)
+            cursor.close()
+            db_manager._put_connection(conn)
+            if fan_rows == 0:
+                from .tier_fan_aggregator import rebuild_scene_tier_fan_daily_range
+                logger.info("scene_tier_fan_daily 为空，执行一次性全量重建")
+                rebuild_scene_tier_fan_daily_range(db_manager, since_date, date_to)
+        except Exception as e:
+            logger.warning("检查/重建 scene_tier_fan_daily 失败: %s", e)
 
-    logger.info("统计维护：轻量补齐缺失日（自 %s）", since_date)
-    run_catchup_aggregation(db_manager, since_date=since_date, date_to=date_to)
-    try:
-        conn = db_manager._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM scene_tier_fan_daily")
-        fan_rows = int(cursor.fetchone()[0] or 0)
-        cursor.close()
-        db_manager._put_connection(conn)
-        if fan_rows == 0:
-            from .tier_fan_aggregator import rebuild_scene_tier_fan_daily_range
-            logger.info("scene_tier_fan_daily 为空，执行一次性全量重建")
-            rebuild_scene_tier_fan_daily_range(db_manager, since_date, date_to)
-    except Exception as e:
-        logger.warning("检查/重建 scene_tier_fan_daily 失败: %s", e)
+    run_dau_metric_backfill_once(db_manager)
 
 
 def run_catchup_aggregation(

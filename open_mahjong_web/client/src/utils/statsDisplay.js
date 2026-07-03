@@ -1,8 +1,28 @@
 export const ratio = (n, d, suffix = '%') =>
   (!d || d <= 0 ? '0.00' + suffix : ((n / d) * 100).toFixed(2) + suffix);
 
-/** 副露率：分子为副露小局数，分母为总小局数×4（四人麻将每局四席） */
-export const fuluRate = (fuluCount, totalRounds) =>
+/** 最大余数法：将 counts 分配为总和恰好 100 的整数百分比 */
+export function distributeIntegerPercents(counts, total) {
+  if (!total || total <= 0) return counts.map(() => 0);
+  const exact = counts.map((c) => (c / total) * 100);
+  const floors = exact.map((v) => Math.floor(v));
+  let remainder = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = exact
+    .map((v, i) => ({ i, rem: v - floors[i] }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  const result = [...floors];
+  for (let k = 0; k < remainder; k++) {
+    result[order[k].i] += 1;
+  }
+  return result;
+}
+
+/** 玩家个人副露率：副露小局数 / 该玩家总小局数 */
+export const playerFuluRate = (fuluCount, totalRounds) =>
+  ratio(fuluCount, totalRounds);
+
+/** 平台全站副露率：四人席累加后除以总小局数×4 */
+export const platformFuluRate = (fuluCount, totalRounds) =>
   ratio(fuluCount, (Number(totalRounds) || 0) * 4);
 
 export const avg = (n, d) =>
@@ -18,24 +38,32 @@ export const avgRank = (s) => {
   return (weighted / games).toFixed(2);
 };
 
-export const buildStatsRows = (s) => [
-  { label: '总对局', value: String(s.total_games || 0) },
-  { label: '总回合', value: String(s.total_rounds || 0) },
-  { label: '平均顺位', value: avgRank(s) },
-  { label: '局均点', value: avg(s.total_round_score, s.total_games) },
-  { label: '一位率', value: ratio(s.first_place_count, s.total_games) },
-  { label: '二位率', value: ratio(s.second_place_count, s.total_games) },
-  { label: '三位率', value: ratio(s.third_place_count, s.total_games) },
-  { label: '四位率', value: ratio(s.fourth_place_count, s.total_games) },
-  { label: '和牌率', value: ratio(s.win_count, s.total_rounds) },
-  { label: '自摸率', value: ratio(s.self_draw_count, s.win_count) },
-  { label: '放铳率', value: ratio(s.deal_in_count, s.total_rounds) },
-  { label: '错和率', value: ratio(s.cuohe_count, s.total_rounds) },
-  { label: '副露率', value: fuluRate(s.fulu_round_count, s.total_rounds) },
-  { label: '平均和番', value: avg(s.total_fan_score, s.win_count) },
-  { label: '平均和巡', value: avg(s.total_win_turn, s.win_count) },
-  { label: '平均铳番', value: avg(s.total_fangchong_score, s.deal_in_count) },
-];
+function buildStatsRowsBase(s, fuluRateFn) {
+  return [
+    { label: '总对局', value: String(s.total_games || 0) },
+    { label: '总回合', value: String(s.total_rounds || 0) },
+    { label: '平均顺位', value: avgRank(s) },
+    { label: '局均点', value: avg(s.total_round_score, s.total_games) },
+    { label: '一位率', value: ratio(s.first_place_count, s.total_games) },
+    { label: '二位率', value: ratio(s.second_place_count, s.total_games) },
+    { label: '三位率', value: ratio(s.third_place_count, s.total_games) },
+    { label: '四位率', value: ratio(s.fourth_place_count, s.total_games) },
+    { label: '和牌率', value: ratio(s.win_count, s.total_rounds) },
+    { label: '自摸率', value: ratio(s.self_draw_count, s.win_count) },
+    { label: '放铳率', value: ratio(s.deal_in_count, s.total_rounds) },
+    { label: '错和率', value: ratio(s.cuohe_count, s.total_rounds) },
+    { label: '副露率', value: fuluRateFn(s.fulu_round_count, s.total_rounds) },
+    { label: '平均和番', value: avg(s.total_fan_score, s.win_count) },
+    { label: '平均和巡', value: avg(s.total_win_turn, s.win_count) },
+    { label: '平均铳番', value: avg(s.total_fangchong_score, s.deal_in_count) },
+  ];
+}
+
+/** 玩家个人统计（PlayerData） */
+export const buildPlayerStatsRows = (s) => buildStatsRowsBase(s, playerFuluRate);
+
+/** 平台全站聚合统计（管理后台 / 平台数据页） */
+export const buildPlatformStatsRows = (s) => buildStatsRowsBase(s, platformFuluRate);
 
 export function buildAllFanEntries(fans, fanDict) {
   const dict = fanDict || {};

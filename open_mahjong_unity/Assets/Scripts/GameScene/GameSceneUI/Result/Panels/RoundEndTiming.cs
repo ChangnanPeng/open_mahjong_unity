@@ -9,6 +9,8 @@ public static class RoundEndTiming {
     public const float HuFanRevealIntervalSeconds = 0.5f;
     public const float HuBeforeTotalPanelSeconds = 0.5f;
     public const float HuConfirmCountdownSeconds = 8f;
+    /// <summary>延时观战 end tick 等待时长中的确认段（真实对局仍为 HuConfirmCountdownSeconds）。</summary>
+    public const float SpectatorHuConfirmCountdownSeconds = 5f;
     /// <summary>四川终局非末步面板停留（由服务端步间 sleep 控制，客户端不再倒计时关面板）。</summary>
     public const float SichuanMidPanelConfirmSeconds = 3f;
     /// <summary>四川查叫面板：有叫/没叫/花猪状态展示停留。</summary>
@@ -34,14 +36,15 @@ public static class RoundEndTiming {
         return duration + SichuanMidPanelConfirmSeconds;
     }
 
-    public static float GetHuResultPanelDuration(int fanCount, int fuFanCount, float delayBeforeVisible, bool includePanelFade = true) {
+    public static float GetHuResultPanelDuration(int fanCount, int fuFanCount, float delayBeforeVisible, bool includePanelFade = true,
+        float? confirmCountdownSeconds = null) {
         float duration = delayBeforeVisible;
         if (includePanelFade) {
             duration += RoundEndPresentationFadeSeconds;
         }
         duration += fuFanCount * HuFanRevealIntervalSeconds;
         duration += fanCount * HuFanRevealIntervalSeconds;
-        duration += HuBeforeTotalPanelSeconds + HuConfirmCountdownSeconds;
+        duration += HuBeforeTotalPanelSeconds + (confirmCountdownSeconds ?? HuConfirmCountdownSeconds);
         return duration;
     }
 }
