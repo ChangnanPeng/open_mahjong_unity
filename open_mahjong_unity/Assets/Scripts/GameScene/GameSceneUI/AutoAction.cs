@@ -10,7 +10,7 @@ using TMPro;
 ///   - 开启自动过牌 → 级联勾选不吃、不碰、不明杠；
 ///   - 三者全部勾选时视同自动过牌亮起；
 ///   - 反选任一不吃/不碰/不明杠 → 自动过牌变暗。
-/// 鸣牌过滤只剔除对应鸣牌项；和牌不受影响。全部可操作项被筛除时才自动 pass。
+/// 鸣牌过滤只剔除对应鸣牌项；「不点和」额外剔除荣和（与未过滤鸣牌并存时保留）。全部可操作项被筛除时才自动 pass。
 /// </summary>
 public class AutoAction : MonoBehaviour{
     public static AutoAction Instance { get; private set; }
@@ -52,7 +52,7 @@ public class AutoAction : MonoBehaviour{
     public bool IsPassChi => GetTilePassPanel()?.PassChi ?? false;
     public bool IsPassPeng => GetTilePassPanel()?.PassPeng ?? false;
     public bool IsPassMingGang => GetTilePassPanel()?.PassMingGang ?? false;
-    // 牌张设置 · 和牌约束（仅在「自动胡牌」开启时生效）
+    // 牌张设置 · 和牌约束（不点和还参与鸣牌 pass 判定；不自摸/不抢杠仅在「自动胡牌」开启时生效）
     public bool IsNoRon => GetTilePassPanel()?.NoRon ?? false;
     public bool IsNoTsumo => GetTilePassPanel()?.NoTsumo ?? false;
     public bool IsNoRobKong => GetTilePassPanel()?.NoRobKong ?? false;

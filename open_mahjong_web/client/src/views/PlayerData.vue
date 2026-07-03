@@ -308,7 +308,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { analyzeRecords } from '../utils/recordAnalyzer'
-import { buildStatsRows } from '../utils/statsDisplay'
+import { buildPlayerStatsRows, distributeIntegerPercents } from '../utils/statsDisplay'
 
 const RULE_DEFS = [
   { key: 'guobiao', label: '国标', statsField: 'guobiao_stats', fanField: 'guobiao' },
@@ -479,7 +479,7 @@ const activeStats = computed(() => {
   return analyzedStats.value
 })
 
-const statsDisplay = computed(() => activeStats.value ? buildStatsRows(activeStats.value) : [])
+const statsDisplay = computed(() => activeStats.value ? buildPlayerStatsRows(activeStats.value) : [])
 
 // ===== 图表数据 =====
 // 最近 20 局顺位：独立拉取玩家最近 20 局（不带筛选），按时间正序
@@ -530,9 +530,10 @@ const pieSegments = computed(() => {
     { key: 4, value: s.fourth_place_count || 0 }
   ]
   const total = counts.reduce((a, c) => a + c.value, 0)
+  const pcts = distributeIntegerPercents(counts.map(c => c.value), total)
   const C = 2 * Math.PI * 40
   let acc = 0
-  return counts.map(c => {
+  return counts.map((c, i) => {
     const frac = total > 0 ? c.value / total : 0
     const len = frac * C
     const seg = {
@@ -542,7 +543,7 @@ const pieSegments = computed(() => {
       color: PIE_COLORS[c.key],
       dash: `${len} ${C - len}`,
       offset: -acc,
-      pct: total > 0 ? ` ${(frac * 100).toFixed(0)}%` : ''
+      pct: total > 0 ? ` ${pcts[i]}%` : ''
     }
     acc += len
     return seg
