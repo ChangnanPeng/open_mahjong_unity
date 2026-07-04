@@ -51,7 +51,6 @@ async def broadcast_game_start(self):
         'tactical_call': getattr(self, 'tactical_call', False), # 战术鸣牌
         'claim_protection': getattr(self, 'claim_protection', False), # 鸣牌保护
         'open_kong_replacement_count': getattr(self, 'open_kong_replacement_count', 2),
-        'sub_rule': getattr(self, 'sub_rule', 'changsha/classic_double_bird'),
         'initial_hu_si_xi': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["siXi"], True),
         'initial_hu_ban_ban_hu': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["banBanHu"], True),
         'initial_hu_que_yi_se': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["queYiSe"], True),
