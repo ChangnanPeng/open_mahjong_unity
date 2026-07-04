@@ -152,6 +152,7 @@ public partial class GameCanvas{
         } else if (actionType == "peng"){
             return "碰";
         } else if (actionType == "angang" || actionType == "jiagang" || actionType == "gang"){
+            if (roomRule == "changsha") return "开杠";
             return "杠";
         } else if (actionType == "hu" || actionType == "hu_self" || actionType == "hu_first" || actionType == "hu_second" || actionType == "hu_third"){
             GameRecordManager.ResolveActionRuleContext(roomRule, null, out string rule, out string subRule);

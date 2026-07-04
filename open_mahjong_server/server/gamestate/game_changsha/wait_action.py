@@ -105,6 +105,7 @@ async def wait_action(self):
                 temp_player_index = task_to_player[task]
                 temp_action_data = await self.action_queues[temp_player_index].get() # 获取操作数据
                 temp_action_type = temp_action_data.get("action_type") # 获取操作类型
+                allowed_actions_before = list(self.action_dict.get(temp_player_index, []))
 
                 # 复制字典以避免引用问题
                 temp_action_data = dict(temp_action_data)
@@ -114,6 +115,9 @@ async def wait_action(self):
                 used_int_time = int(used_time) # 变量整数时间
                 if timeout_grace > 0 and used_int_time >= timeout_grace: # 扣除玩家超出步时的时间
                     self.player_list[temp_player_index].remaining_time -= (used_int_time - timeout_grace)
+
+                if temp_action_type == "pass" and hasattr(self, "record_hu_pass"):
+                    self.record_hu_pass(temp_player_index, allowed_actions_before)
 
                 self.action_dict[temp_player_index] = [] # 从可执行操作列表中移除操作
                 # 主询问 pass 不记入战术 passed（见 tactical_claim.py）
@@ -182,10 +186,18 @@ async def wait_action(self):
         case "waiting_hand_action":
             if action_data:
                 if action_type == "cut": # 切牌
+                    forced_tile = getattr(self, "forced_cut_tile", None)
+                    if forced_tile is not None and action_data.get("TileId") != forced_tile:
+                        logger.warning(
+                            f"开杠补张必须打出指定杠张 player={player_index}, forced={forced_tile}, action_data={action_data}"
+                        )
+                        return
                     cut_result = await apply_player_cut(self, player_index, action_data)
                     if cut_result is None:
                         return
                     tile_id, is_moqie, cut_tile_index = cut_result
+                    forced_cut_was_pending = forced_tile is not None
+                    self.forced_cut_tile = None
                     self.player_list[player_index].discard_tiles.append(tile_id)
                     player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
                     # 广播切牌操作
@@ -201,7 +213,11 @@ async def wait_action(self):
                     if any(self.action_dict[i] for i in self.action_dict):
                         self.game_status = "waiting_action_after_cut" # 转移行为
                     else:
-                        self.game_status = "deal_card" # 历时行为
+                        self.game_status = (
+                            self.next_status_after_claim_window()
+                            if forced_cut_was_pending and hasattr(self, "next_status_after_claim_window")
+                            else "deal_card"
+                        ) # 历时行为
 
 
                 elif action_type == "angang":
@@ -209,6 +225,10 @@ async def wait_action(self):
                     normal_angang = normalize_tile(angang_tile)
                     player = self.player_list[self.current_player_index]
                     hand = player.hand_tiles
+                    is_open_kong = (
+                        hasattr(self, "_is_open_kong_ready_after_declared")
+                        and self._is_open_kong_ready_after_declared(player, normal_angang)
+                    )
                     draw_slot = has_draw_slot(player)
                     is_mo_gang = resolve_is_mo_gang(hand, normal_angang, draw_slot=draw_slot)
                     removed = remove_angang_tiles(hand, normal_angang, draw_slot=draw_slot)
@@ -224,6 +244,7 @@ async def wait_action(self):
                                                   combination_target = f"G{normal_angang}",
                                                   is_mo_gang=is_mo_gang)
 
+                    self.prepare_gang_replacement(2 if is_open_kong else 1, is_open_kong)
                     # 切换到杠后发牌历时行为
                     self.game_status = "deal_card_after_gang"
 
@@ -270,6 +291,7 @@ async def wait_action(self):
                                                   ) # 广播加杠动画
 
                     self.jiagang_tile = normal_jia # 存储抢杠牌
+                    self.prepare_gang_replacement(1, False)
                     self.action_dict = check_action_jiagang(self,normal_jia) # 检查是否有人可以抢杠
                     if any(self.action_dict[i] for i in self.action_dict):
                         self.game_status = "waiting_action_qianggang" # 如果有则执行 等待抢杠行为 转移行为
@@ -292,9 +314,12 @@ async def wait_action(self):
                 hand = player.hand_tiles
                 draw_slot = has_draw_slot(player)
                 is_moqie = draw_slot
-                tile_id = hand[-1] if draw_slot else pick_timeout_discard_tile(hand)
+                forced_tile = getattr(self, "forced_cut_tile", None)
+                tile_id = forced_tile if forced_tile is not None else (hand[-1] if draw_slot else pick_timeout_discard_tile(hand))
                 remove_cut_tile(hand, tile_id, is_moqie, draw_slot=draw_slot)
                 clear_draw_slot(player)
+                forced_cut_was_pending = forced_tile is not None
+                self.forced_cut_tile = None
                 self.player_list[self.current_player_index].discard_tiles.append(tile_id)
                 player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
                 # 广播摸切操作
@@ -309,7 +334,11 @@ async def wait_action(self):
                 if any(self.action_dict[i] for i in self.action_dict):
                     self.game_status = "waiting_action_after_cut" # 转移行为
                 else:
-                    self.game_status = "deal_card" # 历时行为
+                    self.game_status = (
+                        self.next_status_after_claim_window()
+                        if forced_cut_was_pending and hasattr(self, "next_status_after_claim_window")
+                        else "deal_card"
+                    ) # 历时行为
                 return
 
         # 切牌后手牌case 包含 碰 杠 胡 其中碰杠是转移行为 胡是终结行为
@@ -385,6 +414,8 @@ async def wait_action(self):
 
                 # 如果发生碰杠而不是和牌 则发生转移行为
                 if action_type == "peng" or action_type == "gang":
+                    if getattr(self, "pending_gang_forced_discard", False):
+                        self.prepare_gang_replacement(0, False)
                     self.player_list[self.current_player_index].discard_tiles.pop(-1) # 删除弃牌堆的最后一张
                     self.player_list[self.current_player_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
                     self.player_list[player_index].combination_mask.append(combination_mask) # 添加组合掩码
@@ -402,6 +433,7 @@ async def wait_action(self):
                     # 广播碰杠动画
                     await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target)
                     if action_type == "gang":
+                        self.prepare_gang_replacement(2, True)
                         self.game_status = "deal_card_after_gang" # 转移行为
                     else:
                         self.game_status = "onlycut_after_action" # 转移行为
@@ -410,14 +442,14 @@ async def wait_action(self):
                 if action_type == "pass":
                     flush_unexecuted_claim_applications(self, tile_id)
                     await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
-                    self.game_status = "deal_card" # 历时行为
+                    self.game_status = self.next_status_after_claim_window() if hasattr(self, "next_status_after_claim_window") else "deal_card"
                     return
 
             else:
                 # 如果超时则进行历时行为 继续下一个玩家摸牌
                 flush_unexecuted_claim_applications(self, tile_id)
                 await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
-                self.game_status = "deal_card" # 历时行为
+                self.game_status = self.next_status_after_claim_window() if hasattr(self, "next_status_after_claim_window") else "deal_card"
                 return
 
         # 在转移行为以后只能进行切牌操作
@@ -479,13 +511,13 @@ async def wait_action(self):
                     self.game_status = "END"
                     return
                 elif action_type == "pass":
-                    self.game_status = "deal_card" # 历时行为
+                    self.game_status = "deal_card_after_gang" # 抢杠无人胡，原玩家继续补杠牌
                     return
                 else:
                     raise ValueError("抢杠和阶段action_type出现非hu和pass的值")
             # 超时放弃抢杠
             else:
-                self.game_status = "deal_card" # 历时行为
+                self.game_status = "deal_card_after_gang" # 抢杠超时无人胡，原玩家继续补杠牌
                 return
 
         # 等待准备阶段

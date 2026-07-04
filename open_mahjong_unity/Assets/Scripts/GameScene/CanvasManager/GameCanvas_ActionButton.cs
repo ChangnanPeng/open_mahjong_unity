@@ -89,6 +89,11 @@ public partial class GameCanvas : MonoBehaviour {
         }
     }
 
+    private static bool IsChangshaActionContext() {
+        return NormalGameStateManager.Instance != null
+            && NormalGameStateManager.Instance.roomRule == "changsha";
+    }
+
     /// <summary>按当前开关与预设，刷新 ActionButtonContainer 内已有按钮配色。</summary>
     public void RefreshActionButtonColors() {
         if (ActionButtonContainer == null) return;
@@ -138,7 +143,7 @@ public partial class GameCanvas : MonoBehaviour {
                 Debug.Log($"杠牌");
                 ActionButton ActionButtonObj = CreateActionButton(colorPreset);
                 TMP_Text buttonText = ActionButtonObj.TextObject;
-                buttonText.text = "杠";
+                buttonText.text = IsChangshaActionContext() ? "开杠" : "杠";
                 Debug.Log($"杠牌按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }
@@ -175,7 +180,7 @@ public partial class GameCanvas : MonoBehaviour {
                 if (angangButton == null) {
                     angangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = angangButton.TextObject;
-                    buttonText.text = "暗杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "暗杠";
                     Debug.Log($"暗杠按钮: {angangButton}");
                 }
                 angangButton.actionTypeList.Add(action_list[i]);
@@ -186,7 +191,7 @@ public partial class GameCanvas : MonoBehaviour {
                 if (jiagangButton == null) {
                     jiagangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = jiagangButton.TextObject;
-                    buttonText.text = "加杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "加杠";
                     Debug.Log($"加杠按钮: {jiagangButton}");
                 }
                 jiagangButton.actionTypeList.Add(action_list[i]);
