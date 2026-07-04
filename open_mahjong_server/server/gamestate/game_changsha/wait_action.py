@@ -244,7 +244,8 @@ async def wait_action(self):
                                                   combination_target = f"G{normal_angang}",
                                                   is_mo_gang=is_mo_gang)
 
-                    self.prepare_gang_replacement(2 if is_open_kong else 1, is_open_kong)
+                    replacement_count = getattr(self, "open_kong_replacement_count", 2) if is_open_kong else 1
+                    self.prepare_gang_replacement(replacement_count, is_open_kong)
                     # 切换到杠后发牌历时行为
                     self.game_status = "deal_card_after_gang"
 
@@ -433,7 +434,7 @@ async def wait_action(self):
                     # 广播碰杠动画
                     await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target)
                     if action_type == "gang":
-                        self.prepare_gang_replacement(2, True)
+                        self.prepare_gang_replacement(getattr(self, "open_kong_replacement_count", 2), True)
                         self.game_status = "deal_card_after_gang" # 转移行为
                     else:
                         self.game_status = "onlycut_after_action" # 转移行为

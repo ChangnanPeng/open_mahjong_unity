@@ -35,6 +35,14 @@ public class RoomInfo {
     public bool? open_tobi; // 立直麻将专属：是否击飞
     public string hepai_way; // 立直麻将专属：和牌方式 head_bump / multi_ron / three_ron_abort
     public bool? blood_battle; // 四川麻将专属：是否开启血战到底
+    public int open_kong_replacement_count;
+    public bool initial_hu_si_xi;
+    public bool initial_hu_ban_ban_hu;
+    public bool initial_hu_que_yi_se;
+    public bool initial_hu_liu_liu_shun;
+    public bool initial_hu_san_tong;
+    public int bird_count;
+    public bool dealer_bird;
 }
 
 public class GameEndInfo { // 显示游戏结束结果
@@ -233,6 +241,14 @@ public class GameInfo { // 游戏开始时传递房间信息
     public int? dealer_index;           // 当前亲家索引
     public int? view_player_index;      // 实时观战视角座位（客户端作为 self 渲染）
     public bool? blood_battle;          // 四川麻将：是否开启血战到底
+    public int? open_kong_replacement_count;
+    public bool? initial_hu_si_xi;
+    public bool? initial_hu_ban_ban_hu;
+    public bool? initial_hu_que_yi_se;
+    public bool? initial_hu_liu_liu_shun;
+    public bool? initial_hu_san_tong;
+    public int? bird_count;
+    public bool? dealer_bird;
 }
 
 public class SwitchSeatInfo { // 换位信息

@@ -21,6 +21,7 @@ from ..public.claim_protection import (
     schedule_protected_meld_send,
     REAL_MELD_ACTIONS,
 )
+from ...game_calculation.changsha.changsha_hepai_check import INITIAL_HU_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,15 @@ async def broadcast_game_start(self):
         'show_moqie_hint': getattr(self, 'show_moqie_hint', False), # 手摸切灰显
         'tactical_call': getattr(self, 'tactical_call', False), # 战术鸣牌
         'claim_protection': getattr(self, 'claim_protection', False), # 鸣牌保护
+        'open_kong_replacement_count': getattr(self, 'open_kong_replacement_count', 2),
+        'sub_rule': getattr(self, 'sub_rule', 'changsha/classic_double_bird'),
+        'initial_hu_si_xi': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["siXi"], True),
+        'initial_hu_ban_ban_hu': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["banBanHu"], True),
+        'initial_hu_que_yi_se': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["queYiSe"], True),
+        'initial_hu_liu_liu_shun': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["liuLiuShun"], True),
+        'initial_hu_san_tong': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["sanTong"], True),
+        'bird_count': getattr(self, 'bird_count', 2),
+        'dealer_bird': getattr(self, 'dealer_bird', True),
         'isPlayerSetRandomSeed': self.isPlayerSetRandomSeed, # 是否玩家设置了随机种子
         'players_info': [] # ↓玩家信息
     }
