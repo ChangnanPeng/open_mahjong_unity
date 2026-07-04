@@ -907,6 +907,7 @@ public class EndResultPanel : MonoBehaviour {
         bool isClassical = rule == "classical/standard";
         bool isRiichi = rule != null && rule.StartsWith("riichi");
         bool isSichuan = rule != null && rule.StartsWith("sichuan");
+        bool isChangsha = rule != null && rule.StartsWith("changsha");
 
         if (isRiichi && riichiExtras != null) {
             TotalFu.gameObject.SetActive(true);
@@ -930,11 +931,13 @@ public class EndResultPanel : MonoBehaviour {
             TotalFan.text = fanTotal >= 0 ? $"{fanTotal}番" : "满贯";
         } else if (isSichuan) {
             TotalFan.text = $"{ScoreHistorySettlementHelper.CalculateSichuanFanTotal(rule, huFan)}番";
+        } else if (isChangsha) {
+            TotalFan.text = $"{huScore}分";
         } else {
             TotalFan.text = $"{huScore}番";
         }
 
-        TotalScore.text = $"{huScore}点";
+        TotalScore.text = isChangsha ? $"{huScore}分" : $"{huScore}点";
 
         bool showLimit = isClassical && huScore >= 300;
         TotalLimitDisplay.gameObject.SetActive(showLimit);

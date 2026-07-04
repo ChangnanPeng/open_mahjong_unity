@@ -55,6 +55,7 @@ public class RulebookPanelController : MonoBehaviour {
             case "classical": return "classical";
             case "riichi": return "riichi";
             case "sichuan": return "sichuan";
+            case "changsha": return "changsha";
             default: return "guobiao";
         }
     }

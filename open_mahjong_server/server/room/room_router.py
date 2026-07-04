@@ -60,6 +60,8 @@ async def handle_room_message(game_server, Connect_id: str, message: dict, webso
         await handle_create_GB_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Qingque_room":
         await handle_create_Qingque_room(game_server, Connect_id, message, websocket)
+    elif message_type == "room/create_Changsha_room":
+        await handle_create_Changsha_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Classical_room":
         await handle_create_Classical_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Sichuan_room":
@@ -139,6 +141,33 @@ async def handle_create_Qingque_room(game_server, Connect_id: str, message: dict
         message["tips"],
         message.get("random_seed", 0),
         message.get("sub_rule", "qingque/standard"),
+        message.get("tourist_limit", False),
+        message.get("allow_spectator", True),
+        message.get("tactical_call", False),
+        message.get("claim_protection", True),
+    )
+    await websocket.send_json(response.dict(exclude_none=True))
+
+async def handle_create_Changsha_room(game_server, Connect_id: str, message: dict, websocket):
+    """处理创建长沙麻将房间请求"""
+    logging.info(f"创建长沙麻将房间请求 - 用户名: {Connect_id}")
+    if Connect_id in game_server.players:
+        player = game_server.players[Connect_id]
+        blocked = _reject_room_entry(game_server, player)
+        if blocked:
+            await websocket.send_json(blocked.dict(exclude_none=True))
+            return
+
+    response = await game_server.create_Changsha_room(
+        Connect_id,
+        message["roomname"],
+        message["gameround"],
+        message["password"],
+        message["roundTimerValue"],
+        message["stepTimerValue"],
+        message["tips"],
+        message.get("random_seed", 0),
+        message.get("sub_rule", "changsha/classic_double_bird"),
         message.get("tourist_limit", False),
         message.get("allow_spectator", True),
         message.get("tactical_call", False),

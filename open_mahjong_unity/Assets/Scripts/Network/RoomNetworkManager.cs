@@ -303,6 +303,39 @@ public class RoomNetworkManager : MonoBehaviour {
     }
 
     /// <summary>
+    /// 创建长沙麻将房间
+    /// </summary>
+    public async void Create_Changsha_Room(Changsha_Create_RoomConfig config) {
+        if (BlockRoomEntryRequest()) return;
+        try {
+            if (!TryResolveRandomSeed(config.RandomSeed, out string randomSeed, out string seedError)) {
+                NotificationManager.Instance.ShowTip("create_room", false, seedError);
+                return;
+            }
+
+            var request = new CreateChangshaRoomRequest {
+                type = "room/create_Changsha_room",
+                rule = config.Rule,
+                sub_rule = config.SubRule ?? "changsha/classic_double_bird",
+                roomname = config.RoomName,
+                gameround = config.GameRound,
+                roundTimerValue = config.RoundTimer,
+                stepTimerValue = config.StepTimer,
+                tips = config.Tips,
+                password = config.Password,
+                random_seed = randomSeed,
+                tourist_limit = config.TouristLimit,
+                allow_spectator = config.AllowSpectator,
+                tactical_call = config.TacticalCall
+            };
+            Debug.Log($"发送创建长沙麻将房间消息: {config.RoomName}, {config.GameRound}, {config.SubRule}, tactical_call={config.TacticalCall}");
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            NetworkManager.Instance.CreateRoomResponse.Invoke(false, e.Message);
+        }
+    }
+
+    /// <summary>
     /// 创建立直麻将房间
     /// </summary>
     public async void Create_Riichi_Room(Riichi_Create_RoomConfig config) {

@@ -326,6 +326,22 @@ public static class FanTextDictionary {
         {"海底", "1番"},
     };
 
+    public static readonly Dictionary<string, string> FanToDisplayChangsha = new Dictionary<string, string> {
+        {"小胡", "基础"},
+        {"碰碰胡", "大胡"},
+        {"将将胡", "大胡"},
+        {"清一色", "大胡"},
+        {"全求人", "大胡"},
+        {"七小对", "大胡"},
+        {"豪华七小对", "大胡"},
+        {"天胡", "大胡"},
+        {"地胡", "大胡"},
+        {"海底", "大胡"},
+        {"杠上开花", "大胡"},
+        {"杠上炮", "大胡"},
+        {"抢杠胡", "大胡"},
+    };
+
     /// <summary>
     /// 古典规则：根据副种名称返回副数显示文本（如 "10副"），未命中时返回 "0副"。
     /// </summary>
@@ -380,6 +396,13 @@ public static class FanTextDictionary {
         else if (rule == "guobiao/lanshi") map = FanToDisplayLanshi;
         else if (rule == "classical/standard") map = FanToDisplayClassical;
         else if (rule == "sichuan/standard") map = FanToDisplaySichuan;
+        else if (rule == "changsha/classic_double_bird") {
+            if (!string.IsNullOrEmpty(fanName)
+                && (fanName.StartsWith("鸟牌:") || fanName.StartsWith("中鸟x"))) {
+                return "结算";
+            }
+            map = FanToDisplayChangsha;
+        }
         else if (rule != null && rule.StartsWith("riichi")) {
             if (FanToDisplayRiichi.TryGetValue(fanName, out string riichiDisplay)) return riichiDisplay;
             if (FanToDisplayRiichiInactive.TryGetValue(fanName, out riichiDisplay)) return riichiDisplay;

@@ -2186,6 +2186,11 @@ from .sichuan.store_sichuan import store_sichuan_game_record
 
 DatabaseManager.store_sichuan_game_record = store_sichuan_game_record
 
+# 挂载长沙麻将相关方法到 DatabaseManager 类（牌谱写通用表，无需专用统计表）
+from .changsha.store_changsha import store_changsha_game_record
+
+DatabaseManager.store_changsha_game_record = store_changsha_game_record
+
 from .riichi.store_riichi import store_riichi_game_record, store_riichi_game_stats, store_riichi_fan_stats
 from .riichi.get_riichi_stats import get_riichi_stats
 

@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 from .game_guobiao.GuobiaoGameState import GuobiaoGameState
 from ..response import Response, MessageInfo
 from .game_mmcr.QingqueGameState import QingqueGameState
+from .game_changsha.ChangshaGameState import ChangshaGameState
 from .game_classical.ClassicalGameState import ClassicalGameState
 from .game_riichi.RiichiGameState import RiichiGameState
 from .game_sichuan.SichuanGameState import SichuanGameState
@@ -25,6 +26,7 @@ class GameStateManager:
         # 管理不同房间id到已启动的游戏服务的映射（仅用于开始游戏时检查，之后不再使用）
         self.room_id_to_GuobiaoGameState: Dict[str, GuobiaoGameState] = {}
         self.room_id_to_QingqueGameState: Dict[str, QingqueGameState] = {}
+        self.room_id_to_ChangshaGameState: Dict[str, ChangshaGameState] = {}
         self.room_id_to_ClassicalGameState: Dict[str, ClassicalGameState] = {}
         self.room_id_to_RiichiGameState: Dict[str, RiichiGameState] = {}
         self.room_id_to_SichuanGameState: Dict[str, SichuanGameState] = {}
@@ -150,6 +152,34 @@ class GameStateManager:
                     if hasattr(game_state, 'gamestate_id') and game_state.gamestate_id in self.gamestate_id_to_game_state:
                         del self.gamestate_id_to_game_state[game_state.gamestate_id]
                     del self.room_id_to_QingqueGameState[room_id]
+                return Response(type="error_message", success=False, message=f"启动游戏失败: {str(e)}")
+        elif room_rule == "changsha":
+            try:
+                gamestate_id = str(uuid.uuid4())
+
+                game_state = ChangshaGameState(
+                    self.game_server,
+                    room_data,
+                    self.game_server.calculation_service,
+                    self.game_server.db_manager,
+                    gamestate_id
+                )
+                self.room_id_to_ChangshaGameState[room_id] = game_state
+                self.gamestate_id_to_game_state[gamestate_id] = game_state
+
+                for player_id in room_data["player_list"]:
+                    self.user_id_to_game_state[player_id] = game_state
+
+                game_state.game_task = asyncio.create_task(game_state.run_game_loop())
+                logger.info(f"房间 {room_id} 的长沙麻将游戏已启动，gamestate_id: {gamestate_id}")
+            except Exception as e:
+                logger.error(f"创建长沙麻将游戏任务时发生异常，room_id: {room_id}, 错误: {e}", exc_info=True)
+                room_data["is_game_running"] = False
+                if room_id in self.room_id_to_ChangshaGameState:
+                    game_state = self.room_id_to_ChangshaGameState[room_id]
+                    if hasattr(game_state, 'gamestate_id') and game_state.gamestate_id in self.gamestate_id_to_game_state:
+                        del self.gamestate_id_to_game_state[game_state.gamestate_id]
+                    del self.room_id_to_ChangshaGameState[room_id]
                 return Response(type="error_message", success=False, message=f"启动游戏失败: {str(e)}")
         elif room_rule == "classical":
             try:
@@ -327,6 +357,8 @@ class GameStateManager:
             return self.room_id_to_GuobiaoGameState.get(room_id)
         elif room_id in self.room_id_to_QingqueGameState:
             return self.room_id_to_QingqueGameState.get(room_id)
+        elif room_id in self.room_id_to_ChangshaGameState:
+            return self.room_id_to_ChangshaGameState.get(room_id)
         elif room_id in self.room_id_to_ClassicalGameState:
             return self.room_id_to_ClassicalGameState.get(room_id)
         elif room_id in self.room_id_to_RiichiGameState:
@@ -467,6 +499,8 @@ class GameStateManager:
             del self.room_id_to_GuobiaoGameState[game_state.room_id]
         elif game_state.room_id in self.room_id_to_QingqueGameState:
             del self.room_id_to_QingqueGameState[game_state.room_id]
+        elif game_state.room_id in self.room_id_to_ChangshaGameState:
+            del self.room_id_to_ChangshaGameState[game_state.room_id]
         elif game_state.room_id in self.room_id_to_ClassicalGameState:
             del self.room_id_to_ClassicalGameState[game_state.room_id]
         elif game_state.room_id in self.room_id_to_RiichiGameState:
