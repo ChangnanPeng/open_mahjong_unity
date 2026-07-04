@@ -175,7 +175,8 @@ public static class GameRecordMeldCodec {
         // 日麻 / 川麻：两侧暗面、中间两张明牌，便于识别暗杠牌种
         bool usePeekAnkanMask = !string.IsNullOrEmpty(rule)
             && (rule == "riichi" || rule.StartsWith("riichi")
-                || rule == "sichuan" || rule.StartsWith("sichuan"));
+                || rule == "sichuan" || rule.StartsWith("sichuan")
+                || rule == "changsha" || rule.StartsWith("changsha"));
         if (usePeekAnkanMask) {
             return new[] { 2, r0, 0, r1, 0, r2, 2, r3 };
         }

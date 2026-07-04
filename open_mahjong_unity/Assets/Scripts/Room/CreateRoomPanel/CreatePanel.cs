@@ -1,10 +1,11 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using System;
 using System.Collections.Generic;
 using TMPro;
 
 /// <summary>
-/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical）
+/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical / sichuan / changsha）
 /// 驱动配置项的显隐与默认值。
 ///
 /// 设计要点：头部 <see cref="RuleConfigs"/> 为每条规则"全量"登记需要的配置项及默认值。
@@ -105,9 +106,20 @@ public class CreatePanel : MonoBehaviour {
             { CfgTacticalCall,   false }, // 战术鸣牌
             { CfgBloodBattle,    true },  // 血战到底：默认开
         } },
+        { "changsha", new Dictionary<string, object> {
+            { CfgGameRound,      4 },
+            { CfgRoundTimer,     2 },
+            { CfgStepTimer,      1 },
+            { CfgTips,           true },
+            { CfgPassword,       false },
+            { CfgRandomSeed,     false },
+            { CfgTouristLimit,   false },
+            { CfgAllowSpectator, true },
+            { CfgTacticalCall,   false },
+        } },
     };
 
-    /// <summary>规则状态：guobiao / riichi / qingque / classical，与 chooseRule 下拉索引对应 0/1/2/3。</summary>
+    /// <summary>规则状态：guobiao / riichi / qingque / classical / sichuan / changsha。</summary>
     private string _ruleState = "guobiao";
 
     [Header("Dropdown")]
@@ -158,7 +170,17 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private Button createButton;
     [SerializeField] private Button addRuleButton;
 
+    private void EnsureRuleDropdownOptions() {
+        if (chooseRule == null) return;
+        foreach (TMP_Dropdown.OptionData option in chooseRule.options) {
+            if (option.text.Contains("长沙")) return;
+        }
+        chooseRule.options.Add(new TMP_Dropdown.OptionData("长沙麻将"));
+        chooseRule.RefreshShownValue();
+    }
+
     private void Start() {
+        EnsureRuleDropdownOptions();
         chooseRule.onValueChanged.AddListener(OnRuleDropdownChanged);
         closeButton.onClick.AddListener(ClosePanel);
         createButton.onClick.AddListener(CreateRoom);
@@ -199,6 +221,7 @@ public class CreatePanel : MonoBehaviour {
             2 => "qingque",
             3 => "classical",
             4 => "sichuan",
+            5 => "changsha",
             _ => "guobiao"
         };
         bool hasSubRule = RuleConfigs[_ruleState].ContainsKey(CfgSubRule);
@@ -294,6 +317,7 @@ public class CreatePanel : MonoBehaviour {
         if (_ruleState == "qingque") return "qingque/standard";
         if (_ruleState == "classical") return "classical/standard";
         if (_ruleState == "sichuan") return "sichuan/standard";
+        if (_ruleState == "changsha") return "changsha/classic_double_bird";
         if (_ruleState == "riichi") return GetSelectedRiichiSubRule();
         return GetSelectedSubRule();
     }
@@ -437,6 +461,12 @@ public class CreatePanel : MonoBehaviour {
 
         if (_ruleState == "sichuan") {
             CreateSichuanRoom();
+            return;
+        }
+
+        if (_ruleState == "changsha") {
+            CreateChangshaRoom();
+            return;
         }
     }
 
@@ -610,6 +640,30 @@ public class CreatePanel : MonoBehaviour {
         RoomNetworkManager.Instance.Create_Sichuan_Room(config);
     }
 
+    private void CreateChangshaRoom() {
+        var config = new Changsha_Create_RoomConfig {
+            RoomName = roomNameInput.text.Trim(),
+            GameRound = GetSelectedGameTime(),
+            Password = passwordToggle.isOn ? passwordInput.text.Trim() : "",
+            RandomSeed = SetRandomSeedToggle.isOn ? randomSeedInput.text.Trim() : "",
+            Rule = "changsha",
+            SubRule = "changsha/classic_double_bird",
+            RoundTimer = GetSelectedRoundTimer(),
+            StepTimer = GetSelectedStepTimer(),
+            Tips = tipsToggle.isOn,
+            TouristLimit = TouristLimitToggle.isOn,
+            AllowSpectator = AllowSpectatorToggle.isOn,
+            TacticalCall = TacticalCallToggle.isOn,
+        };
+
+        if (!config.Validate(out string error, passwordToggle.isOn, SetRandomSeedToggle.isOn)) {
+            Debug.LogWarning(error);
+            NotificationManager.Instance.ShowTip("create_room", false, $"创建房间失败: {error}");
+            return;
+        }
+        RoomNetworkManager.Instance.Create_Changsha_Room(config);
+    }
+
     private int GetSelectedGameTime() {
         if (gameTime1Button.isOn) return 1;
         if (gameTime2Button.isOn) return 2;
@@ -658,7 +712,11 @@ public class CreatePanel : MonoBehaviour {
             if (_ruleState == "guobiao")
                 HepaiLimitInput.text = GetGuobiaoSubRuleDefaultHepaiLimit(GetSelectedSubRule()).ToString();
             else {
-                int fallback = (int)RuleConfigs[_ruleState].GetValueOrDefault(CfgHepaiLimit, 8);
+                object fallbackValue;
+                int fallback = RuleConfigs.TryGetValue(_ruleState, out var config)
+                    && config.TryGetValue(CfgHepaiLimit, out fallbackValue)
+                    ? Convert.ToInt32(fallbackValue)
+                    : 8;
                 HepaiLimitInput.text = fallback.ToString();
             }
         }

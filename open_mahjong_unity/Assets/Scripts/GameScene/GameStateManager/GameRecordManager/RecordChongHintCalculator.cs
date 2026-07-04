@@ -79,6 +79,9 @@ public static class RecordChongHintCalculator {
           waitingTiles.RemoveWhere(w => (w / 10) == dingque);
         }
       }
+      else if (roomRule == "changsha") {
+        waitingTiles = ChangshaExternal.TingpaiCheck(handForCheck, combinations);
+      }
       else {
         waitingTiles = new HashSet<int>();
       }
