@@ -15,6 +15,7 @@ function mapDailyRow(row) {
   return {
     stat_date: formatStatDate(row.stat_date),
     game_count: Number(row.game_count) || 0,
+    dau: Number(row.dau) || 0,
     active_users: Number(row.active_users) || 0,
     max_online: Number(row.max_online) || 0,
   };
@@ -53,7 +54,7 @@ router.get('/daily', async (req, res) => {
     const params = [dateFrom, dateTo];
     if (granularity === 'day') {
       sql = `
-        SELECT stat_date, game_count, active_users, max_online
+        SELECT stat_date, game_count, dau, active_users, max_online
         FROM daily_stats
         WHERE stat_date >= $1::date AND stat_date <= $2::date
         ORDER BY stat_date ASC
@@ -64,6 +65,7 @@ router.get('/daily', async (req, res) => {
         SELECT
           date_trunc('${trunc}', stat_date)::date AS stat_date,
           SUM(game_count)::int AS game_count,
+          SUM(dau)::int AS dau,
           SUM(active_users)::int AS active_users,
           MAX(max_online)::int AS max_online
         FROM daily_stats

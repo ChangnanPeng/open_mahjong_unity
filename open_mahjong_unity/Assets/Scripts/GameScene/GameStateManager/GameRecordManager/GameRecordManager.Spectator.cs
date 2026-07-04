@@ -383,7 +383,7 @@ public partial class GameRecordManager {
 
     /// <summary>
     /// 计算 end tick 的保持时长：end 会清除上一条结算面板，需保持到结算演出完成。
-    /// - 和牌：按番/符数量计算完整面板演出时长（含确认倒计时），与真实玩家观感一致；
+    /// - 和牌：按番/符数量计算完整面板演出时长，确认段用 SpectatorHuConfirmCountdownSeconds（5 秒）；
     /// - 流局/九种九牌：保持流局提示停留时间；
     /// - 其它：沿用默认短延时。
     /// </summary>
@@ -405,7 +405,8 @@ public partial class GameRecordManager {
                 // tick: [hu_class, hepai_index, hu_score, hu_fan_json, score_changes_json, base_fu?, fu_fan_list?]
                 int fanCount = ParseHuFanList(prevTick, 3)?.Length ?? 0;
                 int fuFanCount = prevTick.Count > 6 ? (ParseHuFanList(prevTick, 6)?.Length ?? 0) : 0;
-                return RoundEndTiming.GetHuResultPanelDuration(fanCount, fuFanCount, 0f);
+                return RoundEndTiming.GetHuResultPanelDuration(fanCount, fuFanCount, 0f,
+                    confirmCountdownSeconds: RoundEndTiming.SpectatorHuConfirmCountdownSeconds);
             }
             case "hu_riichi": {
                 // tick: [hu_riichi, hepai_index, hu_class, han, fu, yaku[], ...]
@@ -414,7 +415,8 @@ public partial class GameRecordManager {
                     return 2.0f;
                 }
                 int yakuCount = ParseHuFanList(prevTick, 5)?.Length ?? 0;
-                return RoundEndTiming.GetHuResultPanelDuration(yakuCount, 0, 0f);
+                return RoundEndTiming.GetHuResultPanelDuration(yakuCount, 0, 0f,
+                    confirmCountdownSeconds: RoundEndTiming.SpectatorHuConfirmCountdownSeconds);
             }
             case "liuju":
             case "jiuzhongjiupai":
@@ -505,13 +507,57 @@ public partial class GameRecordManager {
         }
         currentRoundIndex = lastRound;
         InitGameRound(lastRound);
-        // 不再 GotoAction 跳转：AutoPlay 从本局 node 0 按序逐步播放已有 tick，动画照播。
-        // 追赶即 WebSocket 信息堆积后按序自然执行，无需额外加速/降帧逻辑。
         int tickCount = 0;
+        List<List<string>> actionTicks = null;
         if (gameRecord.gameRound.rounds.TryGetValue(lastRound, out Round rd) && rd.actionTicks != null) {
-            tickCount = rd.actionTicks.Count;
+            actionTicks = rd.actionTicks;
+            tickCount = actionTicks.Count;
         }
-        waitingForMoreTicks = tickCount == 0;
+        // 快进到最新 node，但保留末尾「结算 + end」给 AutoPlay 正常播和牌/流局面板；GotoAction 只重建状态不触发演出。
+        int catchUpNode = ResolveSpectatorCatchUpNode(actionTicks);
+        if (catchUpNode > 0) {
+            GotoAction(catchUpNode);
+        }
+        waitingForMoreTicks = catchUpNode >= tickCount;
+    }
+
+    /// <summary>
+    /// 观战追帧目标 node：跳过已完结的 end，且若末尾是「结算→end」则停在结算 tick 前，由 AutoPlay 播面板后再 end 切局。
+    /// </summary>
+    private static int ResolveSpectatorCatchUpNode(List<List<string>> ticks) {
+        if (ticks == null || ticks.Count == 0) return 0;
+        int node = ticks.Count;
+        while (node > 0 && GetTickAction(ticks, node - 1) == "end") {
+            node--;
+        }
+        if (node < ticks.Count) {
+            while (node > 0 && IsSpectatorSettlementTick(GetTickAction(ticks, node - 1))) {
+                node--;
+            }
+        }
+        return node;
+    }
+
+    private static string GetTickAction(List<List<string>> ticks, int index) {
+        if (ticks == null || index < 0 || index >= ticks.Count) return "";
+        List<string> tick = ticks[index];
+        return tick != null && tick.Count > 0 ? tick[0] : "";
+    }
+
+    private static bool IsSpectatorSettlementTick(string action) {
+        switch (action) {
+            case "hu_self":
+            case "hu_first":
+            case "hu_second":
+            case "hu_third":
+            case "hu_riichi":
+            case "liuju":
+            case "jiuzhongjiupai":
+            case "ryuukyoku":
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

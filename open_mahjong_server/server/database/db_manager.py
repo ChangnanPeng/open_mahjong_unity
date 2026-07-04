@@ -782,15 +782,48 @@ class DatabaseManager:
                 "('beginner', 'intermediate', 'advanced', 'mcrpl');"
             )
 
-            # 每日全站统计：对局数 / 用户量 / 最大在线
+            # 每日全站统计：对局数 / 日活 / 活跃用户 / 最大在线
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS daily_stats (
                     stat_date DATE PRIMARY KEY,
                     game_count INT NOT NULL DEFAULT 0,
+                    dau INT NOT NULL DEFAULT 0,
                     active_users INT NOT NULL DEFAULT 0,
                     max_online INT NOT NULL DEFAULT 0,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+            """)
+            cursor.execute("SAVEPOINT sp_add_daily_stats_dau;")
+            try:
+                cursor.execute(
+                    "ALTER TABLE daily_stats ADD COLUMN dau INT NOT NULL DEFAULT 0;"
+                )
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_add_daily_stats_dau;")
+                else:
+                    raise
+
+            # 每日登录用户（注册用户日活，登录时 UPSERT，不受 IP 记录 20 条裁剪影响）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_login_users (
+                    stat_date DATE NOT NULL,
+                    user_id   BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    PRIMARY KEY (stat_date, user_id)
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_daily_login_users_stat_date
+                ON daily_login_users(stat_date);
+            """)
+            cursor.execute("""
+                INSERT INTO daily_login_users (stat_date, user_id)
+                SELECT DISTINCT
+                    ((logged_at AT TIME ZONE 'Asia/Shanghai') - interval '4 hours')::date,
+                    user_id
+                FROM user_login_ips
+                WHERE user_id > 10000000
+                ON CONFLICT (stat_date, user_id) DO NOTHING
             """)
 
             # 当日在线峰值缓存：每 60s 由采样器 UPSERT(GREATEST) 持久化，
@@ -977,6 +1010,16 @@ class DatabaseManager:
                 "INSERT INTO user_login_ips (user_id, ip_address) VALUES (%s, %s)",
                 (user_id, ip),
             )
+            if user_id > 10000000:
+                from .daily_aggregator import current_stat_date
+                cursor.execute(
+                    """
+                    INSERT INTO daily_login_users (stat_date, user_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (stat_date, user_id) DO NOTHING
+                    """,
+                    (current_stat_date(), user_id),
+                )
             cursor.execute(
                 """
                 DELETE FROM user_login_ips
