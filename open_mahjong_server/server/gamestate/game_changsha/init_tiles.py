@@ -4,7 +4,7 @@ from ..public.random_seed_manager import derive_round_seed
 
 
 def init_changsha_tiles(self):
-    """初始化长沙麻将牌堆（每人13张，庄家第14张在游戏循环中单独发）"""
+    """初始化长沙麻将牌堆（庄家14张，闲家13张）。"""
     # 长沙麻将使用 108 张数牌：万、筒、条各 1-9，每张 4 枚。
     sth_tiles_set = {
         11, 12, 13, 14, 15, 16, 17, 18, 19,  # 万
@@ -20,10 +20,12 @@ def init_changsha_tiles(self):
 
 
 def _shuffle_and_deal_changsha(self) -> None:
-    """长沙：种子生成、洗牌、发牌（每人13张，不额外发牌）"""
+    """长沙：种子生成、洗牌、发牌。"""
     self.round_random_seed = derive_round_seed(self.master_seed, self.current_round)
     random.seed(self.round_random_seed)
     random.shuffle(self.tiles_list)
+    for player in self.player_list:
+        player.has_draw_slot = False
 
     debug_mode = getattr(self, 'Debug', False)
     if debug_mode:
@@ -48,7 +50,10 @@ def _shuffle_and_deal_changsha(self) -> None:
                 for _ in range(13):
                     player.get_tile(self.tiles_list, mark_draw_slot=False)
     else:
-        # 分配每位玩家13张牌（不在此处给庄家额外发牌）
         for player in self.player_list:
             for _ in range(13):
                 player.get_tile(self.tiles_list, mark_draw_slot=False)
+
+    # 长沙麻将开局庄家多一张，首个 game_start 就应体现 14/13/13/13。
+    if self.player_list and len(self.player_list[0].hand_tiles) == 13:
+        self.player_list[0].get_tile(self.tiles_list, mark_draw_slot=True)

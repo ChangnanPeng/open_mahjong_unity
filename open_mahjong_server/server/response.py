@@ -26,6 +26,7 @@ class PlayerInfo(BaseModel):
     score_history: Optional[List[str]] = None  # 分数历史变化列表，每局记录 +？、-？ 或 0
     round_number_history: Optional[List[int]] = None  # 实际每手对应局数（支持连庄重复）
     tag_list: Optional[List[str]] = None  # 标签列表
+    initial_hu_types: Optional[List[str]] = None  # 长沙麻将起手胡类型
     discard_riichi_flags: Optional[List[bool]] = None  # 立直规则：与 discard_tiles 同序的横置标记，重连/牌谱重建时还原横置弃牌
     # 四川麻将（血战到底）专用
     dingque_suit: Optional[int] = None  # 定缺花色：1=万 2=饼 3=条，0/None=未定缺

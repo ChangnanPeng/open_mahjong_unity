@@ -191,6 +191,7 @@ public class PlayerInfo { // 房间信息中单个玩家信息
     public string[] score_history;      // 分数历史变化列表，每局记录 +？、-？ 或 0
     public int[] round_number_history;  // 实际每手对应局数（支持连庄重复）
     public string[] tag_list;           // 标签列表
+    public string[] initial_hu_types;   // 长沙麻将起手胡类型
     public bool[] discard_riichi_flags; // 立直规则：与 discard_tiles 同序的横置标记，重连/牌谱重建时还原横置弃牌
     public int dingque_suit;            // 四川麻将：定缺花色（1万/2饼/3条，0=未定缺），重连/初始同步
     public bool? is_hu;                 // 四川麻将·血战到底：该玩家本盘是否已和牌退场

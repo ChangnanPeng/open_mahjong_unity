@@ -94,6 +94,7 @@ async def broadcast_game_start(self):
                         'voice_used': player.voice_used, # 使用的音色ID
                         'score_history': player.score_history, # 分数历史变化列表
                         'tag_list': player.tag_list, # 标签列表
+                        'initial_hu_types': getattr(self, 'initial_hu_types', {}).get(player.player_index, []),
                     }
                     players_info_for_current.append(player_info)
 

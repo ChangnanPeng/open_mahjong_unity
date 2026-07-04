@@ -6,24 +6,28 @@ logger = logging.getLogger(__name__)
 
 # 检查操作 返回 action_dict
 
+def _is_ready_for_open_kong_claim(self, player_item) -> bool:
+    checker = getattr(getattr(self, "calculation_service", None), "Changsha_tingpai_check", None)
+    if checker is None:
+        return False
+    return bool(checker(player_item.hand_tiles, player_item.combination_tiles))
+
 # 切牌后检查 存储 碰peng 杠gang 胡hu 操作；长沙麻将不允许吃牌
 def check_action_after_cut(self,cut_tile):
     temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
 
     # 如果牌堆内仍有牌则可以碰杠
     if self.tiles_list != []:
-        # 如果任意一家有C=2，则可以碰
+        # 所有符合条件的玩家都要被询问，不能只取第一家。
         for item in self.player_list:
-            if item.hand_tiles.count(cut_tile) >= 2:
+            if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) >= 2:
                 temp_action_dict[item.player_index].append("peng")
-                break
 
         # 检测杠牌：手牌中有3张相同的牌
         for item in self.player_list:
-            if item.hand_tiles.count(cut_tile) == 3:
-                if self.tiles_list != []:
+            if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) == 3:
+                if self.tiles_list != [] and _is_ready_for_open_kong_claim(self, item):
                         temp_action_dict[item.player_index].append("gang")
-                        break
 
     # 如果该牌是任意家的等待牌 且不是自己
     for item in self.player_list:
@@ -110,31 +114,15 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
 
     return temp_action_dict
 
-# 检查碰杠后手牌操作：切牌 + 暗杠/加杠（牌山非空时，与摸牌后杠规则一致）
+# 检查碰后手牌操作：长沙碰牌后直接出牌，避免出现无处理分支的杠按钮。
 def check_only_cut(self, player_index):
     temp_action_dict: Dict[int, list] = {0: [], 1: [], 2: [], 3: []}
     player_item = self.player_list[player_index]
 
-    if self.tiles_list != []:
-        processed_cards = set()
-        for carditem in player_item.hand_tiles:
-            if carditem not in processed_cards and player_item.hand_tiles.count(carditem) == 4:
-                temp_action_dict[player_index].append("angang")
-                processed_cards.add(carditem)
-
-        for combination_tile in player_item.combination_tiles:
-            if combination_tile[0] == "k":
-                jiagang_index = int(combination_tile[1:])
-                if jiagang_index in player_item.hand_tiles:
-                    temp_action_dict[player_index].append("jiagang")
-
     temp_action_dict[player_index].append("cut")
 
     if "peida" in player_item.tag_list:
-        allowed_actions = {"jiagang", "angang", "cut"}
-        temp_action_dict[player_index] = [
-            action for action in temp_action_dict[player_index] if action in allowed_actions
-        ]
+        temp_action_dict[player_index] = ["cut"]
 
     return temp_action_dict
 
@@ -208,6 +196,12 @@ def check_hepai(self,temp_action_dict,hepai_tile,player_index,hepai_type,is_firs
 
 
     if result[0] >= 1:
+        passed_base = getattr(self, "player_passed_hu_base", {}).get(player_index)
+        if passed_base is not None and result[0] <= passed_base:
+            logger.info(
+                f"玩家{player_index}已过同等或更低胡牌，跳过和牌提示 result={result[0]} passed={passed_base}"
+            )
+            return
         if get_index_relative_position(self.player_list[player_index].player_index, self.current_player_index) == "self":
             temp_action_dict[self.player_list[player_index].player_index].append("hu_self") # 自己切牌 最高优先级和牌
             self.result_dict["hu_self"] = result # 保存结算结果

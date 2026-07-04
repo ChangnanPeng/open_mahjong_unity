@@ -31,6 +31,14 @@ BIG_HU_NAMES = {
     "抢杠胡",
 }
 
+INITIAL_HU_NAMES = {
+    "siXi": "四喜",
+    "banBanHu": "板板胡",
+    "queYiSe": "缺一色",
+    "liuLiuShun": "六六顺",
+    "sanTong": "三同",
+}
+
 
 def _rank(tile: int) -> int:
     return tile % 10
@@ -49,6 +57,28 @@ def _count_tiles(tiles: Iterable[int]) -> Dict[int, int]:
     for tile in tiles:
         counts[tile] = counts.get(tile, 0) + 1
     return counts
+
+
+def evaluate_changsha_initial_hu(tiles: List[int]) -> List[str]:
+    counts = _count_tiles(tiles)
+    if not counts or any(tile not in VALID_TILES for tile in tiles):
+        return []
+
+    result: List[str] = []
+    if any(count == 4 for count in counts.values()):
+        result.append(INITIAL_HU_NAMES["siXi"])
+    if all(not _is_jiang(tile) for tile in tiles):
+        result.append(INITIAL_HU_NAMES["banBanHu"])
+    if len({_suit(tile) for tile in tiles}) < 3:
+        result.append(INITIAL_HU_NAMES["queYiSe"])
+    if sum(1 for count in counts.values() if count >= 3) >= 2:
+        result.append(INITIAL_HU_NAMES["liuLiuShun"])
+    if any(
+        all(counts.get(suit * 10 + rank, 0) >= 2 for suit in (1, 2, 3))
+        for rank in range(1, 10)
+    ):
+        result.append(INITIAL_HU_NAMES["sanTong"])
+    return result
 
 
 def _expand_meld(comb: str) -> List[int]:
