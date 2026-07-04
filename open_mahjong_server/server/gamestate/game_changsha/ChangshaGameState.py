@@ -25,7 +25,7 @@ from ..public.spectator_rules import too_many_ai_for_spectator
 from ..public.vote_manager import vote_checkpoint
 from ..public.game_record_manager import init_game_record,init_game_round,player_action_record_deal,player_action_record_cut,player_action_record_angang,player_action_record_jiagang,player_action_record_chipenggang,player_action_record_hu,player_action_record_liuju,player_action_record_round_end,end_game_record,build_score_changes_by_seat,build_score_changes_dict,capture_player_entry_order
 from ...game_calculation.game_calculation_service import GameCalculationService
-from ...game_calculation.changsha.changsha_hepai_check import evaluate_changsha_initial_hu
+from ...game_calculation.changsha.changsha_hepai_check import evaluate_changsha_initial_hu, INITIAL_HU_NAMES
 from ...database.db_manager import DatabaseManager
 from ..public.random_seed_manager import setup_random_seed_system
 from ...database.fulu_utils import record_fulu_rounds_for_players
@@ -154,6 +154,19 @@ class ChangshaGameState:
         self.hepai_limit = 1 # 长沙起和限制固定为1
         self.tourist_limit = room_data.get("tourist_limit", False) # 游客限制
         self.allow_spectator_config = room_data.get("allow_spectator", True) # 允许观战配置
+        self.open_kong_replacement_count = int(room_data.get("open_kong_replacement_count", 2))
+        self.open_kong_replacement_count = min(4, max(1, self.open_kong_replacement_count))
+        self.bird_count = int(room_data.get("bird_count", 2))
+        if self.bird_count not in (0, 1, 2, 4):
+            self.bird_count = 2
+        self.dealer_bird = room_data.get("dealer_bird", True)
+        self.initial_hu_enabled = {
+            INITIAL_HU_NAMES["siXi"]: room_data.get("initial_hu_si_xi", True),
+            INITIAL_HU_NAMES["banBanHu"]: room_data.get("initial_hu_ban_ban_hu", True),
+            INITIAL_HU_NAMES["queYiSe"]: room_data.get("initial_hu_que_yi_se", True),
+            INITIAL_HU_NAMES["liuLiuShun"]: room_data.get("initial_hu_liu_liu_shun", True),
+            INITIAL_HU_NAMES["sanTong"]: room_data.get("initial_hu_san_tong", True),
+        }
 
         self.isPlayerSetRandomSeed = False # 是否玩家设置了随机种子
 
@@ -265,6 +278,16 @@ class ChangshaGameState:
                         'hepai_limit': self.hepai_limit,
                         'open_cuohe': self.open_cuohe,
                         'show_moqie_hint': self.show_moqie_hint,
+                        'tactical_call': getattr(self, 'tactical_call', False),
+                        'claim_protection': getattr(self, 'claim_protection', False),
+                        'open_kong_replacement_count': getattr(self, 'open_kong_replacement_count', 2),
+                        'initial_hu_si_xi': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["siXi"], True),
+                        'initial_hu_ban_ban_hu': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["banBanHu"], True),
+                        'initial_hu_que_yi_se': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["queYiSe"], True),
+                        'initial_hu_liu_liu_shun': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["liuLiuShun"], True),
+                        'initial_hu_san_tong': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["sanTong"], True),
+                        'bird_count': getattr(self, 'bird_count', 2),
+                        'dealer_bird': getattr(self, 'dealer_bird', True),
                         'isPlayerSetRandomSeed': self.isPlayerSetRandomSeed,
                         'players_info': []
                     }
@@ -385,7 +408,11 @@ class ChangshaGameState:
     def _detect_initial_hu_types(self) -> None:
         self.initial_hu_types = {}
         for player in self.player_list:
-            types = evaluate_changsha_initial_hu(player.hand_tiles)
+            types = [
+                hu_type
+                for hu_type in evaluate_changsha_initial_hu(player.hand_tiles)
+                if self.initial_hu_enabled.get(hu_type, True)
+            ]
             if types:
                 self.initial_hu_types[player.player_index] = types
 
@@ -425,8 +452,9 @@ class ChangshaGameState:
         return "deal_card"
 
     def _score_changsha_win(self, winner: int, fan_list: List[str], is_zimo: bool, discarder: int = None):
-        birds = self._draw_changsha_birds(2)
-        bird_seats = [self._changsha_bird_seat(tile, 0) for tile in birds]
+        birds = self._draw_changsha_birds(self.bird_count)
+        bird_origin = 0 if self.dealer_bird else winner
+        bird_seats = [self._changsha_bird_seat(tile, bird_origin) for tile in birds]
         payers = [p.player_index for p in self.player_list if p.player_index != winner] if is_zimo else [discarder]
         total_win = 0
         total_base = 0

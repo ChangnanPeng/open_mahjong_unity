@@ -57,6 +57,14 @@ class GameInfo(BaseModel):
     isPlayerSetRandomSeed: Optional[bool] = False  # 是否玩家设置了随机种子（默认为False）
     player_entry_order: Optional[List[int]] = None  # shuffle 前对局入场顺序 user_id[4]
     players_info: List[PlayerInfo]
+    open_kong_replacement_count: Optional[int] = None
+    initial_hu_si_xi: Optional[bool] = None
+    initial_hu_ban_ban_hu: Optional[bool] = None
+    initial_hu_que_yi_se: Optional[bool] = None
+    initial_hu_liu_liu_shun: Optional[bool] = None
+    initial_hu_san_tong: Optional[bool] = None
+    bird_count: Optional[int] = None
+    dealer_bird: Optional[bool] = None
     self_hand_tiles: Optional[List[int]] = None
     # 立直麻将专用字段
     honba: Optional[int] = None  # 本场棒数

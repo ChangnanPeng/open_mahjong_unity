@@ -2,14 +2,17 @@ import unittest
 from types import SimpleNamespace
 
 from server.game_calculation.changsha.changsha_hepai_check import (
+    INITIAL_HU_NAMES,
     changsha_base_from_fans,
     evaluate_changsha_initial_hu,
 )
+from server.gamestate.game_changsha.ChangshaGameState import ChangshaGameState
 from server.gamestate.game_changsha.action_check import (
     check_action_after_cut,
     check_hepai,
 )
 from server.gamestate.game_changsha.init_tiles import init_changsha_tiles
+from server.room.room_validators import ChangshaRoomValidator
 
 
 class DummyPlayer:
@@ -44,6 +47,11 @@ class FixedTingpai:
 
     def Changsha_tingpai_check(self, hand_list, tiles_combination):
         return set(self.waiting_tiles)
+
+
+class FixedBaseCalculation:
+    def Changsha_base_from_fans(self, fan_list, dealer_related=False):
+        return 1
 
 
 class ChangshaRulesTest(unittest.TestCase):
@@ -152,6 +160,84 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(changsha_base_from_fans(["小胡"], dealer_related=True), 2)
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=False), 12)
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=True), 14)
+
+
+    def test_changsha_room_validator_uses_four_eight_sixteen_hands(self):
+        base = dict(
+            room_name="test",
+            game_round=1,
+            round_timer=20,
+            step_timer=5,
+            random_seed=0,
+            open_kong_replacement_count=2,
+            bird_count=2,
+        )
+
+        for game_round in (1, 2, 4):
+            cfg = ChangshaRoomValidator(**{**base, "game_round": game_round})
+            self.assertEqual(cfg.game_round, game_round)
+
+        with self.assertRaises(ValueError):
+            ChangshaRoomValidator(**{**base, "game_round": 3})
+
+    def test_initial_hu_room_toggles_filter_detected_types(self):
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [11, 11, 11, 11, 13, 13, 23, 23, 33, 33, 24, 24, 24]),
+                DummyPlayer(1, [11, 12, 13]),
+            ],
+            initial_hu_enabled={
+                INITIAL_HU_NAMES["siXi"]: False,
+                INITIAL_HU_NAMES["banBanHu"]: True,
+                INITIAL_HU_NAMES["queYiSe"]: True,
+                INITIAL_HU_NAMES["liuLiuShun"]: True,
+                INITIAL_HU_NAMES["sanTong"]: True,
+            },
+        )
+
+        ChangshaGameState._detect_initial_hu_types(state)
+
+        self.assertNotIn(INITIAL_HU_NAMES["siXi"], state.initial_hu_types[0])
+        self.assertIn(INITIAL_HU_NAMES["banBanHu"], state.initial_hu_types[0])
+
+    def test_bird_scoring_uses_configured_count_and_origin(self):
+        players = [SimpleNamespace(player_index=i, score=0) for i in range(4)]
+        origins = []
+        state = SimpleNamespace(
+            player_list=players,
+            bird_count=1,
+            dealer_bird=False,
+            calculation_service=FixedBaseCalculation(),
+        )
+
+        def draw_birds(count):
+            state.requested_bird_count = count
+            return [11] * count
+
+        def bird_seat(tile, origin):
+            origins.append(origin)
+            return 1
+
+        def player_by_index(index):
+            return players[index]
+
+        state._draw_changsha_birds = draw_birds
+        state._changsha_bird_seat = bird_seat
+        state._player_by_index = player_by_index
+
+        result = ChangshaGameState._score_changsha_win(
+            state,
+            winner=1,
+            fan_list=["test"],
+            is_zimo=False,
+            discarder=2,
+        )
+
+        self.assertEqual(state.requested_bird_count, 1)
+        self.assertEqual(origins, [1])
+        self.assertEqual(players[1].score, 2)
+        self.assertEqual(players[2].score, -2)
+        self.assertEqual(result["bird_seats"], [1])
 
 
 if __name__ == "__main__":

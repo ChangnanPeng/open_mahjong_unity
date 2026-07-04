@@ -172,6 +172,14 @@ async def handle_create_Changsha_room(game_server, Connect_id: str, message: dic
         message.get("allow_spectator", True),
         message.get("tactical_call", False),
         message.get("claim_protection", True),
+        message.get("open_kong_replacement_count", 2),
+        message.get("initial_hu_si_xi", True),
+        message.get("initial_hu_ban_ban_hu", True),
+        message.get("initial_hu_que_yi_se", True),
+        message.get("initial_hu_liu_liu_shun", True),
+        message.get("initial_hu_san_tong", True),
+        message.get("bird_count", 2),
+        message.get("dealer_bird", True),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 

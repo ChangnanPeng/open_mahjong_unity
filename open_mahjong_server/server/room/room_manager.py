@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from .room_validators import GBRoomValidator, MMCValidator, RiichiRoomValidator, SichuanRoomValidator
+from .room_validators import GBRoomValidator, MMCValidator, RiichiRoomValidator, SichuanRoomValidator, ChangshaRoomValidator
 from ..response import Response
 from ..gamestate.game_guobiao.GuobiaoGameState import GuobiaoGameState
 from ..game_calculation.game_calculation_service import Chinese_Hepai_Check
@@ -24,7 +24,7 @@ class RoomManager:
         # 房间的合法性验证器
         self.room_validators = {
             "guobiao": GBRoomValidator,
-            "changsha": GBRoomValidator,
+            "changsha": ChangshaRoomValidator,
             "mmc": MMCValidator,
             "riichi": RiichiRoomValidator,
             "sichuan": SichuanRoomValidator
@@ -334,7 +334,15 @@ class RoomManager:
                                    password: str, roundTimerValue: int, stepTimerValue: int,
                                    tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird",
                                    tourist_limit: bool = False, allow_spectator: bool = True,
-                                   tactical_call: bool = False, claim_protection: bool = True) -> Response:
+                                   tactical_call: bool = False, claim_protection: bool = True,
+                                   open_kong_replacement_count: int = 2,
+                                   initial_hu_si_xi: bool = True,
+                                   initial_hu_ban_ban_hu: bool = True,
+                                   initial_hu_que_yi_se: bool = True,
+                                   initial_hu_liu_liu_shun: bool = True,
+                                   initial_hu_san_tong: bool = True,
+                                   bird_count: int = 2,
+                                   dealer_bird: bool = True) -> Response:
         """创建长沙麻将房间。当前接入经典双鸟规则。"""
         try:
             if player_id not in self.game_server.players:
@@ -363,6 +371,14 @@ class RoomManager:
                 "open_cuohe": False,
                 "tactical_call": tactical_call,
                 "claim_protection": claim_protection,
+                "open_kong_replacement_count": open_kong_replacement_count,
+                "initial_hu_si_xi": initial_hu_si_xi,
+                "initial_hu_ban_ban_hu": initial_hu_ban_ban_hu,
+                "initial_hu_que_yi_se": initial_hu_que_yi_se,
+                "initial_hu_liu_liu_shun": initial_hu_liu_liu_shun,
+                "initial_hu_san_tong": initial_hu_san_tong,
+                "bird_count": bird_count,
+                "dealer_bird": dealer_bird,
             }
 
             try:

@@ -102,7 +102,7 @@ public class RoomItem : MonoBehaviour {
         }
 
         // 对局轮数：从 RoundTextDictionary 获取（东风战/东南战/东西战/全庄战）
-        if (this.gameRound != null) this.gameRound.text = RoundTextDictionary.GetMaxRoundText(gameRound);
+        if (this.gameRound != null) this.gameRound.text = RoundTextDictionary.GetMaxRoundText(roomData.room_rule, gameRound);
         if (fushiText != null) {
             fushiText.text = roomData.is_player_set_random_seed ? "复式:开" : "复式:关";
         }
