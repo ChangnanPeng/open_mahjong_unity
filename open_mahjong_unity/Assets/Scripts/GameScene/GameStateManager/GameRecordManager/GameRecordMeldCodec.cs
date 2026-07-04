@@ -172,11 +172,13 @@ public static class GameRecordMeldCodec {
         int r1 = removedTiles != null && removedTiles.Count > 1 ? removedTiles[1] : r0;
         int r2 = removedTiles != null && removedTiles.Count > 2 ? removedTiles[2] : r0;
         int r3 = removedTiles != null && removedTiles.Count > 3 ? removedTiles[3] : r0;
+        if (!string.IsNullOrEmpty(rule) && (rule == "changsha" || rule.StartsWith("changsha"))) {
+            return new[] { 0, r0, 0, r1, 0, r2, 0, r3 };
+        }
         // 日麻 / 川麻：两侧暗面、中间两张明牌，便于识别暗杠牌种
         bool usePeekAnkanMask = !string.IsNullOrEmpty(rule)
             && (rule == "riichi" || rule.StartsWith("riichi")
-                || rule == "sichuan" || rule.StartsWith("sichuan")
-                || rule == "changsha" || rule.StartsWith("changsha"));
+                || rule == "sichuan" || rule.StartsWith("sichuan"));
         if (usePeekAnkanMask) {
             return new[] { 2, r0, 0, r1, 0, r2, 2, r3 };
         }

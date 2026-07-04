@@ -5,10 +5,6 @@ import asyncio
 import time
 from ..public.ai.auto_cut_ai import auto_cut_action
 from ..public.ai.smart_bot_ai import smart_bot_action
-from ..game_guobiao.combination_mask_view import (
-    sanitize_angang_mask,
-    sanitize_combination_target_for_viewer,
-)
 from ..public.deal_tile_view import sanitize_deal_tile_for_viewer
 from ..public.hand_slot_utils import bot_ask_hand_game_status
 from ..public.claim_protection import (
@@ -368,11 +364,6 @@ def _build_do_action_payload(
 ):
     viewer_mask = combination_mask
     viewer_target = combination_target
-    if action_list and "angang" in action_list:
-        viewer_mask = sanitize_angang_mask(combination_mask, action_player, viewer_index)
-        viewer_target = sanitize_combination_target_for_viewer(
-            combination_target, action_player, viewer_index
-        )
     viewer_deal_tile = sanitize_deal_tile_for_viewer(deal_tile, action_player, viewer_index)
     return {
         "action_list": action_list,

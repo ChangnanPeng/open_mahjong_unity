@@ -398,7 +398,10 @@ public static class FanTextDictionary {
         else if (rule == "sichuan/standard") map = FanToDisplaySichuan;
         else if (rule == "changsha/classic_double_bird") {
             if (!string.IsNullOrEmpty(fanName)
-                && (fanName.StartsWith("鸟牌:") || fanName.StartsWith("中鸟x"))) {
+                && (fanName.StartsWith("鸟牌:")
+                    || fanName.StartsWith("中鸟:")
+                    || fanName.StartsWith("中鸟x")
+                    || fanName.StartsWith("扎鸟倍数:"))) {
                 return "结算";
             }
             map = FanToDisplayChangsha;
