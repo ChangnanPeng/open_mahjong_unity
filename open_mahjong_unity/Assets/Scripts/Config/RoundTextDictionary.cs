@@ -76,6 +76,10 @@ public static class RoundTextDictionary {
     }
 
     public static string GetMatchTypeDisplay(string matchType) {
+        return GetMatchTypeDisplay(null, matchType);
+    }
+
+    public static string GetMatchTypeDisplay(string rule, string matchType) {
         if (string.IsNullOrEmpty(matchType)) return "";
         string normalized = matchType;
         if (normalized.EndsWith("_rank")) {
@@ -85,6 +89,6 @@ public static class RoundTextDictionary {
         if (slash < 0 || !int.TryParse(normalized.Substring(0, slash), out int rounds)) {
             return "";
         }
-        return GetMaxRoundText(rounds);
+        return GetMaxRoundText(rule, rounds);
     }
 }

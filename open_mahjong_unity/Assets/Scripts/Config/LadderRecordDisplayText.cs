@@ -12,7 +12,10 @@ public static class LadderRecordDisplayText {
         string ruleName = RuleNameDictionary.GetWholeName(
             !string.IsNullOrEmpty(record.sub_rule) ? record.sub_rule : record.rule
         );
-        string roundName = RoundTextDictionary.GetMatchTypeDisplay(record.match_type);
+        string roundName = RoundTextDictionary.GetMatchTypeDisplay(
+            !string.IsNullOrEmpty(record.sub_rule) ? record.sub_rule : record.rule,
+            record.match_type
+        );
         string tierName = MatchQueueDisplayText.GetTierTitle(record.match_queue_type);
 
         var sb = new StringBuilder();
