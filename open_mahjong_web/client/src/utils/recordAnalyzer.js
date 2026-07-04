@@ -182,10 +182,22 @@ function analyzeOneRecord(record, userId, acc) {
   acc._finalScores.push({ idx: originalIndex, score: finalScore });
 }
 
+function resolveMyRank(record, userId, serverRank) {
+  const r = Number(serverRank);
+  if (r >= 1 && r <= 4) return r;
+  const originalIndex = findOriginalIndex(record, userId);
+  if (originalIndex < 0) return 0;
+  const localFinal = [];
+  for (let i = 0; i < 4; i++) localFinal.push({ idx: i, score: computeFinalScore(record, i) });
+  localFinal.sort((a, b) => b.score - a.score || a.idx - b.idx);
+  return localFinal.findIndex((e) => e.idx === originalIndex) + 1;
+}
+
 /**
  * 计算一组牌谱对目标玩家的统计行（与 buildStatsRows 输入结构一致）。
+ * @param {Array<object|object>} items 牌谱 JSON，或 { record, rank }（rank 来自服务端）
  */
-export function analyzeRecords(records, userId) {
+export function analyzeRecords(items, userId) {
   const acc = {
     total_games: 0,
     total_rounds: 0,
@@ -205,29 +217,20 @@ export function analyzeRecords(records, userId) {
     _finalScores: [],
   };
 
-  // 每局最终排名：按 finalScore 降序排在该局 4 人中的名次
-  for (const record of records) {
+  for (const item of items) {
+    const record = item?.record ?? item;
     const beforeGames = acc.total_games;
     analyzeOneRecord(record, userId, acc);
     if (acc.total_games === beforeGames) continue;
 
-    // 该局 4 人最终分（从同一条 record 重新取，确定名次）
-    const scores = [];
-    const title = record?.game_title;
-    for (let i = 0; i < 4; i++) {
-      scores.push({ idx: i, uid: Number(title?.[`p${i}_uid`]) });
-    }
-    // 用 acc 里刚推入的 finalScore；按记录内每位玩家重算 finalScore
-    const localFinal = [];
-    for (let i = 0; i < 4; i++) localFinal.push({ idx: i, score: computeFinalScore(record, i) });
-    localFinal.sort((a, b) => b.score - a.score || a.idx - b.idx);
-    const myRank = localFinal.findIndex((e) => e.idx === findOriginalIndex(record, userId)) + 1;
+    const originalIndex = findOriginalIndex(record, userId);
+    const myRank = resolveMyRank(record, userId, item?.rank);
     if (myRank === 1) acc.first_place_count += 1;
     else if (myRank === 2) acc.second_place_count += 1;
     else if (myRank === 3) acc.third_place_count += 1;
     else if (myRank === 4) acc.fourth_place_count += 1;
 
-    acc.total_round_score += computeFinalScore(record, findOriginalIndex(record, userId));
+    acc.total_round_score += computeFinalScore(record, originalIndex);
   }
 
   acc.win_count = acc.self_draw_count + acc.deal_in_win_count;
