@@ -4,7 +4,7 @@ import time
 import logging
 from .action_check import check_action_after_cut, check_action_jiagang, refresh_waiting_tiles
 from .boardcast import broadcast_do_action, broadcast_ready_status, broadcast_ask_other_action
-from ..public.logic_common import get_index_relative_position
+from ..public.logic_common import get_index_relative_position, next_current_num
 from ..public.game_record_manager import (
     player_action_record_cut,
     player_action_record_angang,
@@ -234,7 +234,7 @@ async def wait_action(self):
                     removed = remove_angang_tiles(hand, normal_angang, draw_slot=draw_slot)
                     clear_draw_slot(player)
                     self.player_list[self.current_player_index].combination_tiles.append(f"G{normal_angang}")
-                    add_combination_mask = [2, removed[0], 2, removed[1], 2, removed[2], 2, removed[3]]
+                    add_combination_mask = [0, removed[0], 0, removed[1], 0, removed[2], 0, removed[3]]
                     self.player_list[self.current_player_index].combination_mask.append(add_combination_mask)
                     player_action_record_angang(self, angang_tile=normal_angang, is_mo_gang=is_mo_gang,
                                                 combination_mask=add_combination_mask)
@@ -350,7 +350,64 @@ async def wait_action(self):
             combination_target = ""
             if action_data:
                 refresh_waiting_tiles(self,player_index) # 更新听牌
-                if action_type == "peng": # [tile_id',tile_id',tile_id]
+                if action_type == "chi_left": # [tile_id-2,tile_id-1,tile_id]
+                    if player_index != next_current_num(self.current_player_index):
+                        logger.error(
+                            f"非法chi_left：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    if (tile_id - 1) not in self.player_list[player_index].hand_tiles or (tile_id - 2) not in self.player_list[player_index].hand_tiles:
+                        logger.error(
+                            f"非法chi_left：玩家{player_index}手牌不足，tile_id={tile_id}, hand_tiles={self.player_list[player_index].hand_tiles}, action_data={action_data}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    self.player_list[player_index].hand_tiles.remove(tile_id-1)
+                    self.player_list[player_index].hand_tiles.remove(tile_id-2)
+                    self.player_list[player_index].combination_tiles.append(f"s{tile_id-1}")
+                    combination_target = f"s{tile_id-1}"
+                    combination_mask = [1,tile_id,0,tile_id-1,0,tile_id-2]
+
+                elif action_type == "chi_mid": # [tile_id-1,tile_id,tile_id+1]
+                    if player_index != next_current_num(self.current_player_index):
+                        logger.error(
+                            f"非法chi_mid：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    if (tile_id - 1) not in self.player_list[player_index].hand_tiles or (tile_id + 1) not in self.player_list[player_index].hand_tiles:
+                        logger.error(
+                            f"非法chi_mid：玩家{player_index}手牌不足，tile_id={tile_id}, hand_tiles={self.player_list[player_index].hand_tiles}, action_data={action_data}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    self.player_list[player_index].hand_tiles.remove(tile_id-1)
+                    self.player_list[player_index].hand_tiles.remove(tile_id+1)
+                    self.player_list[player_index].combination_tiles.append(f"s{tile_id}")
+                    combination_target = f"s{tile_id}"
+                    combination_mask = [1,tile_id,0,tile_id-1,0,tile_id+1]
+
+                elif action_type == "chi_right": # [tile_id,tile_id+1,tile_id+2]
+                    if player_index != next_current_num(self.current_player_index):
+                        logger.error(
+                            f"非法chi_right：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    if (tile_id + 1) not in self.player_list[player_index].hand_tiles or (tile_id + 2) not in self.player_list[player_index].hand_tiles:
+                        logger.error(
+                            f"非法chi_right：玩家{player_index}手牌不足，tile_id={tile_id}, hand_tiles={self.player_list[player_index].hand_tiles}, action_data={action_data}"
+                        )
+                        self.game_status = "deal_card"
+                        return
+                    self.player_list[player_index].hand_tiles.remove(tile_id+1)
+                    self.player_list[player_index].hand_tiles.remove(tile_id+2)
+                    self.player_list[player_index].combination_tiles.append(f"s{tile_id+1}")
+                    combination_target = f"s{tile_id+1}"
+                    combination_mask = [1,tile_id,0,tile_id+1,0,tile_id+2]
+
+                elif action_type == "peng": # [tile_id',tile_id',tile_id]
                     # 保护：必须至少有两张 tile_id
                     if self.player_list[player_index].hand_tiles.count(tile_id) < 2:
                         logger.error(
@@ -413,8 +470,8 @@ async def wait_action(self):
                     logger.info(f"处理和牌操作: player_index={player_index}, action_type={action_type}, hu_class={self.hu_class}, game_status={self.game_status}, tile_id={tile_id}")
                     return
 
-                # 如果发生碰杠而不是和牌 则发生转移行为
-                if action_type == "peng" or action_type == "gang":
+                # 如果发生吃碰杠而不是和牌 则发生转移行为
+                if action_type in ("chi_left", "chi_mid", "chi_right", "peng", "gang"):
                     if getattr(self, "pending_gang_forced_discard", False):
                         self.prepare_gang_replacement(0, False)
                     self.player_list[self.current_player_index].discard_tiles.pop(-1) # 删除弃牌堆的最后一张

@@ -205,6 +205,7 @@ class ChangshaGameState:
         self.action_priority:Dict[str,int] = {
         "hu_self": 6, "hu_first": 5, "hu_second": 4, "hu_third": 3,  # 和牌优先级 三种优先级对应多人和牌时的优先权
         "peng": 2, "gang": 2,  # 碰杠优先级 次高优先级
+        "chi_left": 1, "chi_mid": 1, "chi_right": 1,
         "ready": 0,  # 准备操作优先级 最低优先级
         "pass": 0,"cut":0,"angang":0,"jiagang":0,"deal_tile":0,"deal_gang_tile":0 # 其他优先级 最低优先级
         }
@@ -385,8 +386,25 @@ class ChangshaGameState:
         for _ in range(count):
             if not self.tiles_list:
                 break
-            birds.append(self.tiles_list.pop(-1))
+            birds.append(self.tiles_list.pop(0))
         return birds
+
+    @staticmethod
+    def _is_sea_bottom_win(fan_list: List[str]) -> bool:
+        return any("海底" in name for name in (fan_list or []))
+
+    def _sea_bottom_bird_tile(self, winner: int) -> Optional[int]:
+        winner_hand = self._player_by_index(winner).hand_tiles
+        return winner_hand[-1] if winner_hand else None
+
+    @staticmethod
+    def _format_changsha_bird_tile(tile: int) -> str:
+        suit = tile // 10
+        rank = tile % 10
+        suit_name = {1: "万", 2: "饼", 3: "条"}.get(suit)
+        if suit_name is None or rank < 1 or rank > 9:
+            return str(tile)
+        return f"{rank}{suit_name}={rank}"
 
     @staticmethod
     def _changsha_bird_seat(tile: int, origin: int = 0) -> int:
@@ -415,6 +433,22 @@ class ChangshaGameState:
             ]
             if types:
                 self.initial_hu_types[player.player_index] = types
+
+    def _next_sea_bottom_player(self) -> Optional[int]:
+        for offset in range(1, 5):
+            player_index = (self.current_player_index + offset) % 4
+            player = self.player_list[player_index]
+            if "peida" in player.tag_list:
+                continue
+            self.refresh_waiting_tiles(player_index)
+            if player.waiting_tiles:
+                return player_index
+        return None
+
+    def _make_player_next_dealer(self, dealer_index: int) -> None:
+        for player in self.player_list:
+            player.player_index = (player.player_index - dealer_index) % 4
+        self.player_list.sort(key=lambda x: x.player_index)
 
     def record_hu_pass(self, player_index: int, allowed_actions: List[str]) -> None:
         hu_bases = []
@@ -453,6 +487,10 @@ class ChangshaGameState:
 
     def _score_changsha_win(self, winner: int, fan_list: List[str], is_zimo: bool, discarder: int = None):
         birds = self._draw_changsha_birds(self.bird_count)
+        if not birds and self.bird_count > 0 and self._is_sea_bottom_win(fan_list):
+            sea_bottom_bird = self._sea_bottom_bird_tile(winner)
+            if sea_bottom_bird is not None:
+                birds = [sea_bottom_bird]
         bird_origin = 0 if self.dealer_bird else winner
         bird_seats = [self._changsha_bird_seat(tile, bird_origin) for tile in birds]
         payers = [p.player_index for p in self.player_list if p.player_index != winner] if is_zimo else [discarder]
@@ -480,9 +518,16 @@ class ChangshaGameState:
 
         fan_display = list(fan_list or [])
         if birds:
-            bird_text = "鸟牌:" + ",".join(str(tile) for tile in birds)
-            hit_text = "中鸟x" + str(max((item["multiplier"] for item in payer_details), default=1))
-            fan_display.extend([bird_text, hit_text])
+            bird_text = "鸟牌:" + ",".join(self._format_changsha_bird_tile(tile) for tile in birds)
+            active_seats = {winner, *payers}
+            hit_birds = [
+                self._format_changsha_bird_tile(tile)
+                for tile, seat in zip(birds, bird_seats)
+                if seat in active_seats
+            ]
+            hit_text = "中鸟:" + (",".join(hit_birds) if hit_birds else "无")
+            multiplier_text = "扎鸟倍数:x" + str(max((item["multiplier"] for item in payer_details), default=1))
+            fan_display.extend([bird_text, hit_text, multiplier_text])
 
         return {
             "actual_hu_score": total_win,
@@ -564,7 +609,14 @@ class ChangshaGameState:
                         if self.tiles_list == []: # 牌山已空
                             self.game_status = "END" # 结束游戏
                             break
-                        self.next_current_index() # 切换到下一个玩家
+                        if len(self.tiles_list) == 1:
+                            sea_bottom_player = self._next_sea_bottom_player()
+                            if sea_bottom_player is None:
+                                self.game_status = "END"
+                                break
+                            self.current_player_index = sea_bottom_player
+                        else:
+                            self.next_current_index() # 切换到下一个玩家
                         self.last_draw_was_gang = False
                         self.refresh_waiting_tiles(self.current_player_index) # 摸牌前更新听牌
                         self.player_list[self.current_player_index].get_tile(self.tiles_list) # 摸牌
@@ -791,7 +843,11 @@ class ChangshaGameState:
                         break
 
             # 开启下一局的准备工作
-            next_game_round_changsha_switchseat(self)
+            if self.hu_class in ["hu_self","hu_first","hu_second","hu_third"] and hepai_player_index is not None:
+                self._make_player_next_dealer(hepai_player_index)
+                next_game_round_changsha_switchseat(self, keep_dealer_seat=True)
+            else:
+                next_game_round_changsha_switchseat(self)
 
             logger.info(f"重新开始下一局")
             # ↑ 重新开始下一局循环

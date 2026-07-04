@@ -6,18 +6,60 @@ logger = logging.getLogger(__name__)
 
 # 检查操作 返回 action_dict
 
-def _is_ready_for_open_kong_claim(self, player_item) -> bool:
+def _is_number_tile(tile: int) -> bool:
+    suit = tile // 10
+    rank = tile % 10
+    return suit in (1, 2, 3) and 1 <= rank <= 9
+
+
+def _is_same_suit_sequence(tiles) -> bool:
+    if not all(_is_number_tile(tile) for tile in tiles):
+        return False
+    return len({tile // 10 for tile in tiles}) == 1
+
+
+def _has_tiles(hand_tiles, needed_tiles) -> bool:
+    remaining = list(hand_tiles)
+    for tile in needed_tiles:
+        if tile not in remaining:
+            return False
+        remaining.remove(tile)
+    return True
+
+
+def _append_chi_actions(self, temp_action_dict: Dict[int, list], cut_tile: int) -> None:
+    next_player_index = next_current_num(self.current_player_index)
+    next_player = self.player_list[next_player_index]
+    chi_shapes = (
+        ("chi_left", (cut_tile - 2, cut_tile - 1, cut_tile), (cut_tile - 2, cut_tile - 1)),
+        ("chi_mid", (cut_tile - 1, cut_tile, cut_tile + 1), (cut_tile - 1, cut_tile + 1)),
+        ("chi_right", (cut_tile, cut_tile + 1, cut_tile + 2), (cut_tile + 1, cut_tile + 2)),
+    )
+    for action, sequence, needed in chi_shapes:
+        if _is_same_suit_sequence(sequence) and _has_tiles(next_player.hand_tiles, needed):
+            temp_action_dict[next_player_index].append(action)
+
+
+def _is_ready_for_open_kong_claim(self, player_item, tile: int) -> bool:
     checker = getattr(getattr(self, "calculation_service", None), "Changsha_tingpai_check", None)
     if checker is None:
         return False
-    return bool(checker(player_item.hand_tiles, player_item.combination_tiles))
+    remaining = list(player_item.hand_tiles)
+    for _ in range(3):
+        if tile not in remaining:
+            return False
+        remaining.remove(tile)
+    melds = list(player_item.combination_tiles) + [f"g{tile}"]
+    return bool(checker(remaining, melds))
 
-# 切牌后检查 存储 碰peng 杠gang 胡hu 操作；长沙麻将不允许吃牌
+# 切牌后检查 存储 吃chi 碰peng 杠gang 胡hu 操作
 def check_action_after_cut(self,cut_tile):
     temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
 
     # 如果牌堆内仍有牌则可以碰杠
     if self.tiles_list != []:
+        _append_chi_actions(self, temp_action_dict, cut_tile)
+
         # 所有符合条件的玩家都要被询问，不能只取第一家。
         for item in self.player_list:
             if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) >= 2:
@@ -26,11 +68,13 @@ def check_action_after_cut(self,cut_tile):
         # 检测杠牌：手牌中有3张相同的牌
         for item in self.player_list:
             if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) == 3:
-                if self.tiles_list != [] and _is_ready_for_open_kong_claim(self, item):
+                if self.tiles_list != [] and _is_ready_for_open_kong_claim(self, item, cut_tile):
                         temp_action_dict[item.player_index].append("gang")
 
     # 如果该牌是任意家的等待牌 且不是自己
     for item in self.player_list:
+        if item.player_index != self.current_player_index:
+            refresh_waiting_tiles(self, item.player_index)
         if cut_tile in item.waiting_tiles and item.player_index != self.current_player_index:
             check_hepai(self,temp_action_dict,cut_tile,item.player_index,"dianhe")
 

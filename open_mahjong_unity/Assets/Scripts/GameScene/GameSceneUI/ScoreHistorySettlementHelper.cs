@@ -69,7 +69,9 @@ public static class ScoreHistorySettlementHelper {
         if (string.IsNullOrEmpty(fanKey)) return true;
         return fanKey.StartsWith("花牌")
             || fanKey.StartsWith("鸟牌:")
-            || fanKey.StartsWith("中鸟x");
+            || fanKey.StartsWith("中鸟:")
+            || fanKey.StartsWith("中鸟x")
+            || fanKey.StartsWith("扎鸟倍数:");
     }
 
     /// <summary>

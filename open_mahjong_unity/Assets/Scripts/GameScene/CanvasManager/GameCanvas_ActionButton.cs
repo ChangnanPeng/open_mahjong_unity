@@ -180,7 +180,7 @@ public partial class GameCanvas : MonoBehaviour {
                 if (angangButton == null) {
                     angangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = angangButton.TextObject;
-                    buttonText.text = IsChangshaActionContext() ? "开杠" : "暗杠";
+                    buttonText.text = "暗杠";
                     Debug.Log($"暗杠按钮: {angangButton}");
                 }
                 angangButton.actionTypeList.Add(action_list[i]);
@@ -191,7 +191,7 @@ public partial class GameCanvas : MonoBehaviour {
                 if (jiagangButton == null) {
                     jiagangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = jiagangButton.TextObject;
-                    buttonText.text = IsChangshaActionContext() ? "开杠" : "加杠";
+                    buttonText.text = "加杠";
                     Debug.Log($"加杠按钮: {jiagangButton}");
                 }
                 jiagangButton.actionTypeList.Add(action_list[i]);

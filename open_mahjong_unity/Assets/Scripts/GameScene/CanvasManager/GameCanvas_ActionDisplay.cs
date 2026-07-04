@@ -151,7 +151,11 @@ public partial class GameCanvas{
             return "吃";
         } else if (actionType == "peng"){
             return "碰";
-        } else if (actionType == "angang" || actionType == "jiagang" || actionType == "gang"){
+        } else if (actionType == "angang"){
+            return "暗杠";
+        } else if (actionType == "jiagang"){
+            return "加杠";
+        } else if (actionType == "gang"){
             if (roomRule == "changsha") return "开杠";
             return "杠";
         } else if (actionType == "hu" || actionType == "hu_self" || actionType == "hu_first" || actionType == "hu_second" || actionType == "hu_third"){
