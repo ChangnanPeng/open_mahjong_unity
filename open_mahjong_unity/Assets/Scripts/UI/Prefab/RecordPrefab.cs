@@ -42,7 +42,7 @@ public class RecordPrefab : MonoBehaviour{
 
         RecordIdText.text = gameId;
         string ruleName = RuleNameDictionary.GetWholeName(subRule);
-        string matchTypeDisplay = RoundTextDictionary.GetMatchTypeDisplay(matchType);
+        string matchTypeDisplay = RoundTextDictionary.GetMatchTypeDisplay(subRule, matchType);
         RuleText.text = ruleName;
         MatchTypeText.text = matchTypeDisplay;
         RecordedTimeText.text = recordedTime;
