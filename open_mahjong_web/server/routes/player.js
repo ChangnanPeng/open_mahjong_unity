@@ -807,26 +807,25 @@ router.post('/records/batch-json', analyzeLimiter, async (req, res) => {
     const params = [];
     const conditions = buildRecordFilters(userId, query, params);
     const sql = `
-      SELECT game_id FROM (
+      SELECT sub.game_id, gr.record, gpr.rank
+      FROM (
         SELECT DISTINCT gpr.game_id, gr.created_at
         FROM game_player_records gpr
         JOIN game_records gr ON gr.game_id = gpr.game_id
         WHERE ${conditions.join(' AND ')}
       ) sub
-      ORDER BY created_at DESC
+      JOIN game_records gr ON gr.game_id = sub.game_id
+      JOIN game_player_records gpr ON gpr.game_id = sub.game_id AND gpr.user_id = $1
+      ORDER BY sub.created_at DESC
       LIMIT $${params.length + 1}
     `;
     params.push(ANALYZE_MAX_GAMES);
-    const idResult = await pool.query(sql, params);
-    const gameIds = idResult.rows.map(r => r.game_id);
-    if (gameIds.length === 0) {
-      return res.json({ success: true, data: { items: [], total: 0, cap: ANALYZE_MAX_GAMES } });
-    }
-    const recordsResult = await pool.query(
-      `SELECT game_id, record FROM game_records WHERE game_id = ANY($1::varchar[])`,
-      [gameIds]
-    );
-    const items = recordsResult.rows.map(r => ({ game_id: r.game_id, record: r.record }));
+    const recordsResult = await pool.query(sql, params);
+    const items = recordsResult.rows.map(r => ({
+      game_id: r.game_id,
+      record: r.record,
+      rank: r.rank != null ? Number(r.rank) : null,
+    }));
     res.json({ success: true, data: { items, total: items.length, cap: ANALYZE_MAX_GAMES } });
   } catch (error) {
     console.error('batch-json:', error);

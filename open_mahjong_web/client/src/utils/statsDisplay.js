@@ -1,21 +1,18 @@
 export const ratio = (n, d, suffix = '%') =>
   (!d || d <= 0 ? '0.00' + suffix : ((n / d) * 100).toFixed(2) + suffix);
 
-/** 最大余数法：将 counts 分配为总和恰好 100 的整数百分比 */
-export function distributeIntegerPercents(counts, total) {
-  if (!total || total <= 0) return counts.map(() => 0);
-  const exact = counts.map((c) => (c / total) * 100);
-  const floors = exact.map((v) => Math.floor(v));
-  let remainder = 100 - floors.reduce((a, b) => a + b, 0);
-  const order = exact
-    .map((v, i) => ({ i, rem: v - floors[i] }))
-    .sort((a, b) => b.rem - a.rem || a.i - b.i);
-  const result = [...floors];
-  for (let k = 0; k < remainder; k++) {
-    result[order[k].i] += 1;
-  }
-  return result;
-}
+/** 有顺位的对局数（1–4 位次数之和），顺位相关比率的分母 */
+export const rankedGames = (s) =>
+  (s?.first_place_count || 0) + (s?.second_place_count || 0)
+  + (s?.third_place_count || 0) + (s?.fourth_place_count || 0);
+
+/** 顺位占比（分母 = rankedGames，与饼图中心一致） */
+export const rankRate = (count, s) => ratio(count, rankedGames(s));
+
+export const rankRateInt = (count, s) => {
+  const d = rankedGames(s);
+  return (!d || d <= 0) ? 0 : Math.round((Number(count) / d) * 100);
+};
 
 /** 玩家个人副露率：副露小局数 / 该玩家总小局数 */
 export const playerFuluRate = (fuluCount, totalRounds) =>
@@ -29,7 +26,7 @@ export const avg = (n, d) =>
   (d === undefined || !d || d <= 0 ? '0.00' : (n / d).toFixed(2));
 
 export const avgRank = (s) => {
-  const games = s.total_games || 0;
+  const games = rankedGames(s);
   if (!games) return '0.00';
   const weighted = (s.first_place_count || 0) * 1
     + (s.second_place_count || 0) * 2
@@ -44,10 +41,10 @@ function buildStatsRowsBase(s, fuluRateFn) {
     { label: '总回合', value: String(s.total_rounds || 0) },
     { label: '平均顺位', value: avgRank(s) },
     { label: '局均点', value: avg(s.total_round_score, s.total_games) },
-    { label: '一位率', value: ratio(s.first_place_count, s.total_games) },
-    { label: '二位率', value: ratio(s.second_place_count, s.total_games) },
-    { label: '三位率', value: ratio(s.third_place_count, s.total_games) },
-    { label: '四位率', value: ratio(s.fourth_place_count, s.total_games) },
+    { label: '一位率', value: rankRate(s.first_place_count, s) },
+    { label: '二位率', value: rankRate(s.second_place_count, s) },
+    { label: '三位率', value: rankRate(s.third_place_count, s) },
+    { label: '四位率', value: rankRate(s.fourth_place_count, s) },
     { label: '和牌率', value: ratio(s.win_count, s.total_rounds) },
     { label: '自摸率', value: ratio(s.self_draw_count, s.win_count) },
     { label: '放铳率', value: ratio(s.deal_in_count, s.total_rounds) },
