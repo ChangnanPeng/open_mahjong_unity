@@ -308,7 +308,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { analyzeRecords } from '../utils/recordAnalyzer'
-import { buildPlayerStatsRows, distributeIntegerPercents } from '../utils/statsDisplay'
+import { buildPlayerStatsRows, rankRateInt, rankedGames } from '../utils/statsDisplay'
 
 const RULE_DEFS = [
   { key: 'guobiao', label: '国标', statsField: 'guobiao_stats', fanField: 'guobiao' },
@@ -529,11 +529,10 @@ const pieSegments = computed(() => {
     { key: 3, value: s.third_place_count || 0 },
     { key: 4, value: s.fourth_place_count || 0 }
   ]
-  const total = counts.reduce((a, c) => a + c.value, 0)
-  const pcts = distributeIntegerPercents(counts.map(c => c.value), total)
+  const total = rankedGames(s)
   const C = 2 * Math.PI * 40
   let acc = 0
-  return counts.map((c, i) => {
+  return counts.map((c) => {
     const frac = total > 0 ? c.value / total : 0
     const len = frac * C
     const seg = {
@@ -543,17 +542,13 @@ const pieSegments = computed(() => {
       color: PIE_COLORS[c.key],
       dash: `${len} ${C - len}`,
       offset: -acc,
-      pct: total > 0 ? ` ${pcts[i]}%` : ''
+      pct: total > 0 ? ` ${rankRateInt(c.value, s)}%` : ''
     }
     acc += len
     return seg
   })
 })
-const pieTotal = computed(() => {
-  const s = activeStats.value
-  if (!s) return 0
-  return (s.first_place_count || 0) + (s.second_place_count || 0) + (s.third_place_count || 0) + (s.fourth_place_count || 0)
-})
+const pieTotal = computed(() => rankedGames(activeStats.value))
 
 const currentFanDict = computed(() => {
   if (!playerInfo.value || !currentRuleDef.value?.fanField) return null
@@ -781,8 +776,7 @@ const runDailyAnalysis = async () => {
       analyzing.value = false
       return
     }
-    const records = items.map(x => x.record)
-    const stats = analyzeRecords(records, userId)
+    const stats = analyzeRecords(items, userId)
     analyzedResult.value = { filterKey: filterKey.value, stats }
     ElMessage.success(`已本地分析 ${items.length} 局牌谱`)
   } catch (e) {
