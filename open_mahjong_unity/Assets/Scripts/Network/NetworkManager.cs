@@ -562,8 +562,6 @@ public class NetworkManager : MonoBehaviour {
                 case "gamestate/new_rule/ask_other_action":
                 case "gamestate/new_rule/do_action":
                 case "gamestate/new_rule/show_result":
-                case "gamestate/new_rule/final_settlement":
-                case "gamestate/new_rule/ask_action":
                 case "gamestate/new_rule/reconnect":
                 case "gamestate/new_rule/game_end":
                 case "gamestate/new_rule/ready_status":

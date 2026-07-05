@@ -604,7 +604,7 @@ def test_hidden_new_rule_smoke_uses_four_game_server_connection_sessions() -> No
         current_user_id = game_state.player_list[game_state.current_player_index].user_id
         await _wait_for_condition(
             lambda: any(
-                payload["type"] == "gamestate/new_rule/ask_action"
+                payload["type"] == "gamestate/new_rule/broadcast_hand_action"
                 and payload.get("player_index") == game_state.current_player_index
                 for payload in websockets[current_user_id].sent
             ),
@@ -751,7 +751,7 @@ def test_hidden_new_rule_room_can_start_game_state() -> None:
         assert game_state.outbound_payloads
         await _wait_for_condition(
             lambda: any(
-                payload["type"] == "gamestate/new_rule/ask_action"
+                payload["type"] == "gamestate/new_rule/broadcast_hand_action"
                 and payload.get("player_index") == game_state.current_player_index
                 for payload in websocket.sent
             ),
@@ -1322,7 +1322,7 @@ def test_hidden_new_rule_room_emits_final_settlement_reveal_payloads() -> None:
         final_payloads = [
             payload
             for payload in game_state.outbound_payloads
-            if payload.get("type") == "gamestate/new_rule/final_settlement"
+            if payload.get("type") == "gamestate/new_rule/show_result"
         ]
         assert len(final_payloads) == 4
         viewer_one_payload = next(payload for payload in final_payloads if payload["player_index"] == 1)
@@ -1664,7 +1664,7 @@ def test_hidden_new_rule_room_multi_ron_as_second_and_third_winners_ends_by_mess
         final_payloads = [
             payload
             for payload in game_state.outbound_payloads
-            if payload.get("type") == "gamestate/new_rule/final_settlement"
+            if payload.get("type") == "gamestate/new_rule/show_result"
         ]
         assert game_state.ended_by == "win"
         assert game_state.current_player_index == 0
@@ -2072,7 +2072,7 @@ def test_hidden_new_rule_room_third_self_draw_win_ends_hand_by_messages() -> Non
         final_payloads = [
             payload
             for payload in game_state.outbound_payloads
-            if payload.get("type") == "gamestate/new_rule/final_settlement"
+            if payload.get("type") == "gamestate/new_rule/show_result"
         ]
         assert game_state.ended_by == "win"
         assert game_state.player_list[0].is_hu
@@ -2130,7 +2130,7 @@ def test_hidden_new_rule_room_final_discard_no_win_ends_by_wall_by_messages() ->
         final_payloads = [
             payload
             for payload in websockets[101].sent
-            if payload.get("type") == "gamestate/new_rule/final_settlement"
+            if payload.get("type") == "gamestate/new_rule/show_result"
         ]
         assert final_payloads, websockets[101].sent
         assert final_payloads[-1]["game_info"]["ended_by"] == "wall"

@@ -273,6 +273,16 @@ Important caveat:
 
 Goal: reduce Unity special-case code by emitting the existing payload shapes as naturally as possible.
 
+Decision after audit:
+
+- Do not keep `unity_game_info` long-term. New rule should put Unity-ready `GameInfo` data directly in `game_info`.
+- Do not keep `gamestate/new_rule/ask_action` as the main public ask message. Split it into:
+  - `gamestate/new_rule/broadcast_hand_action` for self-turn asks.
+  - `gamestate/new_rule/ask_other_action` for discard/rob-kong response asks.
+- Do not keep `gamestate/new_rule/final_settlement` as the public result message. Use `gamestate/new_rule/show_result` with `show_result_info`.
+- `gamestate/new_rule/do_action` can remain because it already follows `DoActionInfo` closely.
+- `gamestate/new_rule/reconnect` is temporary until reconnect can send normal `game_start` plus pending ask just like existing rules.
+
 Audit and align these DTOs:
 
 - `GameInfo`
@@ -283,7 +293,7 @@ Audit and align these DTOs:
 
 Tasks:
 
-- [ ] Decide whether `unity_game_info` should remain long-term or be replaced by normal `game_info` for new-rule Unity messages.
+- [x] Decide whether `unity_game_info` should remain long-term or be replaced by normal `game_info` for new-rule Unity messages.
 - [ ] Ensure ask-hand payload uses existing fields:
   - `action_list`
   - `action_tick`
@@ -304,8 +314,22 @@ Tasks:
   - `combination_mask`
   - `combination_target`
 - [ ] Ensure result payload uses existing `show_result_info` fields.
-- [ ] Keep `gamestate/new_rule/...` routes if room-rule path separation requires them.
+- [x] Keep `gamestate/new_rule/...` routes if room-rule path separation requires them.
 - [ ] Remove Unity bridge branches that become redundant after payload convergence.
+
+Phase 4 implementation slices:
+
+- Phase 4a: backend payload type/field convergence. Status: complete in commit-in-progress for public message types.
+- Phase 4b: Unity C# bridge cleanup (`unity_game_info`, `ask_action`, `final_settlement` paths).
+- Phase 4c: reconnect behavior convergence.
+
+Phase 4a verification:
+
+- `rg -n "gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server\server\gamestate\game_new_rule open_mahjong_unity\Assets\Scripts\Network` returns no matches.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
 
 Unity regression targets:
 

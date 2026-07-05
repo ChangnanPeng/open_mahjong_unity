@@ -146,8 +146,9 @@ def ask_action_payload(
     cut_tile: Optional[int] = None,
     rob_kong_tile: Optional[int] = None,
 ) -> dict:
+    is_hand_action = cut_tile is None and rob_kong_tile is None
     return {
-        "type": "gamestate/new_rule/ask_action",
+        "type": "gamestate/new_rule/broadcast_hand_action" if is_hand_action else "gamestate/new_rule/ask_other_action",
         "success": True,
         "game_info": game_view(game_state, viewer_index),
         "unity_game_info": unity_game_info(game_state, viewer_index),
@@ -162,7 +163,7 @@ def ask_action_payload(
             "player_index": viewer_index,
             "remain_tiles": len(game_state.tiles_list),
             "action_tick": game_state.server_action_tick,
-        } if cut_tile is None and rob_kong_tile is None else None,
+        } if is_hand_action else None,
         "ask_other_action_info": {
             "action_list": list(action_list),
             "remaining_time": game_state.player_list[viewer_index].remaining_time,
@@ -295,7 +296,7 @@ def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> di
     if hasattr(game_state, "apply_deferred_score_changes"):
         game_state.apply_deferred_score_changes()
     return {
-        "type": "gamestate/new_rule/final_settlement",
+        "type": "gamestate/new_rule/show_result",
         "success": True,
         "player_index": viewer_index,
         "game_info": game_view(game_state, viewer_index, reveal_final=True),

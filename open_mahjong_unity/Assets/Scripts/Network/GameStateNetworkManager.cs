@@ -69,10 +69,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/riichi/show_result":
             case "gamestate/sichuan/show_result":
             case "gamestate/new_rule/show_result":
-            case "gamestate/new_rule/final_settlement":
                 HandleShowResult(response);
                 break;
-            case "gamestate/new_rule/ask_action":
             case "gamestate/new_rule/reconnect":
                 HandleNewRuleBridgeMessage(response);
                 break;

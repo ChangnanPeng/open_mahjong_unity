@@ -79,6 +79,39 @@ Verification after Phase 2:
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
+## Phase 4 Audit
+
+Current new-rule broadcast shape:
+
+- `game_new_rule/boardcast.py` builds raw dict payloads instead of `Response`/`GameInfo` model instances.
+- `game_info` is a prototype backend/debug view with fields such as `tiles_left`, `game_status`, and `deferred_hu_settlements`.
+- `unity_game_info` is a second, Unity-ready `GameInfo`-shaped payload.
+- `ask_action_payload()` uses a temporary public type `gamestate/new_rule/ask_action` and decides hand-vs-other ask by whether `cut_tile`/`rob_kong_tile` is present.
+- `final_settlement_payload()` uses a temporary public type `gamestate/new_rule/final_settlement`.
+- Unity `Response.cs` has a temporary `unity_game_info` field.
+- Unity `GameStateNetworkManager.cs` has `HandleNewRuleBridgeMessage()` and `SyncNewRuleUnityGameInfo()` to adapt those temporary shapes back into normal game-state handlers.
+
+Phase 4 decisions:
+
+- Remove `unity_game_info` from the target shape. New rule should emit Unity-ready `GameInfo` through normal `game_info`.
+- Replace `gamestate/new_rule/ask_action` with `gamestate/new_rule/broadcast_hand_action` or `gamestate/new_rule/ask_other_action`.
+- Replace public `gamestate/new_rule/final_settlement` with `gamestate/new_rule/show_result`.
+- Keep `gamestate/new_rule/do_action` because its nested `do_action_info` already follows `DoActionInfo` closely.
+- Keep `gamestate/new_rule/...` route prefix for rule separation; the cleanup target is the DTO shape, not necessarily the URL-like type prefix.
+- Treat `gamestate/new_rule/reconnect` as a later cleanup item. It should eventually converge toward existing reconnect behavior: normal `game_start` state restoration plus pending ask resend.
+
+Phase 4a verification:
+
+- New-rule hand asks now emit `gamestate/new_rule/broadcast_hand_action`.
+- New-rule discard/rob-kong response asks now emit `gamestate/new_rule/ask_other_action`.
+- New-rule final settlement now emits `gamestate/new_rule/show_result`.
+- Unity network dispatch no longer includes `gamestate/new_rule/ask_action` or `gamestate/new_rule/final_settlement`.
+- `rg -n "gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server\server\gamestate\game_new_rule open_mahjong_unity\Assets\Scripts\Network` returns no matches.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
+
 ## Phase 3 Code Targets
 
 Second code change renames statuses everywhere:

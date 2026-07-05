@@ -968,7 +968,7 @@ def test_run_game_loop_starts_draft_loop_and_can_be_cancelled() -> None:
 
         assert game.game_status == "waiting_hand_action"
         assert game.waiting_players_list
-        assert any(payload["type"] == "gamestate/new_rule/ask_action" for payload in game.outbound_payloads)
+        assert any(payload["type"] == "gamestate/new_rule/broadcast_hand_action" for payload in game.outbound_payloads)
 
         await game.cleanup_game_state()
         assert game.game_task.cancelled()
@@ -989,7 +989,7 @@ def test_open_action_window_sets_live_action_fields() -> None:
     assert game.live_pending_window is window
     assert game.action_dict[0] == ["cut"]
     assert game.waiting_players_list == [0]
-    assert game.outbound_payloads[-1]["type"] == "gamestate/new_rule/ask_action"
+    assert game.outbound_payloads[-1]["type"] == "gamestate/new_rule/broadcast_hand_action"
     assert game.outbound_payloads[-1]["action_list"] == ["cut"]
 
 
@@ -1097,7 +1097,7 @@ def test_flush_outbound_payloads_sends_to_connected_player() -> None:
         await game.flush_outbound_payloads()
 
         assert websocket.sent
-        assert websocket.sent[0]["type"] == "gamestate/new_rule/ask_action"
+        assert websocket.sent[0]["type"] == "gamestate/new_rule/broadcast_hand_action"
         assert websocket.sent[0]["player_index"] == 0
         assert game.websocket_sent_payloads == websocket.sent
         assert game.outbound_send_cursor == len(game.outbound_payloads)

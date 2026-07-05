@@ -200,7 +200,7 @@ def test_final_settlement_without_winners_emits_unity_draw_result() -> None:
 
     payload = final_settlement_payload(game, 0)
 
-    assert payload["type"] == "gamestate/new_rule/final_settlement"
+    assert payload["type"] == "gamestate/new_rule/show_result"
     assert payload["show_result_info"]["hepai_player_index"] == -1
     assert payload["show_result_info"]["hu_class"] == "liuju"
     assert payload["show_result_info"]["hu_score"] == 0
@@ -215,7 +215,7 @@ def test_ask_action_payload_includes_action_tick_and_actions() -> None:
 
     payload = ask_action_payload(game, 2, ["hu", "pass"], cut_tile=41)
 
-    assert payload["type"] == "gamestate/new_rule/ask_action"
+    assert payload["type"] == "gamestate/new_rule/ask_other_action"
     assert payload["player_index"] == 2
     assert payload["action_list"] == ["hu", "pass"]
     assert payload["action_tick"] == 7
@@ -233,10 +233,12 @@ def test_ask_action_payload_includes_unity_bridge_fields() -> None:
     assert hand_payload["unity_game_info"]["room_rule"] == "new_rule"
     assert hand_payload["unity_game_info"]["sub_rule"] == "new_rule/standard"
     assert hand_payload["unity_game_info"]["self_hand_tiles"] == game.player_list[0].hand_tiles
+    assert hand_payload["type"] == "gamestate/new_rule/broadcast_hand_action"
     assert hand_payload["ask_hand_action_info"]["action_list"] == ["cut"]
     assert hand_payload["ask_hand_action_info"]["remain_tiles"] == len(game.tiles_list)
     assert hand_payload["ask_other_action_info"] is None
 
+    assert other_payload["type"] == "gamestate/new_rule/ask_other_action"
     assert other_payload["ask_hand_action_info"] is None
     assert other_payload["ask_other_action_info"]["action_list"] == ["hu", "pass"]
     assert other_payload["ask_other_action_info"]["cut_tile"] == 41
