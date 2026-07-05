@@ -11,24 +11,24 @@ from server.gamestate.game_new_rule import NewRuleGameState
 from server.gamestate.game_new_rule.boardcast import (
     ask_action_payload,
     final_settlement_payload,
-    game_view,
+    game_info_payload,
     reconnect_payload,
     visible_action_payload,
 )
 
 
-def test_game_view_masks_concealed_kong_for_other_players() -> None:
+def test_game_info_masks_concealed_kong_for_other_players() -> None:
     game = NewRuleGameState()
     game.player_list[0].hand_tiles = [11, 12, 13]
     game.player_list[0].combination_tiles = ["G15"]
 
-    owner_view = game_view(game, 0)
-    other_view = game_view(game, 1)
+    owner_view = game_info_payload(game, 0)
+    other_view = game_info_payload(game, 1)
 
     assert owner_view["players_info"][0]["combination_tiles"] == ["G15"]
     assert other_view["players_info"][0]["combination_tiles"] == ["G0"]
     assert other_view["players_info"][0]["hand_tiles"] is None
-    assert other_view["players_info"][0]["hand_count"] == 3
+    assert other_view["players_info"][0]["hand_tiles_count"] == 3
 
 
 def test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile() -> None:
@@ -98,8 +98,6 @@ def test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results() -
     player_zero = payload["game_info"]["players_info"][0]
     assert player_zero["hand_tiles"] == [11, 12, 13]
     assert player_zero["combination_tiles"] == ["G15"]
-    assert payload["game_info"]["deferred_hu_settlements"] == [{"winner": 0, "points": 8, "fan_ids": ["pinfu"]}]
-    assert payload["game_info"]["ended_by"] == "win"
     assert payload["show_result_info"]["hepai_player_index"] == 0
     assert payload["show_result_info"]["hu_score"] == 8
     assert payload["show_result_info"]["hu_fan"] == ["pinfu"]
@@ -128,16 +126,8 @@ def test_final_settlement_keeps_zero_point_empty_fan_result() -> None:
 
     payload = final_settlement_payload(game, 1)
 
-    assert payload["game_info"]["deferred_hu_settlements"] == [
-        {
-            "winner": 0,
-            "points": 0,
-            "raw_points": 0,
-            "fan_ids": [],
-            "fan_names": [],
-            "score_changes": [0, 0, 0, 0],
-        }
-    ]
+    assert payload["show_result_info"]["hu_score"] == 0
+    assert payload["show_result_info"]["hu_fan"] == []
 
 
 def test_final_settlement_applies_score_changes_once() -> None:
@@ -230,9 +220,9 @@ def test_ask_action_payload_includes_unity_bridge_fields() -> None:
     hand_payload = ask_action_payload(game, 0, ["cut"])
     other_payload = ask_action_payload(game, 1, ["hu", "pass"], cut_tile=41)
 
-    assert hand_payload["unity_game_info"]["room_rule"] == "new_rule"
-    assert hand_payload["unity_game_info"]["sub_rule"] == "new_rule/standard"
-    assert hand_payload["unity_game_info"]["self_hand_tiles"] == game.player_list[0].hand_tiles
+    assert hand_payload["game_info"]["room_rule"] == "new_rule"
+    assert hand_payload["game_info"]["sub_rule"] == "new_rule/standard"
+    assert hand_payload["game_info"]["self_hand_tiles"] == game.player_list[0].hand_tiles
     assert hand_payload["type"] == "gamestate/new_rule/broadcast_hand_action"
     assert hand_payload["ask_hand_action_info"]["action_list"] == ["cut"]
     assert hand_payload["ask_hand_action_info"]["remain_tiles"] == len(game.tiles_list)
@@ -286,8 +276,6 @@ def test_reconnect_payload_after_end_reveals_final_state_and_applies_scores_once
     player_zero = first_payload["game_info"]["players_info"][0]
     assert player_zero["hand_tiles"] == [11, 12, 13]
     assert player_zero["combination_tiles"] == ["G15"]
-    assert first_payload["game_info"]["ended_by"] == "win"
-    assert first_payload["game_info"]["deferred_hu_settlements"] == game.deferred_hu_settlements
     assert first_payload["game_info"]["players_info"][0]["score"] == -48
     assert first_payload["game_info"]["players_info"][1]["score"] == 48
     assert second_payload["game_info"]["players_info"][0]["score"] == -48
@@ -296,7 +284,7 @@ def test_reconnect_payload_after_end_reveals_final_state_and_applies_scores_once
 
 def run() -> None:
     tests = [
-        test_game_view_masks_concealed_kong_for_other_players,
+        test_game_info_masks_concealed_kong_for_other_players,
         test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile,
         test_mid_hand_discard_win_keeps_public_discard_tile_but_hides_scoring,
         test_deal_tile_payload_hides_drawn_tile_from_other_viewers,

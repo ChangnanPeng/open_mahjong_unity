@@ -15,24 +15,6 @@ def public_melds_for_viewer(player: Any, viewer_index: Optional[int], *, reveal_
     return melds
 
 
-def player_view(game_state: Any, player_index: int, viewer_index: Optional[int], *, reveal_final: bool = False) -> dict:
-    player = game_state.player_list[player_index]
-    include_hand = reveal_final or viewer_index == player_index
-    return {
-        "player_index": player_index,
-        "user_id": player.user_id,
-        "username": player.username,
-        "score": player.score,
-        "is_hu": player.is_hu,
-        "hu_order": player.hu_order,
-        "tag_list": list(player.tag_list),
-        "discard_tiles": list(player.discard_tiles),
-        "combination_tiles": public_melds_for_viewer(player, viewer_index, reveal_final=reveal_final),
-        "hand_count": len(player.hand_tiles),
-        "hand_tiles": list(player.hand_tiles) if include_hand else None,
-    }
-
-
 def _safe_room_id(room_id: Any) -> int:
     try:
         return int(room_id)
@@ -40,7 +22,7 @@ def _safe_room_id(room_id: Any) -> int:
         return 0
 
 
-def unity_player_info(
+def player_info_payload(
     game_state: Any,
     player_index: int,
     viewer_index: Optional[int],
@@ -77,7 +59,7 @@ def unity_player_info(
     }
 
 
-def unity_game_info(game_state: Any, viewer_index: Optional[int], *, reveal_final: bool = False) -> dict:
+def game_info_payload(game_state: Any, viewer_index: Optional[int], *, reveal_final: bool = False) -> dict:
     return {
         "room_id": _safe_room_id(game_state.room_id),
         "gamestate_id": game_state.gamestate_id,
@@ -102,7 +84,7 @@ def unity_game_info(game_state: Any, viewer_index: Optional[int], *, reveal_fina
         "isPlayerSetRandomSeed": bool(game_state.room_random_seed),
         "player_entry_order": [player.user_id for player in game_state.player_list],
         "players_info": [
-            unity_player_info(game_state, idx, viewer_index, reveal_final=reveal_final)
+            player_info_payload(game_state, idx, viewer_index, reveal_final=reveal_final)
             for idx in range(len(game_state.player_list))
         ],
         "self_hand_tiles": list(game_state.player_list[viewer_index].hand_tiles)
@@ -112,30 +94,6 @@ def unity_game_info(game_state: Any, viewer_index: Optional[int], *, reveal_fina
         "view_player_index": viewer_index,
         "blood_battle": True,
     }
-
-
-def game_view(game_state: Any, viewer_index: Optional[int], *, reveal_final: bool = False) -> dict:
-    payload = {
-        "room_id": game_state.room_id,
-        "gamestate_id": game_state.gamestate_id,
-        "room_rule": game_state.room_rule,
-        "sub_rule": game_state.sub_rule,
-        "current_player_index": game_state.current_player_index,
-        "dealer_index": game_state.dealer_index,
-        "current_round": game_state.current_round,
-        "round_index": game_state.round_index,
-        "tiles_left": len(game_state.tiles_list),
-        "game_status": game_state.game_status,
-        "action_tick": game_state.server_action_tick,
-        "players_info": [
-            player_view(game_state, idx, viewer_index, reveal_final=reveal_final)
-            for idx in range(len(game_state.player_list))
-        ],
-    }
-    if reveal_final:
-        payload["deferred_hu_settlements"] = list(game_state.deferred_hu_settlements)
-        payload["ended_by"] = game_state.ended_by
-    return payload
 
 
 def ask_action_payload(
@@ -150,8 +108,7 @@ def ask_action_payload(
     return {
         "type": "gamestate/new_rule/broadcast_hand_action" if is_hand_action else "gamestate/new_rule/ask_other_action",
         "success": True,
-        "game_info": game_view(game_state, viewer_index),
-        "unity_game_info": unity_game_info(game_state, viewer_index),
+        "game_info": game_info_payload(game_state, viewer_index),
         "player_index": viewer_index,
         "action_list": list(action_list),
         "action_tick": game_state.server_action_tick,
@@ -190,8 +147,7 @@ def visible_action_payload(
         "action": action,
         "player": actor,
         "tile": action_info.get("tile"),
-        "game_info": game_view(game_state, viewer_index, reveal_final=reveal_final),
-        "unity_game_info": unity_game_info(game_state, viewer_index, reveal_final=reveal_final),
+        "game_info": game_info_payload(game_state, viewer_index, reveal_final=reveal_final),
         "do_action_info": {
             "action_list": [action] if action else [],
             "action_player": actor if actor is not None else -1,
@@ -299,8 +255,7 @@ def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> di
         "type": "gamestate/new_rule/show_result",
         "success": True,
         "player_index": viewer_index,
-        "game_info": game_view(game_state, viewer_index, reveal_final=True),
-        "unity_game_info": unity_game_info(game_state, viewer_index, reveal_final=True),
+        "game_info": game_info_payload(game_state, viewer_index, reveal_final=True),
         "show_result_info": _final_show_result_info(game_state),
     }
 
@@ -314,8 +269,7 @@ def reconnect_payload(game_state: Any, viewer_index: int) -> dict:
         "type": "gamestate/new_rule/reconnect",
         "success": True,
         "player_index": viewer_index,
-        "game_info": game_view(game_state, viewer_index, reveal_final=reveal_final),
-        "unity_game_info": unity_game_info(game_state, viewer_index, reveal_final=reveal_final),
+        "game_info": game_info_payload(game_state, viewer_index, reveal_final=reveal_final),
         "action_list": action_list,
         "action_tick": game_state.server_action_tick,
     }

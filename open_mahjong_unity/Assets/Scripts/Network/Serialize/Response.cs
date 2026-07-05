@@ -411,7 +411,6 @@ public class Response { // 所有后端的返回数据都由Response类接收
     public RoomInfo[] room_list; // 返回房间列表
     public RoomInfo room_info; // 返回单个房间信息
     public GameInfo game_info; // gameinfo用于开始游戏 其中包含player_info
-    public GameInfo unity_game_info; // 新规则试玩桥接：保留后端测试 game_info，同时给 Unity 一份标准 GameInfo
     public AskHandActionGBInfo ask_hand_action_info; // 国标游戏中询问切片补花暗杠自摸
     public AskOtherActionGBInfo ask_other_action_info; // 国标游戏中询问吃碰杠和
     public DoActionInfo do_action_info; // 国标游戏中执行操作

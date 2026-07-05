@@ -320,12 +320,20 @@ Tasks:
 Phase 4 implementation slices:
 
 - Phase 4a: backend payload type/field convergence. Status: complete in commit-in-progress for public message types.
-- Phase 4b: Unity C# bridge cleanup (`unity_game_info`, `ask_action`, `final_settlement` paths).
+- Phase 4b: Unity C# bridge cleanup (`unity_game_info`, `ask_action`, `final_settlement` paths). Status: complete in commit-in-progress.
 - Phase 4c: reconnect behavior convergence.
 
 Phase 4a verification:
 
 - `rg -n "gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server\server\gamestate\game_new_rule open_mahjong_unity\Assets\Scripts\Network` returns no matches.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
+
+Phase 4b verification:
+
+- `rg -n "unity_game_info|SyncNewRuleUnityGameInfo|gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
 - `test_new_rule_boardcast.py`: 13 tests passed.
 - `test_new_rule_gamestate.py`: 55 tests passed.
 - `test_new_rule_room_creation.py`: 38 tests passed.

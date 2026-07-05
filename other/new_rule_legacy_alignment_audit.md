@@ -112,6 +112,17 @@ Phase 4a verification:
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
+Phase 4b verification:
+
+- New-rule payloads now put Unity-ready data directly in `game_info`.
+- The temporary `unity_game_info` field is removed from Unity `Response`.
+- Unity no longer calls `SyncNewRuleUnityGameInfo`; `DoAction`/`ShowResult` now sync remaining tiles from standard `game_info`.
+- `rg -n "unity_game_info|SyncNewRuleUnityGameInfo|gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
+
 ## Phase 3 Code Targets
 
 Second code change renames statuses everywhere:

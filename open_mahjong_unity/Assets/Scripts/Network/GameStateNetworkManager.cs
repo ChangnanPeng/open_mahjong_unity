@@ -127,22 +127,19 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleGameStart(Response response) {
         Debug.Log($"游戏开始: {response.message}");
         AutoReconnect.OnGameRestored();
-        NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.unity_game_info ?? response.game_info);
+        NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
     }
 
     private void HandleNewRuleBridgeMessage(Response response) {
         if (NormalGameStateManager.Instance == null) {
-            Debug.LogWarning("New-rule bridge message arrived before NormalGameStateManager was ready.");
+            Debug.LogWarning("New-rule reconnect message arrived before NormalGameStateManager was ready.");
             return;
         }
-        if (response.do_action_info == null) {
-            SyncNewRuleUnityGameInfo(response);
-        }
-        if (response.unity_game_info != null && (
+        if (response.game_info != null && (
             string.IsNullOrEmpty(NormalGameStateManager.Instance.roomRule) ||
             NormalGameStateManager.Instance.roomRule != "new_rule"
         )) {
-            NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.unity_game_info);
+            NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
         }
         if (response.ask_hand_action_info != null) {
             HandleBroadcastHandAction(response);
@@ -158,11 +155,10 @@ public class GameStateNetworkManager : MonoBehaviour {
         }
     }
 
-    private void SyncNewRuleUnityGameInfo(Response response) {
-        if (response.unity_game_info == null || NormalGameStateManager.Instance == null) return;
-        if (response.unity_game_info.room_rule != "new_rule") return;
-        NormalGameStateManager.Instance.remainTiles = response.unity_game_info.tile_count;
-        BoardCanvas.Instance?.UpdateRemainTiles(response.unity_game_info.tile_count);
+    private void SyncGameInfo(Response response) {
+        if (response.game_info == null || NormalGameStateManager.Instance == null) return;
+        NormalGameStateManager.Instance.remainTiles = response.game_info.tile_count;
+        BoardCanvas.Instance?.UpdateRemainTiles(response.game_info.tile_count);
     }
 
     /// <summary>
@@ -248,7 +244,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.gang_score_changes,
             doresponse.is_mo_buhua
         );
-        SyncNewRuleUnityGameInfo(response);
+        SyncGameInfo(response);
     }
     
     /// <summary>
@@ -256,7 +252,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     /// </summary>
     private void HandleShowResult(Response response) {
         Debug.Log($"收到显示结算结果消息: {response.show_result_info}");
-        SyncNewRuleUnityGameInfo(response);
+        SyncGameInfo(response);
         ShowResultInfo showresponse = response.show_result_info;
         if (showresponse == null) return;
         RiichiEndResultExtras riichiExtras = BuildRiichiExtrasIfAny(showresponse);

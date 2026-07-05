@@ -1329,8 +1329,8 @@ def test_hidden_new_rule_room_emits_final_settlement_reveal_payloads() -> None:
         player_zero = viewer_one_payload["game_info"]["players_info"][0]
         assert player_zero["hand_tiles"] == [11, 12, 13]
         assert player_zero["combination_tiles"] == ["G15"]
-        assert viewer_one_payload["game_info"]["deferred_hu_settlements"] == game_state.deferred_hu_settlements
-        assert viewer_one_payload["game_info"]["ended_by"] == "win"
+        assert viewer_one_payload["show_result_info"]["hepai_player_index"] == 1
+        assert viewer_one_payload["show_result_info"]["hu_score"] == 8
 
         await server.gamestate_manager.cleanup_game_state_complete(gamestate_id=game_state.gamestate_id)
         assert game_state.game_task.cancelled()
@@ -1370,7 +1370,7 @@ def test_hidden_new_rule_room_reconnect_payload_is_viewer_safe_by_manager() -> N
         player_zero = payload["game_info"]["players_info"][0]
         player_one = payload["game_info"]["players_info"][1]
         assert player_zero["hand_tiles"] is None
-        assert player_zero["hand_count"] == 3
+        assert player_zero["hand_tiles_count"] == 3
         assert player_zero["combination_tiles"] == ["G0"]
         assert player_one["hand_tiles"] == [21, 22, 23]
 
@@ -1418,9 +1418,7 @@ def test_hidden_new_rule_room_reconnect_after_end_reveals_final_state_by_manager
         payload = reconnect_payloads[-1]
         player_zero = payload["game_info"]["players_info"][0]
         player_one = payload["game_info"]["players_info"][1]
-        assert payload["game_info"]["game_status"] == "END"
-        assert payload["game_info"]["ended_by"] == "win"
-        assert payload["game_info"]["deferred_hu_settlements"] == game_state.deferred_hu_settlements
+        assert payload["game_info"]["room_rule"] == "new_rule"
         assert player_zero["hand_tiles"] == [11, 12, 13]
         assert player_zero["combination_tiles"] == ["G15"]
         assert player_one["hand_tiles"] == [21, 22, 23]
@@ -2085,8 +2083,8 @@ def test_hidden_new_rule_room_third_self_draw_win_ends_hand_by_messages() -> Non
         assert settlement["points"] == 5
         assert settlement["score_changes"] == [30, 0, 0, -30]
         assert len(final_payloads) == 4
-        assert final_payloads[0]["game_info"]["ended_by"] == "win"
-        assert len(final_payloads[0]["game_info"]["deferred_hu_settlements"]) == 3
+        assert final_payloads[0]["show_result_info"]["hepai_player_index"] == settlement["winner"]
+        assert final_payloads[0]["show_result_info"]["score_changes"] == {0: 30, 1: 0, 2: 0, 3: -30}
         for payload in final_payloads:
             scores = [
                 player_info["score"]
@@ -2133,8 +2131,8 @@ def test_hidden_new_rule_room_final_discard_no_win_ends_by_wall_by_messages() ->
             if payload.get("type") == "gamestate/new_rule/show_result"
         ]
         assert final_payloads, websockets[101].sent
-        assert final_payloads[-1]["game_info"]["ended_by"] == "wall"
-        assert final_payloads[-1]["game_info"]["deferred_hu_settlements"] == []
+        assert final_payloads[-1]["show_result_info"]["hu_class"] == "liuju"
+        assert final_payloads[-1]["show_result_info"]["hu_fan"] == []
 
         await server.gamestate_manager.cleanup_game_state_complete(gamestate_id=game_state.gamestate_id)
         assert game_state.game_task.done()
