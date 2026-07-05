@@ -138,6 +138,8 @@ class NewRuleGameState:
         self.game_record: dict = {}
         self.player_action_tick = 0
         self.round_record_finalized = False
+        self.bot_tasks: set[asyncio.Task] = set()
+        self.bot_action_ticks: dict[int, int] = {}
         self.action_events: Dict[int, asyncio.Event] = {i: asyncio.Event() for i in range(4)}
         self.action_queues: Dict[int, asyncio.Queue] = {i: asyncio.Queue() for i in range(4)}
         self.waiting_players_list: list[int] = []
@@ -195,6 +197,13 @@ class NewRuleGameState:
                 logger.info("New rule game loop cancelled, room_id=%s", self.room_id)
             except Exception as exc:
                 logger.error("Error while cancelling new rule game loop, room_id=%s: %s", self.room_id, exc)
+        for task in list(self.bot_tasks):
+            if not task.done():
+                task.cancel()
+        if self.bot_tasks:
+            await asyncio.gather(*self.bot_tasks, return_exceptions=True)
+            self.bot_tasks.clear()
+        self.bot_action_ticks.clear()
 
     async def player_disconnect(self, user_id: int) -> None:
         """Mark a player offline; broadcast/reconnect payloads are future live work."""
@@ -267,15 +276,8 @@ class NewRuleGameState:
             while not self.action_queues[idx].empty():
                 self.action_queues[idx].get_nowait()
 
+        self.schedule_bot_actions()
         results: Dict[int, dict] = {}
-        for idx in list(self.waiting_players_list):
-            if self.player_list[idx].is_bot:
-                action = self._default_bot_action(idx)
-                if action is not None:
-                    results[idx] = action
-                    self.action_dict[idx] = []
-                    self.waiting_players_list.remove(idx)
-
         deadline = None if timeout is None else asyncio.get_running_loop().time() + timeout
         while self.waiting_players_list:
             wait_tasks = {
@@ -310,29 +312,29 @@ class NewRuleGameState:
                 self.waiting_players_list.remove(idx)
         return results
 
-    def _default_bot_action(self, player_index: int) -> Optional[dict]:
-        actions = self.action_dict.get(player_index, [])
-        if not actions:
-            return None
-        if "pass" in actions:
-            return {
-                "player_index": player_index,
-                "action_type": "pass",
-                "target_tile": None,
-                "TileId": None,
-                "cutIndex": -1,
-                "cutClass": False,
-            }
-        if "cut" in actions and self.player_list[player_index].hand_tiles:
-            return {
-                "player_index": player_index,
-                "action_type": "cut",
-                "target_tile": None,
-                "TileId": self.player_list[player_index].hand_tiles[0],
-                "cutIndex": 0,
-                "cutClass": False,
-            }
-        return None
+    def schedule_bot_actions(self) -> None:
+        from .bot import new_rule_bot_action
+
+        if self.game_status == "END":
+            return
+        for player_index in list(self.waiting_players_list):
+            actions = self.action_dict.get(player_index, [])
+            if not actions or not self.player_list[player_index].is_bot:
+                continue
+            if self.bot_action_ticks.get(player_index) == self.server_action_tick:
+                continue
+            task = asyncio.create_task(
+                new_rule_bot_action(
+                    self,
+                    player_index,
+                    list(actions),
+                    self.game_status,
+                    self.server_action_tick,
+                )
+            )
+            self.bot_action_ticks[player_index] = self.server_action_tick
+            self.bot_tasks.add(task)
+            task.add_done_callback(self.bot_tasks.discard)
 
     def open_action_window(self, window: dict) -> dict:
         """Expose a driver window through live-loop action fields."""

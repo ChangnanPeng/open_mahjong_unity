@@ -42,14 +42,14 @@ Caveat:
 | Response target | `target_tile` | `target_tile` | Keep | Phase 2 |
 | `submit_action` API | keyword args use `tile_id`, `cut_index` | old-style `TileId`, `cutIndex`, `cutClass` | Rewrite API/tests | Phase 2 |
 | `get_action.py` API | receives old fields but converts to prototype fields | keep old fields through queue | Rewrite conversion away | Phase 2 |
-| Bot fallback action | returns prototype fields and runs synchronously | old-style async bot pipeline | Rewrite later; first remove prototype fields in fallback | Phase 2/6 |
+| Bot fallback action | removed | old-style async bot pipeline | Thin new-rule adapter submits through new-rule validation | Phase 6a |
 | `boardcast.py` do-action cut index | reads `action_info["cut_index"]` | read canonical `cutIndex` or do-action already has `cut_tile_index` | Rewrite | Phase 2 |
 | Unity route path | `gamestate/new_rule/...` | existing route style where possible | Keep for now; path separation may remain useful | Phase 4 |
 | Unity `unity_game_info` | new bridge field | normal `game_info` should eventually be canonical | Audit/remove later | Phase 4 |
 | Unity DTOs | uses existing `ask_*`, `do_action_info`, `show_result_info` plus bridge | existing DTOs without bridge-only fields | Converge later | Phase 4 |
 | Record helpers | new rule mostly not using full `player_action_record_*` flow | shared `game_record_manager` helpers | Audit and align later | Phase 5 |
 | Storage | no `store_new_rule_game_record` registered | `game_records` + `game_player_records` pattern | Add or reuse store later | Phase 5 |
-| Bot pipeline | synchronous `_default_bot_action` | async `public.ai` scheduling | Replace later after status/action alignment | Phase 6 |
+| Bot pipeline | async `game_new_rule.bot` adapter | async old-style scheduling | Direct `public.ai` import is unsafe because it uses old-rule `get_action`; adapter reuses smart helpers only | Phase 6a |
 
 ## Phase 2 Code Targets
 
@@ -190,13 +190,41 @@ Phase 3 verification:
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
+## Phase 6a Verification
+
+Bot pipeline alignment is partially in place:
+
+- The synchronous `_default_bot_action` fallback has been removed.
+- `NewRuleGameState.wait_action()` now schedules bot actions as async tasks after clearing per-player queues/events.
+- Pending bot tasks are tracked and cancelled in `cleanup_game_state()`.
+- `game_new_rule/bot.py` is a thin adapter:
+  - auto-cut bot (`user_id == 0` and other non-smart bot IDs) pass/cuts through new-rule validation;
+  - smart bot (`user_id == 2`) reuses shared smart-bot scoring helpers;
+  - all bot submissions use canonical `TileId`, `cutIndex`, `cutClass`, and `target_tile`;
+  - stale action ticks and terminal `END` are ignored.
+- Auto-cut now waits before self-turn/forced-discard cuts and cuts the last hand tile, matching the original bot pacing more closely.
+
+Verification:
+
+- `run_new_rule_tests.py`: all 10 scripts passed.
+- `test_new_rule_gamestate.py`: 61 tests passed.
+- `test_new_rule_get_action.py`: 4 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
+
+Still pending:
+
+- Unity manual parity check for bot pacing.
+- Finer smart-bot behavior tests for chi/peng/gang and hu.
+- Manual checks with both Unity buttons: "add bot" and "add smart bot".
+
 ## Deferred Areas
 
 Do not mix these into Phase 2/3/4 or Phase 5a:
 
 - Adding database storage.
 - Full record/replay validation.
-- Replacing bot scheduling.
+- Completing advanced bot behavior and Unity parity validation.
 - Fan localization.
 
 These are important, but doing them after action/status cleanup keeps the refactor understandable.

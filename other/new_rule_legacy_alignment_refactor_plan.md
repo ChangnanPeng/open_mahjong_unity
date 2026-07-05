@@ -101,11 +101,17 @@ Broadcast/Unity:
 - Unity has explicit `gamestate/new_rule/...` cases.
 - Some bridge code was added because payloads were not originally shaped like old `GameInfo`, `AskHandActionGBInfo`, `AskOtherActionGBInfo`, `DoActionInfo`, and `ShowResultInfo`.
 
-Bot:
+Bot baseline at the start of this refactor:
 
-- Current new-rule bots use synchronous fallback `_default_bot_action`.
-- Existing bots expect old statuses and old cut fields.
-- Qingque and Guobiao share the existing smart bot path; new rule should get closer to that path before writing a large adapter.
+- New-rule bots used synchronous fallback `_default_bot_action`.
+- Existing bots expected old statuses and old cut fields.
+- Qingque and Guobiao share the existing smart bot path; new rule needed to get closer to that path before writing a large adapter.
+
+Current bot state after Phase 6a:
+
+- `_default_bot_action` has been removed.
+- New rule uses `game_new_rule/bot.py` as a thin async adapter.
+- The adapter reuses shared smart-bot scoring helpers but submits through new-rule validation.
 
 Record/replay/database:
 
@@ -445,30 +451,41 @@ Prerequisite:
 
 Tasks:
 
-- [ ] Decide whether direct import of `public.ai.auto_cut_ai.auto_cut_action` is safe after alignment.
-- [ ] If not direct, add a very thin new-rule bot adapter.
-- [ ] Preserve old bot delay behavior.
-- [ ] For `user_id == 0`, implement auto-cut/pass behavior first.
-- [ ] For `user_id == 2`, reuse smart discard selection helpers:
+- [x] Decide whether direct import of `public.ai.auto_cut_ai.auto_cut_action` is safe after alignment.
+  - Decision: not direct. The public bots import the shared old-rule `public.ai.get_action`, so new rule needs its own thin adapter that submits through `game_new_rule.get_action`.
+- [x] Add a thin new-rule bot adapter: `open_mahjong_server/server/gamestate/game_new_rule/bot.py`.
+- [x] Preserve old bot delay behavior for self-turn and forced-discard cuts.
+- [x] Replace `_default_bot_action` synchronous fallback with async task scheduling from `wait_action`.
+- [x] For `user_id == 0`, implement auto-cut/pass behavior first.
+- [x] For `user_id == 2`, reuse smart discard selection helpers:
   - `count_melds`
   - `count_visible_tiles`
   - `find_best_cut`
   - `find_best_cut_score`
   - `should_accept_hu`
-- [ ] Keep response choices conservative initially:
-  - accept legal hu if configured;
-  - otherwise pass;
-  - add chi/peng/gang decisions later.
-- [ ] Make bot submissions go through new-rule validation.
-- [ ] Ensure bot action after `END` is ignored.
+- [x] Make bot submissions go through new-rule validation.
+- [x] Ensure stale bot actions after action-tick changes are ignored.
+- [x] Ensure bot action after `END` is ignored.
+- [x] Cleanup cancels pending bot tasks.
+- [ ] Unity manual parity check: confirm bot discard pacing is no longer instantaneous.
+- [ ] Add finer tests for smart bot chi/peng/gang and hu choices.
 
 Tests:
 
-- [ ] auto-cut bot queues a delayed cut.
+- [x] auto-cut bot queues a delayed cut.
+- [x] cleanup cancels pending bot tasks.
 - [ ] smart bot queues a legal cut.
 - [ ] bot pass after discard response.
 - [ ] bot hu response.
 - [ ] no bot action after terminal settlement.
+
+Phase 6a verification:
+
+- `run_new_rule_tests.py`: all 10 scripts passed.
+- `test_new_rule_gamestate.py`: 61 tests passed.
+- `test_new_rule_get_action.py`: 4 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
 ## Phase 7: Room, Ready, Next-Hand, And Game-End Flow
 
@@ -562,9 +579,18 @@ Do not commit:
 
 ## Immediate Next Steps
 
-1. Create a new refactor branch from the snapshot commit.
-2. Run current Python new-rule tests to establish a baseline.
-3. Build the audit matrix.
-1. Continue Phase 5: record, replay, spectator, and storage alignment.
-2. Then continue Phase 6: replace the temporary synchronous bot fallback with old-style bot scheduling/reuse.
-3. After record/bot alignment, run Unity compile and manual parity checks again.
+Completed:
+
+- Created refactor branch from the saved snapshot route.
+- Ran current Python new-rule tests to establish a baseline.
+- Built the audit matrix.
+- Completed Phase 2/3/4 public protocol alignment.
+- Completed Phase 5a minimal record scaffold.
+- Completed Phase 6a async bot adapter and removed synchronous fallback.
+
+Next:
+
+1. Run Unity manual parity check for new-rule bot pacing, action prompts, and end-of-hand result display.
+2. Continue Phase 5b: database storage, replay validation, spectator updates, and multi-round record lifecycle.
+3. Continue Phase 6b: finer smart-bot/pass/hu tests and manual Unity checks with both bot buttons.
+4. After record/bot parity, run Unity compile and a fresh manual new-rule playtest.

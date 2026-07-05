@@ -4,6 +4,7 @@ import asyncio
 from collections import Counter
 from pathlib import Path
 import sys
+import time
 from types import SimpleNamespace
 
 SERVER_ROOT = Path(__file__).resolve().parents[3]
@@ -912,6 +913,62 @@ def test_wait_action_defaults_pending_pass_on_timeout() -> None:
     asyncio.run(scenario())
 
 
+def test_auto_bot_cuts_last_tile_after_delay() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState(room_data={
+            "room_id": "bot-delay-test",
+            "player_list": [0, 101, 102, 103],
+            "player_settings": {0: {"username": "auto-bot"}},
+        })
+        game.initialize_round()
+        for player in game.player_list:
+            player.hand_tiles = []
+            player.waiting_tiles = set()
+        game.player_list[0].hand_tiles = [11, 12, 13]
+        game.player_list[0].has_draw_slot = True
+
+        game.open_action_window(game.begin_hand_action(0))
+        started = time.perf_counter()
+        result = await game.wait_action(timeout=1.0)
+        elapsed = time.perf_counter() - started
+
+        assert elapsed >= 0.45
+        assert result[0]["action_type"] == "cut"
+        assert result[0]["TileId"] == 13
+        assert result[0]["cutIndex"] == 2
+        assert result[0]["cutClass"] is True
+        assert game.waiting_players_list == []
+        assert game.action_dict[0] == []
+        assert game.bot_action_ticks[0] == game.server_action_tick
+
+    asyncio.run(scenario())
+
+
+def test_cleanup_cancels_pending_bot_tasks() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState(room_data={
+            "room_id": "bot-cleanup-test",
+            "player_list": [0, 101, 102, 103],
+            "player_settings": {0: {"username": "auto-bot"}},
+        })
+        game.initialize_round()
+        for player in game.player_list:
+            player.hand_tiles = []
+        game.player_list[0].hand_tiles = [11]
+
+        game.open_action_window(game.begin_hand_action(0))
+        wait_task = asyncio.create_task(game.wait_action(timeout=1.0))
+        await asyncio.sleep(0)
+
+        assert game.bot_tasks
+        await game.cleanup_game_state()
+        assert game.bot_tasks == set()
+        wait_task.cancel()
+        await asyncio.gather(wait_task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
 def test_submit_action_rejects_non_waiting_or_illegal_action() -> None:
     async def scenario() -> None:
         game = NewRuleGameState()
@@ -1290,6 +1347,8 @@ def run() -> None:
         test_wait_action_collects_submitted_action,
         test_visible_action_payloads_are_addressed_to_each_viewer,
         test_wait_action_defaults_pending_pass_on_timeout,
+        test_auto_bot_cuts_last_tile_after_delay,
+        test_cleanup_cancels_pending_bot_tasks,
         test_submit_action_rejects_non_waiting_or_illegal_action,
         test_disconnect_reconnect_tags_are_local_shell_behavior,
         test_cleanup_cancels_attached_game_task,
