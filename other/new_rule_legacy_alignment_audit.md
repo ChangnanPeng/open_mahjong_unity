@@ -81,7 +81,7 @@ Verification after Phase 2:
 
 ## Phase 3 Code Targets
 
-Second code change should rename statuses everywhere:
+Second code change renames statuses everywhere:
 
 - `waiting_discard_response` -> `waiting_action_after_cut`
 - `waiting_only_cut` -> `onlycut_after_action`
@@ -92,6 +92,18 @@ Phase 3 final state:
 - Production code does not contain prototype status strings.
 - Tests do not contain prototype status strings.
 - Bot/status integration is closer to existing rules, but async bot reuse can still wait for Phase 6.
+
+Phase 3 verification:
+
+- `rg -n "waiting_discard_response|waiting_only_cut|waiting_rob_kong" open_mahjong_server\server\gamestate\game_new_rule` returns no matches.
+- `test_new_rule_get_action.py`: 4 tests passed.
+- `test_new_rule_router.py`: 3 tests passed.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_action_check.py`: 9 tests passed.
+- `test_new_rule_gamestate_manager.py`: 1 test passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
 ## Deferred Areas
 

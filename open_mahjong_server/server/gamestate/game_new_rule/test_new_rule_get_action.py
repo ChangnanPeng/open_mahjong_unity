@@ -78,7 +78,7 @@ def test_get_action_ignores_stale_response_tick() -> None:
     async def scenario() -> None:
         game = NewRuleGameState()
         _with_fake_server(game)
-        game.game_status = "waiting_discard_response"
+        game.game_status = "waiting_action_after_cut"
         game.server_action_tick = 5
         game.waiting_players_list = [1]
         game.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}

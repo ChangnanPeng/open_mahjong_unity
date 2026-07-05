@@ -70,7 +70,7 @@ def test_new_rule_send_action_route_queues_response_action() -> None:
     async def scenario() -> None:
         game = NewRuleGameState()
         server = _server_with_game(game)
-        game.game_status = "waiting_discard_response"
+        game.game_status = "waiting_action_after_cut"
         game.server_action_tick = 3
         game.waiting_players_list = [1]
         game.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}

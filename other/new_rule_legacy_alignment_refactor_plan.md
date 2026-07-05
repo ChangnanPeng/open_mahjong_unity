@@ -231,6 +231,8 @@ Do not leave behind:
 
 Goal: move public/live-loop status names to existing-rule conventions.
 
+Status: complete in commit-in-progress after Phase 2.
+
 Target mapping:
 
 - `waiting_discard_response` -> `waiting_action_after_cut`
@@ -243,13 +245,25 @@ Target mapping:
 Tasks:
 
 - [ ] Add status constants in `protocol.py`.
-- [ ] Replace string literals in `NewRuleGameState.py`.
-- [ ] Replace expected statuses in tests.
-- [ ] Update `boardcast.py` ask/reconnect behavior to use old statuses.
-- [ ] Update `get_action.py` validation branches.
-- [ ] Update any room/router tests that wait for old custom statuses.
-- [ ] Remove or document every remaining custom status string.
-- [ ] Remove prototype status aliases from production code and tests.
+- [x] Replace string literals in `NewRuleGameState.py`.
+- [x] Replace expected statuses in tests.
+- [x] Update `boardcast.py` ask/reconnect behavior to use old statuses.
+- [x] Update `get_action.py` validation branches.
+- [x] Update any room/router tests that wait for old custom statuses.
+- [x] Remove or document every remaining custom status string.
+- [x] Remove prototype status aliases from production code and tests.
+
+Verification:
+
+- `rg -n "waiting_discard_response|waiting_only_cut|waiting_rob_kong" open_mahjong_server\server\gamestate\game_new_rule` returns no matches.
+- `test_new_rule_get_action.py`: 4 tests passed.
+- `test_new_rule_router.py`: 3 tests passed.
+- `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_action_check.py`: 9 tests passed.
+- `test_new_rule_gamestate_manager.py`: 1 test passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
 
 Important caveat:
 

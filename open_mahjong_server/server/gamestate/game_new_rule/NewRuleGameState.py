@@ -316,8 +316,8 @@ class NewRuleGameState:
         if window.get("status") == "END":
             payloads = [final_settlement_payload(self, idx) for idx in range(4)]
         else:
-            cut_tile = window.get("tile") if window.get("status") == "waiting_discard_response" else None
-            rob_kong_tile = window.get("tile") if window.get("status") == "waiting_rob_kong" else None
+            cut_tile = window.get("tile") if window.get("status") == "waiting_action_after_cut" else None
+            rob_kong_tile = window.get("tile") if window.get("status") == "waiting_action_qianggang" else None
             for idx, actions in self.action_dict.items():
                 if actions:
                     payloads.append(
@@ -407,7 +407,7 @@ class NewRuleGameState:
         status = window.get("status")
         settlements = settlements or {}
 
-        if status in {"waiting_hand_action", "waiting_only_cut"}:
+        if status in {"waiting_hand_action", "onlycut_after_action"}:
             player_index = window["player"]
             action_data = action_results.get(player_index)
             if action_data is None:
@@ -434,7 +434,7 @@ class NewRuleGameState:
             )
             return self.open_action_window(next_window)
 
-        if status == "waiting_discard_response":
+        if status == "waiting_action_after_cut":
             discarder_index = window["player"]
             tile = window["tile"]
             win_responses: Dict[int, str] = {}
@@ -473,7 +473,7 @@ class NewRuleGameState:
                 )
             return self.open_action_window(next_window)
 
-        if status == "waiting_rob_kong":
+        if status == "waiting_action_qianggang":
             kong_player_index = window["player"]
             tile = window["tile"]
             responses = {player_index: data["action_type"] for player_index, data in action_results.items()}
@@ -553,7 +553,7 @@ class NewRuleGameState:
         from .action_check import check_only_cut
 
         self.current_player_index = player_index
-        self.game_status = "waiting_only_cut"
+        self.game_status = "onlycut_after_action"
         return {
             "status": self.game_status,
             "player": player_index,
@@ -578,7 +578,7 @@ class NewRuleGameState:
             for other in self.player_list:
                 if other.player_index != player_index and not other.is_hu:
                     refresh_waiting_tiles(self, other.player_index)
-            self.game_status = "waiting_discard_response"
+            self.game_status = "waiting_action_after_cut"
             return {
                 "status": self.game_status,
                 "player": player_index,
@@ -983,7 +983,7 @@ class NewRuleGameState:
             self.game_status = "waiting_hand_action"
         else:
             player.has_draw_slot = False
-            self.game_status = "waiting_only_cut"
+            self.game_status = "onlycut_after_action"
 
         return {
             "claimed": True,
@@ -1019,7 +1019,7 @@ class NewRuleGameState:
         if f"k{tile}" not in player.combination_tiles:
             raise ValueError(f"Player {player_index} has no exposed triplet k{tile} to upgrade.")
         self.current_player_index = player_index
-        self.game_status = "waiting_rob_kong"
+        self.game_status = "waiting_action_qianggang"
         return {
             "player": player_index,
             "tile": tile,

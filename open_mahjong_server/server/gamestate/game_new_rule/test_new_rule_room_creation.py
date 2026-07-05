@@ -878,11 +878,11 @@ def test_hidden_new_rule_room_accepts_discard_win_response_message() -> None:
         )
 
         for _ in range(20):
-            if game_state.game_status == "waiting_discard_response" and 1 in game_state.waiting_players_list:
+            if game_state.game_status == "waiting_action_after_cut" and 1 in game_state.waiting_players_list:
                 break
             await asyncio.sleep(0.05)
 
-        assert game_state.game_status == "waiting_discard_response"
+        assert game_state.game_status == "waiting_action_after_cut"
         assert 1 in game_state.waiting_players_list
         assert "hu" in game_state.action_dict[1]
         action_tick = game_state.server_action_tick
@@ -974,7 +974,7 @@ def test_hidden_new_rule_room_accepts_discard_pass_response_message() -> None:
         )
 
         for _ in range(20):
-            if game_state.game_status == "waiting_discard_response" and 1 in game_state.waiting_players_list:
+            if game_state.game_status == "waiting_action_after_cut" and 1 in game_state.waiting_players_list:
                 break
             await asyncio.sleep(0.05)
 
@@ -1018,7 +1018,7 @@ def test_hidden_new_rule_room_accepts_peng_claim_response_message() -> None:
         game_state.player_list[1].combination_tiles = []
 
         await _send_host_cut(server, websocket, game_state, 15)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert 1 in game_state.waiting_players_list
         assert "peng" in game_state.action_dict[1]
@@ -1036,7 +1036,7 @@ def test_hidden_new_rule_room_accepts_peng_claim_response_message() -> None:
             response_websocket,
         )
 
-        await _wait_for_status(game_state, "waiting_only_cut", 1)
+        await _wait_for_status(game_state, "onlycut_after_action", 1)
 
         assert game_state.player_list[1].combination_tiles == ["k15"]
         assert game_state.player_list[1].hand_tiles == [31]
@@ -1057,7 +1057,7 @@ def test_hidden_new_rule_room_accepts_chi_claim_response_message() -> None:
         game_state.player_list[1].combination_tiles = []
 
         await _send_host_cut(server, websocket, game_state, 12)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert 1 in game_state.waiting_players_list
         assert "chi_right" in game_state.action_dict[1]
@@ -1075,7 +1075,7 @@ def test_hidden_new_rule_room_accepts_chi_claim_response_message() -> None:
             response_websocket,
         )
 
-        await _wait_for_status(game_state, "waiting_only_cut", 1)
+        await _wait_for_status(game_state, "onlycut_after_action", 1)
 
         assert game_state.player_list[1].combination_tiles == ["s12"]
         assert game_state.player_list[1].hand_tiles == [31]
@@ -1096,7 +1096,7 @@ def test_hidden_new_rule_room_accepts_gang_claim_response_message() -> None:
         game_state.player_list[1].combination_tiles = []
 
         await _send_host_cut(server, websocket, game_state, 15)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert 1 in game_state.waiting_players_list
         assert "gang" in game_state.action_dict[1]
@@ -1465,7 +1465,7 @@ def test_hidden_new_rule_room_scripted_peng_cut_discard_win_continues_by_message
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 15)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "peng" in game_state.action_dict[2], game_state.action_dict
         peng_tick = game_state.server_action_tick
@@ -1481,7 +1481,7 @@ def test_hidden_new_rule_room_scripted_peng_cut_discard_win_continues_by_message
             websockets[103],
         )
 
-        await _wait_for_status(game_state, "waiting_only_cut", 2)
+        await _wait_for_status(game_state, "onlycut_after_action", 2)
         assert game_state.player_list[2].combination_tiles == ["k15"]
         assert game_state.player_list[2].hand_tiles == [31]
 
@@ -1498,7 +1498,7 @@ def test_hidden_new_rule_room_scripted_peng_cut_discard_win_continues_by_message
             websockets[103],
         )
 
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
         assert 31 in game_state.player_list[2].discard_tiles
         assert "hu" in game_state.action_dict[3], game_state.action_dict
 
@@ -1555,7 +1555,7 @@ def test_hidden_new_rule_room_scripted_multi_ron_continues_by_messages() -> None
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         assert "hu" in game_state.action_dict[2], game_state.action_dict
@@ -1631,7 +1631,7 @@ def test_hidden_new_rule_room_multi_ron_as_second_and_third_winners_ends_by_mess
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         assert "hu" in game_state.action_dict[2], game_state.action_dict
@@ -1720,7 +1720,7 @@ def test_hidden_new_rule_room_late_action_after_end_does_not_mutate_by_messages(
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         action_tick = game_state.server_action_tick
         await handle_gamestate_message(
@@ -1799,7 +1799,7 @@ def test_hidden_new_rule_room_stale_response_after_window_change_is_ignored_by_m
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         assert "hu" not in game_state.action_dict[2], game_state.action_dict
@@ -1870,7 +1870,7 @@ def test_hidden_new_rule_room_hu_and_pass_locks_only_passing_player_by_messages(
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         assert "hu" in game_state.action_dict[2], game_state.action_dict
@@ -1933,7 +1933,7 @@ def test_hidden_new_rule_room_hu_response_skips_peng_claim_by_messages() -> None
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 45)
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
 
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         assert "peng" in game_state.action_dict[2], game_state.action_dict
@@ -2250,7 +2250,7 @@ def test_hidden_new_rule_room_scripted_added_kong_pass_cut_by_messages() -> None
             websockets[101],
         )
 
-        await _wait_for_status(game_state, "waiting_rob_kong")
+        await _wait_for_status(game_state, "waiting_action_qianggang")
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         action_tick = game_state.server_action_tick
         await handle_gamestate_message(
@@ -2293,7 +2293,7 @@ def test_hidden_new_rule_room_scripted_added_kong_pass_cut_by_messages() -> None
             websockets[101],
         )
 
-        await _wait_for_status(game_state, "waiting_discard_response")
+        await _wait_for_status(game_state, "waiting_action_after_cut")
         assert game_state.player_list[0].discard_tiles == [33]
         assert "pass" in game_state.action_dict[1], game_state.action_dict
 
@@ -2355,7 +2355,7 @@ def test_hidden_new_rule_room_scripted_added_kong_robbed_by_messages() -> None:
             websockets[101],
         )
 
-        await _wait_for_status(game_state, "waiting_rob_kong")
+        await _wait_for_status(game_state, "waiting_action_qianggang")
         assert "hu" in game_state.action_dict[1], game_state.action_dict
         action_tick = game_state.server_action_tick
         await handle_gamestate_message(

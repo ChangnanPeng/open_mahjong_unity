@@ -277,7 +277,7 @@ def test_resolve_discard_claim_prefers_peng_over_chi_and_forces_cut() -> None:
     assert game.player_list[2].combination_tiles == ["k15"]
     assert game.player_list[2].combination_mask == [[1, 15, 0, 15, 0, 15]]
     assert game.current_player_index == 2
-    assert game.game_status == "waiting_only_cut"
+    assert game.game_status == "onlycut_after_action"
 
 
 def test_resolve_discard_claim_chi_only_from_fixed_next_seat() -> None:
@@ -503,7 +503,7 @@ def test_added_kong_without_robbery_upgrades_triplet_and_draws_supplement() -> N
     attempt = game.attempt_added_kong(0, 15)
     result = game.resolve_added_kong_responses(0, 15, {2: "pass"})
 
-    assert attempt["next_status"] == "waiting_rob_kong"
+    assert attempt["next_status"] == "waiting_action_qianggang"
     assert not result["robbed"]
     assert result["passed"] == [2]
     assert result["meld_code"] == "g15"
@@ -587,7 +587,7 @@ def test_apply_turn_cut_refreshes_waits_and_opens_discard_response_window() -> N
 
     window = game.apply_turn_action(0, "cut", tile=41)
 
-    assert window["status"] == "waiting_discard_response"
+    assert window["status"] == "waiting_action_after_cut"
     assert "hu" in window["actions"][2], window
     assert game.player_list[0].discard_tiles == [41]
 
@@ -645,7 +645,7 @@ def test_apply_turn_added_kong_opens_rob_kong_window() -> None:
 
     window = game.apply_turn_action(0, "jiagang", tile=15)
 
-    assert window["status"] == "waiting_rob_kong"
+    assert window["status"] == "waiting_action_qianggang"
     assert "hu" in window["actions"][2], window
     assert game.player_list[0].combination_tiles == ["k15"]
     assert game.player_list[0].hand_tiles == [15, 41]
@@ -719,7 +719,7 @@ def test_continue_after_discard_responses_claim_returns_only_cut_window() -> Non
     tile = game.record_discard(0, 15)
     window = game.continue_after_discard_responses(0, tile, {}, {2: "peng"})
 
-    assert window["status"] == "waiting_only_cut"
+    assert window["status"] == "onlycut_after_action"
     assert window["reason"] == "discard_claim"
     assert window["player"] == 2
     assert window["claim_result"]["meld_code"] == "k15"
@@ -758,7 +758,7 @@ def test_continue_after_final_discard_no_win_ends_by_wall() -> None:
     game.player_list[0].hand_tiles = [15]
 
     discard_window = game.apply_turn_action(0, "cut", tile=15)
-    assert discard_window["status"] == "waiting_discard_response"
+    assert discard_window["status"] == "waiting_action_after_cut"
     assert discard_window["actions"] == {0: [], 1: [], 2: [], 3: []}
 
     window = game.continue_after_discard_responses(0, 15, {}, {})
@@ -833,17 +833,17 @@ def test_scripted_flow_discard_claim_forced_cut_discard_win_next_draw() -> None:
     assert first_window["actions"][0] == ["cut"], first_window
 
     discard_window = game.apply_turn_action(0, "cut", tile=15)
-    assert discard_window["status"] == "waiting_discard_response"
+    assert discard_window["status"] == "waiting_action_after_cut"
     assert "peng" in discard_window["actions"][2], discard_window
 
     claim_window = game.continue_after_discard_responses(0, 15, {}, {2: "peng"})
-    assert claim_window["status"] == "waiting_only_cut"
+    assert claim_window["status"] == "onlycut_after_action"
     assert claim_window["player"] == 2
     assert claim_window["actions"][2] == ["cut"]
     assert game.player_list[2].combination_tiles == ["k15"]
 
     second_discard_window = game.apply_turn_action(2, "cut", tile=31)
-    assert second_discard_window["status"] == "waiting_discard_response"
+    assert second_discard_window["status"] == "waiting_action_after_cut"
     assert "hu" in second_discard_window["actions"][1], second_discard_window
     assert "hu" in second_discard_window["actions"][3], second_discard_window
 
@@ -1009,7 +1009,7 @@ def test_resolve_action_window_applies_queued_cut() -> None:
         await game.submit_action(0, "cut", TileId=41)
         window = await resolve_task
 
-        assert window["status"] == "waiting_discard_response"
+        assert window["status"] == "waiting_action_after_cut"
         assert window["tile"] == 41
         assert "hu" in window["actions"][2]
         assert game.action_dict[2] == ["hu", "pass"]
@@ -1035,7 +1035,7 @@ def test_resolve_action_window_applies_discard_win_and_opens_next_draw() -> None
         await game.submit_action(2, "hu")
         next_window = await resolve_task
 
-        assert discard_window["status"] == "waiting_discard_response"
+        assert discard_window["status"] == "waiting_action_after_cut"
         assert next_window["status"] == "waiting_hand_action"
         assert next_window["reason"] == "discard_win"
         assert next_window["player"] == 1
@@ -1064,7 +1064,7 @@ def test_apply_action_results_resolves_discard_claim_window() -> None:
         {2: {"action_type": "peng", "target_tile": None, "TileId": None, "cutIndex": -1, "cutClass": False}},
     )
 
-    assert next_window["status"] == "waiting_only_cut"
+    assert next_window["status"] == "onlycut_after_action"
     assert next_window["reason"] == "discard_claim"
     assert next_window["player"] == 2
     assert game.player_list[2].combination_tiles == ["k15"]
