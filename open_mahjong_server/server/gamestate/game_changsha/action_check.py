@@ -1,6 +1,6 @@
 from typing import Dict
 import logging
-from ..public.logic_common import get_index_relative_position, next_current_num
+from ..public.logic_common import get_index_relative_position, back_current_num
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +28,16 @@ def _has_tiles(hand_tiles, needed_tiles) -> bool:
 
 
 def _append_chi_actions(self, temp_action_dict: Dict[int, list], cut_tile: int) -> None:
-    next_player_index = next_current_num(self.current_player_index)
-    next_player = self.player_list[next_player_index]
+    chi_player_index = back_current_num(self.current_player_index)
+    chi_player = self.player_list[chi_player_index]
     chi_shapes = (
         ("chi_left", (cut_tile - 2, cut_tile - 1, cut_tile), (cut_tile - 2, cut_tile - 1)),
         ("chi_mid", (cut_tile - 1, cut_tile, cut_tile + 1), (cut_tile - 1, cut_tile + 1)),
         ("chi_right", (cut_tile, cut_tile + 1, cut_tile + 2), (cut_tile + 1, cut_tile + 2)),
     )
     for action, sequence, needed in chi_shapes:
-        if _is_same_suit_sequence(sequence) and _has_tiles(next_player.hand_tiles, needed):
-            temp_action_dict[next_player_index].append(action)
+        if _is_same_suit_sequence(sequence) and _has_tiles(chi_player.hand_tiles, needed):
+            temp_action_dict[chi_player_index].append(action)
 
 
 def _is_ready_for_open_kong_claim(self, player_item, tile: int) -> bool:

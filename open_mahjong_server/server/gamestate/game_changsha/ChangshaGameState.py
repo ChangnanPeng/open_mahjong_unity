@@ -401,10 +401,21 @@ class ChangshaGameState:
     def _format_changsha_bird_tile(tile: int) -> str:
         suit = tile // 10
         rank = tile % 10
-        suit_name = {1: "万", 2: "饼", 3: "条"}.get(suit)
-        if suit_name is None or rank < 1 or rank > 9:
+        suit_name = {1: "万", 2: "筒", 3: "条"}.get(suit)
+        rank_name = {
+            1: "一",
+            2: "二",
+            3: "三",
+            4: "四",
+            5: "五",
+            6: "六",
+            7: "七",
+            8: "八",
+            9: "九",
+        }.get(rank)
+        if suit_name is None or rank_name is None:
             return str(tile)
-        return f"{rank}{suit_name}={rank}"
+        return f"{rank_name}{suit_name}"
 
     @staticmethod
     def _changsha_bird_seat(tile: int, origin: int = 0) -> int:
