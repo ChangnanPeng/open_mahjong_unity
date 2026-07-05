@@ -11,8 +11,9 @@ from server.gamestate.game_new_rule import NewRuleGameState
 from server.gamestate.game_new_rule.boardcast import (
     ask_action_payload,
     final_settlement_payload,
+    game_start_payload,
     game_info_payload,
-    reconnect_payload,
+    pending_action_payload,
     visible_action_payload,
 )
 
@@ -235,26 +236,40 @@ def test_ask_action_payload_includes_unity_bridge_fields() -> None:
     assert other_payload["ask_other_action_info"]["action_tick"] == 3
 
 
-def test_reconnect_payload_uses_viewer_safe_state_and_pending_actions() -> None:
+def test_game_start_payload_uses_viewer_safe_state() -> None:
     game = NewRuleGameState()
     game.player_list[0].hand_tiles = [11, 12, 13]
     game.player_list[0].combination_tiles = ["G15"]
     game.player_list[1].hand_tiles = [21, 22, 23]
-    game.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}
-    game.server_action_tick = 9
 
-    payload = reconnect_payload(game, 1)
+    payload = game_start_payload(game, 1)
 
-    assert payload["type"] == "gamestate/new_rule/reconnect"
+    assert payload["type"] == "gamestate/new_rule/game_start"
     assert payload["player_index"] == 1
-    assert payload["action_list"] == ["hu", "pass"]
-    assert payload["action_tick"] == 9
     assert payload["game_info"]["players_info"][0]["hand_tiles"] is None
     assert payload["game_info"]["players_info"][0]["combination_tiles"] == ["G0"]
     assert payload["game_info"]["players_info"][1]["hand_tiles"] == [21, 22, 23]
 
 
-def test_reconnect_payload_after_end_reveals_final_state_and_applies_scores_once() -> None:
+def test_pending_action_payload_replays_standard_action_ask() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    game.game_status = "waiting_action_after_cut"
+    game.live_pending_window = {"status": "waiting_action_after_cut", "tile": 41}
+    game.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}
+    game.server_action_tick = 9
+
+    payload = pending_action_payload(game, 1)
+
+    assert payload is not None
+    assert payload["type"] == "gamestate/new_rule/ask_other_action"
+    assert payload["player_index"] == 1
+    assert payload["action_list"] == ["hu", "pass"]
+    assert payload["action_tick"] == 9
+    assert payload["ask_other_action_info"]["cut_tile"] == 41
+
+
+def test_game_start_payload_after_end_reveals_final_state_and_applies_scores_once() -> None:
     game = NewRuleGameState()
     game.game_status = "END"
     game.ended_by = "win"
@@ -270,8 +285,8 @@ def test_reconnect_payload_after_end_reveals_final_state_and_applies_scores_once
         }
     ]
 
-    first_payload = reconnect_payload(game, 1)
-    second_payload = reconnect_payload(game, 1)
+    first_payload = game_start_payload(game, 1, reveal_final=True)
+    second_payload = game_start_payload(game, 1, reveal_final=True)
 
     player_zero = first_payload["game_info"]["players_info"][0]
     assert player_zero["hand_tiles"] == [11, 12, 13]
@@ -295,8 +310,9 @@ def run() -> None:
         test_final_settlement_without_winners_emits_unity_draw_result,
         test_ask_action_payload_includes_action_tick_and_actions,
         test_ask_action_payload_includes_unity_bridge_fields,
-        test_reconnect_payload_uses_viewer_safe_state_and_pending_actions,
-        test_reconnect_payload_after_end_reveals_final_state_and_applies_scores_once,
+        test_game_start_payload_uses_viewer_safe_state,
+        test_pending_action_payload_replays_standard_action_ask,
+        test_game_start_payload_after_end_reveals_final_state_and_applies_scores_once,
     ]
     for test in tests:
         test()

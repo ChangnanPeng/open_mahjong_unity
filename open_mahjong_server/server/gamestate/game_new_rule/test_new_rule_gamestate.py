@@ -1120,7 +1120,7 @@ def test_send_payload_to_player_without_connection_keeps_outbox_fallback() -> No
     asyncio.run(scenario())
 
 
-def test_player_reconnect_sends_safe_reconnect_payload() -> None:
+def test_player_reconnect_sends_game_start_then_pending_action_payload() -> None:
     async def scenario() -> None:
         game = NewRuleGameState()
         websocket = FakeWebSocket()
@@ -1133,19 +1133,26 @@ def test_player_reconnect_sends_safe_reconnect_payload() -> None:
         game.player_list[0].combination_tiles = ["G15"]
         game.player_list[1].hand_tiles = [21, 22, 23]
         game.player_list[1].tag_list = ["offline"]
+        game.game_status = "waiting_action_after_cut"
+        game.live_pending_window = {"status": "waiting_action_after_cut", "tile": 41}
         game.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}
 
         await game.player_reconnect(102)
 
         assert "offline" not in game.player_list[1].tag_list
-        assert websocket.sent
-        payload = websocket.sent[-1]
-        assert payload["type"] == "gamestate/new_rule/reconnect"
-        assert payload["player_index"] == 1
-        assert payload["action_list"] == ["hu", "pass"]
-        assert payload["game_info"]["players_info"][0]["hand_tiles"] is None
-        assert payload["game_info"]["players_info"][0]["combination_tiles"] == ["G0"]
-        assert payload["game_info"]["players_info"][1]["hand_tiles"] == [21, 22, 23]
+        assert [payload["type"] for payload in websocket.sent[-2:]] == [
+            "gamestate/new_rule/game_start",
+            "gamestate/new_rule/ask_other_action",
+        ]
+        game_start = websocket.sent[-2]
+        pending_action = websocket.sent[-1]
+        assert game_start["player_index"] == 1
+        assert game_start["game_info"]["players_info"][0]["hand_tiles"] is None
+        assert game_start["game_info"]["players_info"][0]["combination_tiles"] == ["G0"]
+        assert game_start["game_info"]["players_info"][1]["hand_tiles"] == [21, 22, 23]
+        assert pending_action["player_index"] == 1
+        assert pending_action["action_list"] == ["hu", "pass"]
+        assert pending_action["ask_other_action_info"]["cut_tile"] == 41
 
     asyncio.run(scenario())
 
@@ -1206,7 +1213,7 @@ def run() -> None:
         test_apply_action_results_resolves_discard_claim_window,
         test_flush_outbound_payloads_sends_to_connected_player,
         test_send_payload_to_player_without_connection_keeps_outbox_fallback,
-        test_player_reconnect_sends_safe_reconnect_payload,
+        test_player_reconnect_sends_game_start_then_pending_action_payload,
     ]
     for test in tests:
         test()

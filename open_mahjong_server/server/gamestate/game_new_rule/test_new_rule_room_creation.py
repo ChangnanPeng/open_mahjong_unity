@@ -1338,7 +1338,7 @@ def test_hidden_new_rule_room_emits_final_settlement_reveal_payloads() -> None:
     asyncio.run(scenario())
 
 
-def test_hidden_new_rule_room_reconnect_payload_is_viewer_safe_by_manager() -> None:
+def test_hidden_new_rule_room_reconnect_restores_game_start_and_pending_action_by_manager() -> None:
     async def scenario() -> None:
         server, websockets, game_state = await _started_room_with_connected_players()
         for player in game_state.player_list:
@@ -1348,6 +1348,8 @@ def test_hidden_new_rule_room_reconnect_payload_is_viewer_safe_by_manager() -> N
         game_state.player_list[0].hand_tiles = [11, 12, 13]
         game_state.player_list[0].combination_tiles = ["G15"]
         game_state.player_list[1].hand_tiles = [21, 22, 23]
+        game_state.game_status = "waiting_action_after_cut"
+        game_state.live_pending_window = {"status": "waiting_action_after_cut", "tile": 41}
         game_state.action_dict = {0: [], 1: ["hu", "pass"], 2: [], 3: []}
         game_state.server_action_tick = 9
 
@@ -1357,22 +1359,30 @@ def test_hidden_new_rule_room_reconnect_payload_is_viewer_safe_by_manager() -> N
         await server.gamestate_manager.player_reconnect(102)
 
         assert "offline" not in game_state.player_list[1].tag_list
-        reconnect_payloads = [
+        game_start_payloads = [
             payload
             for payload in websockets[102].sent
-            if payload.get("type") == "gamestate/new_rule/reconnect"
+            if payload.get("type") == "gamestate/new_rule/game_start"
         ]
-        assert reconnect_payloads, websockets[102].sent
-        payload = reconnect_payloads[-1]
+        assert game_start_payloads, websockets[102].sent
+        payload = game_start_payloads[-1]
         assert payload["player_index"] == 1
-        assert payload["action_list"] == ["hu", "pass"]
-        assert payload["action_tick"] == 9
         player_zero = payload["game_info"]["players_info"][0]
         player_one = payload["game_info"]["players_info"][1]
         assert player_zero["hand_tiles"] is None
         assert player_zero["hand_tiles_count"] == 3
         assert player_zero["combination_tiles"] == ["G0"]
         assert player_one["hand_tiles"] == [21, 22, 23]
+        pending_action_payloads = [
+            item
+            for item in websockets[102].sent
+            if item.get("type") == "gamestate/new_rule/ask_other_action"
+        ]
+        assert pending_action_payloads, websockets[102].sent
+        pending_payload = pending_action_payloads[-1]
+        assert pending_payload["action_list"] == ["hu", "pass"]
+        assert pending_payload["action_tick"] == 9
+        assert pending_payload["ask_other_action_info"]["cut_tile"] == 41
 
         await server.gamestate_manager.cleanup_game_state_complete(gamestate_id=game_state.gamestate_id)
         assert game_state.game_task.cancelled()
@@ -1409,13 +1419,13 @@ def test_hidden_new_rule_room_reconnect_after_end_reveals_final_state_by_manager
         await server.gamestate_manager.player_disconnect(102)
         await server.gamestate_manager.player_reconnect(102)
 
-        reconnect_payloads = [
+        game_start_payloads = [
             payload
             for payload in websockets[102].sent
-            if payload.get("type") == "gamestate/new_rule/reconnect"
+            if payload.get("type") == "gamestate/new_rule/game_start"
         ]
-        assert reconnect_payloads, websockets[102].sent
-        payload = reconnect_payloads[-1]
+        assert game_start_payloads, websockets[102].sent
+        payload = game_start_payloads[-1]
         player_zero = payload["game_info"]["players_info"][0]
         player_one = payload["game_info"]["players_info"][1]
         assert payload["game_info"]["room_rule"] == "new_rule"
@@ -1429,10 +1439,16 @@ def test_hidden_new_rule_room_reconnect_after_end_reveals_final_state_by_manager
         second_payload = [
             payload
             for payload in websockets[102].sent
-            if payload.get("type") == "gamestate/new_rule/reconnect"
+            if payload.get("type") == "gamestate/new_rule/game_start"
         ][-1]
         assert second_payload["game_info"]["players_info"][0]["score"] == -48
         assert second_payload["game_info"]["players_info"][1]["score"] == 48
+        show_result_payloads = [
+            payload
+            for payload in websockets[102].sent
+            if payload.get("type") == "gamestate/new_rule/show_result"
+        ]
+        assert show_result_payloads, websockets[102].sent
 
         await server.gamestate_manager.cleanup_game_state_complete(gamestate_id=game_state.gamestate_id)
         assert game_state.game_task.done()
@@ -2413,7 +2429,7 @@ def run() -> None:
         test_hidden_new_rule_room_accepts_added_kong_pass_response_messages,
         test_hidden_new_rule_room_accepts_robbing_kong_win_response_message,
         test_hidden_new_rule_room_emits_final_settlement_reveal_payloads,
-        test_hidden_new_rule_room_reconnect_payload_is_viewer_safe_by_manager,
+        test_hidden_new_rule_room_reconnect_restores_game_start_and_pending_action_by_manager,
         test_hidden_new_rule_room_reconnect_after_end_reveals_final_state_by_manager,
         test_hidden_new_rule_room_scripted_peng_cut_discard_win_continues_by_messages,
         test_hidden_new_rule_room_scripted_multi_ron_continues_by_messages,

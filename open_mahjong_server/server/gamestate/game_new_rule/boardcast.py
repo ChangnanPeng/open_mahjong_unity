@@ -96,6 +96,18 @@ def game_info_payload(game_state: Any, viewer_index: Optional[int], *, reveal_fi
     }
 
 
+def game_start_payload(game_state: Any, viewer_index: int, *, reveal_final: bool = False) -> dict:
+    if reveal_final and hasattr(game_state, "apply_deferred_score_changes"):
+        game_state.apply_deferred_score_changes()
+    return {
+        "type": "gamestate/new_rule/game_start",
+        "success": True,
+        "player_index": viewer_index,
+        "message": "game start",
+        "game_info": game_info_payload(game_state, viewer_index, reveal_final=reveal_final),
+    }
+
+
 def ask_action_payload(
     game_state: Any,
     viewer_index: int,
@@ -128,6 +140,24 @@ def ask_action_payload(
             "action_tick": game_state.server_action_tick,
         } if cut_tile is not None or rob_kong_tile is not None else None,
     }
+
+
+def pending_action_payload(game_state: Any, viewer_index: int) -> Optional[dict]:
+    action_list = list(game_state.action_dict.get(viewer_index, []))
+    if not action_list:
+        return None
+
+    status = getattr(game_state, "game_status", None)
+    pending_window = getattr(game_state, "live_pending_window", None) or {}
+    cut_tile = pending_window.get("tile") if status == "waiting_action_after_cut" else None
+    rob_kong_tile = pending_window.get("tile") if status == "waiting_action_qianggang" else None
+    return ask_action_payload(
+        game_state,
+        viewer_index,
+        action_list,
+        cut_tile=cut_tile,
+        rob_kong_tile=rob_kong_tile,
+    )
 
 
 def visible_action_payload(
@@ -257,19 +287,4 @@ def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> di
         "player_index": viewer_index,
         "game_info": game_info_payload(game_state, viewer_index, reveal_final=True),
         "show_result_info": _final_show_result_info(game_state),
-    }
-
-
-def reconnect_payload(game_state: Any, viewer_index: int) -> dict:
-    reveal_final = getattr(game_state, "game_status", None) == "END"
-    if reveal_final and hasattr(game_state, "apply_deferred_score_changes"):
-        game_state.apply_deferred_score_changes()
-    action_list = list(game_state.action_dict.get(viewer_index, []))
-    return {
-        "type": "gamestate/new_rule/reconnect",
-        "success": True,
-        "player_index": viewer_index,
-        "game_info": game_info_payload(game_state, viewer_index, reveal_final=reveal_final),
-        "action_list": action_list,
-        "action_tick": game_state.server_action_tick,
     }

@@ -98,7 +98,7 @@ Phase 4 decisions:
 - Replace public `gamestate/new_rule/final_settlement` with `gamestate/new_rule/show_result`.
 - Keep `gamestate/new_rule/do_action` because its nested `do_action_info` already follows `DoActionInfo` closely.
 - Keep `gamestate/new_rule/...` route prefix for rule separation; the cleanup target is the DTO shape, not necessarily the URL-like type prefix.
-- Treat `gamestate/new_rule/reconnect` as a later cleanup item. It should eventually converge toward existing reconnect behavior: normal `game_start` state restoration plus pending ask resend.
+- Reconnect should use existing-style restoration: normal `game_start` state restoration plus pending ask resend, or `show_result` resend after terminal `END`.
 
 Phase 4a verification:
 
@@ -119,6 +119,20 @@ Phase 4b verification:
 - Unity no longer calls `SyncNewRuleUnityGameInfo`; `DoAction`/`ShowResult` now sync remaining tiles from standard `game_info`.
 - `rg -n "unity_game_info|SyncNewRuleUnityGameInfo|gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
 - `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
+
+Phase 4c verification:
+
+- New-rule reconnect no longer emits `gamestate/new_rule/reconnect`.
+- `player_reconnect()` now sends `gamestate/new_rule/game_start` first.
+- If the reconnecting player has a pending self-turn action, the server resends `gamestate/new_rule/broadcast_hand_action`.
+- If the reconnecting player has a pending discard/rob-kong response, the server resends `gamestate/new_rule/ask_other_action`.
+- If the game is already `END`, the server sends `gamestate/new_rule/show_result` after `game_start` so Unity can restore the result panel.
+- Unity no longer has `HandleNewRuleBridgeMessage()` and no longer routes `gamestate/new_rule/reconnect`.
+- `rg -n "gamestate/new_rule/reconnect|HandleNewRuleBridgeMessage|reconnect_payload|build_reconnect_payload" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
+- `test_new_rule_boardcast.py`: 14 tests passed.
 - `test_new_rule_gamestate.py`: 55 tests passed.
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
@@ -151,10 +165,8 @@ Phase 3 verification:
 
 ## Deferred Areas
 
-Do not mix these into Phase 2/3:
+Do not mix these into Phase 2/3/4:
 
-- Removing `unity_game_info`.
-- Changing Unity C# route handling.
 - Adding database storage.
 - Reworking record/replay.
 - Replacing bot scheduling.

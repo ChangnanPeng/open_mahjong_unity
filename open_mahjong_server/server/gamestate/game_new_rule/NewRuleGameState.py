@@ -175,15 +175,23 @@ class NewRuleGameState:
                 break
 
     async def player_reconnect(self, user_id: int) -> None:
-        """Clear offline marker and send a sanitized reconnect snapshot if possible."""
+        """Clear offline marker and restore the player's table with standard game messages."""
         for player in self.player_list:
             if player.user_id == user_id:
                 if "offline" in player.tag_list:
                     player.tag_list.remove("offline")
                 await self.send_payload_to_player(
                     player.player_index,
-                    self.build_reconnect_payload(player.player_index),
+                    self.build_game_start_payload(player.player_index),
                 )
+                pending_payload = self.build_pending_action_payload(player.player_index)
+                if pending_payload is not None:
+                    await self.send_payload_to_player(player.player_index, pending_payload)
+                elif self.game_status == "END":
+                    await self.send_payload_to_player(
+                        player.player_index,
+                        self.build_final_settlement_payload(player.player_index),
+                    )
                 break
 
     async def submit_action(
@@ -345,10 +353,20 @@ class NewRuleGameState:
         self.outbound_payloads.extend(payloads)
         return payloads
 
-    def build_reconnect_payload(self, player_index: int) -> dict:
-        from .boardcast import reconnect_payload
+    def build_game_start_payload(self, player_index: int) -> dict:
+        from .boardcast import game_start_payload
 
-        return reconnect_payload(self, player_index)
+        return game_start_payload(self, player_index, reveal_final=self.game_status == "END")
+
+    def build_pending_action_payload(self, player_index: int) -> Optional[dict]:
+        from .boardcast import pending_action_payload
+
+        return pending_action_payload(self, player_index)
+
+    def build_final_settlement_payload(self, player_index: int) -> dict:
+        from .boardcast import final_settlement_payload
+
+        return final_settlement_payload(self, player_index)
 
     async def flush_outbound_payloads(self) -> None:
         """Send newly recorded payloads to connected players where possible."""

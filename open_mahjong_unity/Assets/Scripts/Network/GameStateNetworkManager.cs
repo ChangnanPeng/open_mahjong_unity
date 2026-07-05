@@ -71,9 +71,6 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/new_rule/show_result":
                 HandleShowResult(response);
                 break;
-            case "gamestate/new_rule/reconnect":
-                HandleNewRuleBridgeMessage(response);
-                break;
             case "gamestate/guobiao/game_end":
             case "gamestate/qingque/game_end":
             case "gamestate/classical/game_end":
@@ -128,31 +125,6 @@ public class GameStateNetworkManager : MonoBehaviour {
         Debug.Log($"游戏开始: {response.message}");
         AutoReconnect.OnGameRestored();
         NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
-    }
-
-    private void HandleNewRuleBridgeMessage(Response response) {
-        if (NormalGameStateManager.Instance == null) {
-            Debug.LogWarning("New-rule reconnect message arrived before NormalGameStateManager was ready.");
-            return;
-        }
-        if (response.game_info != null && (
-            string.IsNullOrEmpty(NormalGameStateManager.Instance.roomRule) ||
-            NormalGameStateManager.Instance.roomRule != "new_rule"
-        )) {
-            NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
-        }
-        if (response.ask_hand_action_info != null) {
-            HandleBroadcastHandAction(response);
-        }
-        if (response.ask_other_action_info != null) {
-            HandleAskOtherAction(response);
-        }
-        if (response.do_action_info != null) {
-            HandleDoAction(response);
-        }
-        if (response.show_result_info != null) {
-            HandleShowResult(response);
-        }
     }
 
     private void SyncGameInfo(Response response) {

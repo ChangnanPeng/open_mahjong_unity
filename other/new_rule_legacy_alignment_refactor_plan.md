@@ -281,7 +281,7 @@ Decision after audit:
   - `gamestate/new_rule/ask_other_action` for discard/rob-kong response asks.
 - Do not keep `gamestate/new_rule/final_settlement` as the public result message. Use `gamestate/new_rule/show_result` with `show_result_info`.
 - `gamestate/new_rule/do_action` can remain because it already follows `DoActionInfo` closely.
-- `gamestate/new_rule/reconnect` is temporary until reconnect can send normal `game_start` plus pending ask just like existing rules.
+- Reconnect should not use a new-rule-only public message. It should send normal `gamestate/new_rule/game_start`, then resend the pending ask with `broadcast_hand_action` / `ask_other_action`, or resend `show_result` after `END`.
 
 Audit and align these DTOs:
 
@@ -315,13 +315,13 @@ Tasks:
   - `combination_target`
 - [ ] Ensure result payload uses existing `show_result_info` fields.
 - [x] Keep `gamestate/new_rule/...` routes if room-rule path separation requires them.
-- [ ] Remove Unity bridge branches that become redundant after payload convergence.
+- [x] Remove Unity bridge branches that become redundant after payload convergence.
 
 Phase 4 implementation slices:
 
 - Phase 4a: backend payload type/field convergence. Status: complete in commit-in-progress for public message types.
 - Phase 4b: Unity C# bridge cleanup (`unity_game_info`, `ask_action`, `final_settlement` paths). Status: complete in commit-in-progress.
-- Phase 4c: reconnect behavior convergence.
+- Phase 4c: reconnect behavior convergence. Status: complete in commit-in-progress.
 
 Phase 4a verification:
 
@@ -335,6 +335,19 @@ Phase 4b verification:
 
 - `rg -n "unity_game_info|SyncNewRuleUnityGameInfo|gamestate/new_rule/ask_action|gamestate/new_rule/final_settlement" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
 - `test_new_rule_boardcast.py`: 13 tests passed.
+- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
+
+Phase 4c verification:
+
+- New-rule reconnect now restores the client with normal `gamestate/new_rule/game_start`.
+- If the player still has a pending hand action, reconnect resends `gamestate/new_rule/broadcast_hand_action`.
+- If the player still has a pending discard/rob-kong response, reconnect resends `gamestate/new_rule/ask_other_action`.
+- If the hand is already `END`, reconnect resends `gamestate/new_rule/show_result` after the restored `game_start`.
+- Unity no longer dispatches or handles `gamestate/new_rule/reconnect`.
+- `rg -n "gamestate/new_rule/reconnect|HandleNewRuleBridgeMessage|reconnect_payload|build_reconnect_payload" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
+- `test_new_rule_boardcast.py`: 14 tests passed.
 - `test_new_rule_gamestate.py`: 55 tests passed.
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
@@ -539,6 +552,6 @@ Do not commit:
 1. Create a new refactor branch from the snapshot commit.
 2. Run current Python new-rule tests to establish a baseline.
 3. Build the audit matrix.
-4. Implement canonical action-field rewrite first.
-5. Then perform status-name alignment.
-6. Only after those pass, continue to Unity payload cleanup and bot reuse.
+1. Continue Phase 5: record, replay, spectator, and storage alignment.
+2. Then continue Phase 6: replace the temporary synchronous bot fallback with old-style bot scheduling/reuse.
+3. After record/bot alignment, run Unity compile and manual parity checks again.
