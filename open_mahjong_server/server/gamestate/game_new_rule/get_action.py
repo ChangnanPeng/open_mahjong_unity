@@ -19,16 +19,16 @@ def _validate_action_payload(
     game_state: Any,
     player_index: int,
     action_type: str,
-    tile_id: Optional[int],
+    TileId: Optional[int],
     target_tile: Optional[int],
 ) -> tuple[bool, Optional[int]]:
     player = game_state.player_list[player_index]
     if action_type == "cut":
-        if tile_id is None or not hand_contains_tile(player.hand_tiles, tile_id):
+        if TileId is None or not hand_contains_tile(player.hand_tiles, TileId):
             logger.warning(
-                "New-rule cut rejected: player_index=%s tile_id=%s hand_tiles=%s",
+                "New-rule cut rejected: player_index=%s TileId=%s hand_tiles=%s",
                 player_index,
-                tile_id,
+                TileId,
                 player.hand_tiles,
             )
             return False, target_tile
@@ -80,8 +80,9 @@ async def get_ai_action(
         player_index,
         action_type,
         target_tile=target_tile,
-        tile_id=TileId,
-        cut_index=cutIndex if cutIndex is not None else -1,
+        TileId=TileId,
+        cutIndex=cutIndex if cutIndex is not None else -1,
+        cutClass=cutClass,
     )
 
 

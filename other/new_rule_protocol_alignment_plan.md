@@ -6,6 +6,8 @@ Goal: make `game_new_rule` speak the same game-state/status/action protocol shap
 
 Current work snapshot: `other/new_rule_work_snapshot_2026-07-05.md`.
 
+Broader refactor plan: `other/new_rule_legacy_alignment_refactor_plan.md`.
+
 This plan exists because Unity and the original bot pipeline are not pure render/AI layers. They depend on established backend state names, action dictionaries, and broadcast payload fields. The more `new_rule` matches those conventions, the less special-case bridge code is needed.
 
 ## Current Situation
@@ -119,11 +121,12 @@ Target action field mapping:
 | inferred cut class | `cutClass` |
 | `target_tile` | `target_tile` |
 
-Short-term compatibility rule:
+Clean refactor rule:
 
-- During migration, accept both old and new field names.
-- Prefer emitting old-style fields at public boundaries.
-- Keep snake-case helper accessors internally only if they simplify rule code.
+- The review-quality final code should use only the existing-rule canonical field names.
+- Do not keep long-term aliases for the earlier prototype names.
+- Do not keep tests that assert both prototype and canonical shapes.
+- Temporary migration scaffolding is acceptable only while moving a small area, and should be removed before the phase is considered complete.
 
 ## Non-Goals
 
@@ -158,34 +161,31 @@ Tasks:
 - [x] Link this plan from the Unity parity checklist.
 - [ ] Identify all new-rule code paths that read or write `game_status`.
 - [ ] Identify all new-rule code paths that read or write queued action dictionaries.
-- [ ] Add a small compatibility helper API before broad renames.
+- [ ] Add a small protocol/constants helper API before broad renames, if it makes the final canonical code clearer.
 
 Suggested helper names:
 
-- `canonical_status(status)`
-- `legacy_status(status)`
-- `normalize_action_data(action_data)`
 - `get_cut_tile(action_data)`
 - `get_cut_index(action_data)`
 - `set_cut_fields(action_data, tile_id, cut_index, cut_class)`
 
-## Phase 2: Action Data Compatibility
+## Phase 2: Canonical Action Data Rewrite
 
-Goal: let new-rule code safely accept both field styles and emit old-style fields where Unity/bots expect them.
+Goal: rewrite new-rule code to use the existing-rule action field style as the only production shape.
 
 Tasks:
 
-- [ ] Update `NewRuleGameState.submit_action(...)` to normalize old/new action fields in one place.
-- [ ] Keep `get_action.py` accepting `TileId`, `cutIndex`, `cutClass`.
-- [ ] Make queued cut actions include old-style fields:
+- [ ] Update `NewRuleGameState.submit_action(...)` to store canonical action fields.
+- [ ] Keep `get_action.py` submitting `TileId`, `cutIndex`, `cutClass`.
+- [ ] Make queued cut actions use only:
   - `TileId`
   - `cutIndex`
   - `cutClass`
-- [ ] Keep snake-case aliases temporarily:
+- [ ] Remove prototype cut fields from production code:
   - `tile_id`
   - `cut_index`
-- [ ] Update `boardcast.py` to prefer old-style canonical fields and fall back to aliases.
-- [ ] Add tests proving both field styles work.
+- [ ] Update `boardcast.py` to read canonical fields directly.
+- [ ] Add tests proving the canonical field style works.
 
 Success check:
 
@@ -201,10 +201,10 @@ Tasks:
 - [ ] Replace public use of `waiting_discard_response` with `waiting_action_after_cut`.
 - [ ] Replace public use of `waiting_only_cut` with `onlycut_after_action`.
 - [ ] Replace public use of `waiting_rob_kong` with `waiting_action_qianggang`.
-- [ ] Decide whether internal helper windows may keep old aliases during migration.
 - [ ] Update `game_new_rule/get_action.py`.
 - [ ] Update `game_new_rule/boardcast.py`.
 - [ ] Update `game_new_rule/test_new_rule_*` expected statuses.
+- [ ] Remove prototype status aliases from production code and tests.
 - [ ] Update docs after code settles.
 
 Success check:
@@ -226,7 +226,7 @@ Preferred migration:
 
 - [ ] Keep a passive/debug bot mode available for manual UI testing.
 - [ ] Add new-rule bot adapter or hook.
-- [ ] Reuse `public.ai.auto_cut_ai` behavior for `user_id == 0` if status/action compatibility is sufficient.
+- [ ] Reuse `public.ai.auto_cut_ai` behavior for `user_id == 0` if status/action alignment is sufficient.
 - [ ] Reuse safe smart-bot decision helpers for `user_id == 2`:
   - `count_melds`
   - `count_visible_tiles`
@@ -258,15 +258,15 @@ Run after protocol and bot changes:
 
 ## Risk Notes
 
-- A broad status rename can break many tests at once; do action-field compatibility first.
+- A broad status rename can break many tests at once; do canonical action-field rewrite first.
 - Unity may still need some `gamestate/new_rule/...` routing because room rules are separated by path, even if payloads are old-style.
 - The smart bot may make manual testing harder if it wins too aggressively; keep a passive/dev bot path.
-- Do not remove compatibility aliases until Unity parity smoke is green.
+- Do not leave prototype aliases in review-quality code.
 
 ## Immediate Next Steps
 
-1. Add compatibility helpers and tests for old/new action fields.
-2. Migrate queued action data to include old-style cut fields.
+1. Add protocol/constants helpers only if they make the final canonical code clearer.
+2. Migrate queued action data to old-style cut fields and remove prototype aliases.
 3. Migrate status names to old-style names at public boundaries.
 4. Re-run new-rule backend tests.
 5. Re-run Unity smoke.

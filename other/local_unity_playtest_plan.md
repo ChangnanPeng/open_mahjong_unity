@@ -147,6 +147,7 @@ Reference docs:
 - `other/new_rule_reference.md`
 - `other/new_rule_discard_win_lockout.md`
 - `other/new_rule_multi_ron_implementation.md`
+- `other/new_rule_legacy_alignment_refactor_plan.md`
 - `other/new_rule_fan_scoring/new_rule_fan_scoring.md`
 - `other/new_rule_fan_scoring/new_rule_fan_details.md`
 - `other/new_rule_implementation_plan.md`

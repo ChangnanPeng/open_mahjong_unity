@@ -33,8 +33,9 @@ def test_get_ai_action_queues_cut_action() -> None:
 
         queued = await game.action_queues[0].get()
         assert queued["action_type"] == "cut"
-        assert queued["tile_id"] == 12
-        assert queued["cut_index"] == 1
+        assert queued["TileId"] == 12
+        assert queued["cutIndex"] == 1
+        assert queued["cutClass"] is False
         assert game.action_events[0].is_set()
 
     asyncio.run(scenario())

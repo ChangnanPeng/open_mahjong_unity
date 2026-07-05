@@ -6,7 +6,7 @@ This is a documentation snapshot, not a git commit. The working tree is currentl
 
 ## One-Line State
 
-The new rule has a substantial Python backend implementation and a first playable Unity bridge, but the next major step should be protocol alignment: make `game_new_rule` use old-style status names/action fields close to Qingque/Guobiao/Sichuan before continuing bot and Unity parity work.
+The new rule has a substantial Python backend implementation and a first playable Unity bridge, but the next major step should be legacy alignment. Follow `other/new_rule_legacy_alignment_refactor_plan.md`: make `game_new_rule` use old-style status names/action fields and audit Unity, bot, record/replay, and storage compatibility before continuing feature work.
 
 ## Current Repository And Environment
 

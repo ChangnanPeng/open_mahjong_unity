@@ -192,8 +192,9 @@ class NewRuleGameState:
         action_type: str,
         *,
         target_tile: Optional[int] = None,
-        tile_id: Optional[int] = None,
-        cut_index: int = -1,
+        TileId: Optional[int] = None,
+        cutIndex: int = -1,
+        cutClass: bool = False,
     ) -> None:
         """Queue a client-style action for the currently waiting player."""
         if player_index not in self.waiting_players_list:
@@ -208,8 +209,9 @@ class NewRuleGameState:
                 "player_index": player_index,
                 "action_type": action_type,
                 "target_tile": target_tile,
-                "tile_id": tile_id,
-                "cut_index": cut_index,
+                "TileId": TileId,
+                "cutIndex": cutIndex,
+                "cutClass": cutClass,
             }
         )
         self.action_events[player_index].set()
@@ -258,7 +260,14 @@ class NewRuleGameState:
 
         for idx in list(self.waiting_players_list):
             if "pass" in self.action_dict.get(idx, []):
-                results[idx] = {"player_index": idx, "action_type": "pass", "target_tile": None, "tile_id": None, "cut_index": -1}
+                results[idx] = {
+                    "player_index": idx,
+                    "action_type": "pass",
+                    "target_tile": None,
+                    "TileId": None,
+                    "cutIndex": -1,
+                    "cutClass": False,
+                }
                 self.action_dict[idx] = []
                 self.waiting_players_list.remove(idx)
         return results
@@ -272,16 +281,18 @@ class NewRuleGameState:
                 "player_index": player_index,
                 "action_type": "pass",
                 "target_tile": None,
-                "tile_id": None,
-                "cut_index": -1,
+                "TileId": None,
+                "cutIndex": -1,
+                "cutClass": False,
             }
         if "cut" in actions and self.player_list[player_index].hand_tiles:
             return {
                 "player_index": player_index,
                 "action_type": "cut",
                 "target_tile": None,
-                "tile_id": self.player_list[player_index].hand_tiles[0],
-                "cut_index": 0,
+                "TileId": self.player_list[player_index].hand_tiles[0],
+                "cutIndex": 0,
+                "cutClass": False,
             }
         return None
 
@@ -402,7 +413,7 @@ class NewRuleGameState:
             if action_data is None:
                 raise ValueError(f"Missing action for player {player_index}.")
             action = action_data["action_type"]
-            tile = action_data.get("tile_id") if action == "cut" else action_data.get("target_tile")
+            tile = action_data.get("TileId") if action == "cut" else action_data.get("target_tile")
             if action == "hu_self":
                 tile = tile if tile is not None else self.player_list[player_index].hand_tiles[-1]
             next_window = self.apply_turn_action(
@@ -416,7 +427,8 @@ class NewRuleGameState:
                     "action": action,
                     "player": player_index,
                     "tile": tile,
-                    "cut_index": action_data.get("cut_index"),
+                    "cutIndex": action_data.get("cutIndex"),
+                    "cutClass": action_data.get("cutClass", False),
                 },
                 reveal_final=next_window.get("status") == "END",
             )

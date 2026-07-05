@@ -872,12 +872,13 @@ def test_wait_action_collects_submitted_action() -> None:
         wait_task = asyncio.create_task(game.wait_action(timeout=1.0))
         await asyncio.sleep(0)
 
-        await game.submit_action(0, "cut", tile_id=15, cut_index=2)
+        await game.submit_action(0, "cut", TileId=15, cutIndex=2)
         result = await wait_task
 
         assert result[0]["action_type"] == "cut"
-        assert result[0]["tile_id"] == 15
-        assert result[0]["cut_index"] == 2
+        assert result[0]["TileId"] == 15
+        assert result[0]["cutIndex"] == 2
+        assert result[0]["cutClass"] is False
         assert game.waiting_players_list == []
         assert game.action_dict[0] == []
 
@@ -888,7 +889,7 @@ def test_visible_action_payloads_are_addressed_to_each_viewer() -> None:
     game = NewRuleGameState()
 
     payloads = game.emit_visible_action_payloads(
-        {"action": "cut", "player": 0, "tile": 15, "cut_index": 0}
+        {"action": "cut", "player": 0, "tile": 15, "cutIndex": 0}
     )
 
     assert [payload["player_index"] for payload in payloads] == [0, 1, 2, 3]
@@ -1005,7 +1006,7 @@ def test_resolve_action_window_applies_queued_cut() -> None:
         game.open_action_window(game.begin_hand_action(0))
         resolve_task = asyncio.create_task(game.resolve_action_window(timeout=1.0))
         await asyncio.sleep(0)
-        await game.submit_action(0, "cut", tile_id=41)
+        await game.submit_action(0, "cut", TileId=41)
         window = await resolve_task
 
         assert window["status"] == "waiting_discard_response"
@@ -1060,7 +1061,7 @@ def test_apply_action_results_resolves_discard_claim_window() -> None:
     window = game.apply_turn_action(0, "cut", tile=15)
     next_window = game.apply_action_results(
         window,
-        {2: {"action_type": "peng", "target_tile": None, "tile_id": None, "cut_index": -1}},
+        {2: {"action_type": "peng", "target_tile": None, "TileId": None, "cutIndex": -1, "cutClass": False}},
     )
 
     assert next_window["status"] == "waiting_only_cut"
