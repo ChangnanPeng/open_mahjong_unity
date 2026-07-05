@@ -4,7 +4,7 @@ import time
 import logging
 from .action_check import check_action_after_cut, check_action_jiagang, refresh_waiting_tiles
 from .boardcast import broadcast_do_action, broadcast_ready_status, broadcast_ask_other_action
-from ..public.logic_common import get_index_relative_position, next_current_num
+from ..public.logic_common import get_index_relative_position, back_current_num
 from ..public.game_record_manager import (
     player_action_record_cut,
     player_action_record_angang,
@@ -351,9 +351,9 @@ async def wait_action(self):
             if action_data:
                 refresh_waiting_tiles(self,player_index) # 更新听牌
                 if action_type == "chi_left": # [tile_id-2,tile_id-1,tile_id]
-                    if player_index != next_current_num(self.current_player_index):
+                    if player_index != back_current_num(self.current_player_index):
                         logger.error(
-                            f"非法chi_left：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                            f"非法chi_left：只有上家可吃 player={player_index}, current={self.current_player_index}"
                         )
                         self.game_status = "deal_card"
                         return
@@ -370,9 +370,9 @@ async def wait_action(self):
                     combination_mask = [1,tile_id,0,tile_id-1,0,tile_id-2]
 
                 elif action_type == "chi_mid": # [tile_id-1,tile_id,tile_id+1]
-                    if player_index != next_current_num(self.current_player_index):
+                    if player_index != back_current_num(self.current_player_index):
                         logger.error(
-                            f"非法chi_mid：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                            f"非法chi_mid：只有上家可吃 player={player_index}, current={self.current_player_index}"
                         )
                         self.game_status = "deal_card"
                         return
@@ -389,9 +389,9 @@ async def wait_action(self):
                     combination_mask = [1,tile_id,0,tile_id-1,0,tile_id+1]
 
                 elif action_type == "chi_right": # [tile_id,tile_id+1,tile_id+2]
-                    if player_index != next_current_num(self.current_player_index):
+                    if player_index != back_current_num(self.current_player_index):
                         logger.error(
-                            f"非法chi_right：只有下家可吃 player={player_index}, current={self.current_player_index}"
+                            f"非法chi_right：只有上家可吃 player={player_index}, current={self.current_player_index}"
                         )
                         self.game_status = "deal_card"
                         return

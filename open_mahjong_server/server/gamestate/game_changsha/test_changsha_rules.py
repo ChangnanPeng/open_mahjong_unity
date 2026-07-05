@@ -121,15 +121,15 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertIn("peng", actions[3])
         self.assertIn("gang", actions[2])
 
-    def test_discard_check_allows_next_player_to_chi(self):
+    def test_discard_check_allows_upper_player_to_chi(self):
         state = SimpleNamespace(
             player_list=[
-                DummyPlayer(0, [31, 32, 33]),
-                DummyPlayer(1, [12, 14, 25]),
+                DummyPlayer(0, [11, 12, 25]),
+                DummyPlayer(1, [31, 32, 33]),
                 DummyPlayer(2, [12, 14, 26]),
                 DummyPlayer(3, [11, 12, 13]),
             ],
-            current_player_index=0,
+            current_player_index=1,
             tiles_list=[21],
             dihe_possible=True,
             calculation_service=FixedTingpai([]),
@@ -137,8 +137,9 @@ class ChangshaRulesTest(unittest.TestCase):
 
         actions = check_action_after_cut(state, 13)
 
-        self.assertIn("chi_mid", actions[1])
-        self.assertIn("pass", actions[1])
+        self.assertIn("chi_left", actions[0])
+        self.assertIn("pass", actions[0])
+        self.assertEqual(actions[1], [])
         self.assertNotIn("chi_mid", actions[2])
         self.assertNotIn("chi_mid", actions[3])
 
@@ -336,9 +337,9 @@ class ChangshaRulesTest(unittest.TestCase):
             discarder=2,
         )
 
-        self.assertEqual(ChangshaGameState._format_changsha_bird_tile(24), "4饼=4")
-        self.assertIn("鸟牌:4饼=4,1条=1", result["fan_display"])
-        self.assertIn("中鸟:4饼=4", result["fan_display"])
+        self.assertEqual(ChangshaGameState._format_changsha_bird_tile(24), "四筒")
+        self.assertIn("鸟牌:四筒,一条", result["fan_display"])
+        self.assertIn("中鸟:四筒", result["fan_display"])
         self.assertIn("扎鸟倍数:x2", result["fan_display"])
         self.assertEqual(players[1].score, 2)
         self.assertEqual(players[2].score, -2)
