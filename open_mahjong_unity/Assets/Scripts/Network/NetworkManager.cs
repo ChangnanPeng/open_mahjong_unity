@@ -557,6 +557,16 @@ public class NetworkManager : MonoBehaviour {
                 case "gamestate/sichuan/ready_status":
                 case "gamestate/sichuan/ask_dingque":
                 case "gamestate/sichuan/dingque_done":
+                case "gamestate/new_rule/game_start":
+                case "gamestate/new_rule/broadcast_hand_action":
+                case "gamestate/new_rule/ask_other_action":
+                case "gamestate/new_rule/do_action":
+                case "gamestate/new_rule/show_result":
+                case "gamestate/new_rule/final_settlement":
+                case "gamestate/new_rule/ask_action":
+                case "gamestate/new_rule/reconnect":
+                case "gamestate/new_rule/game_end":
+                case "gamestate/new_rule/ready_status":
                 case "switch_seat":
                 case "refresh_player_tag_list":
                 case "gamestate/broadcast_sticker":

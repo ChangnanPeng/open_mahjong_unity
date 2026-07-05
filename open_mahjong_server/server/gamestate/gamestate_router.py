@@ -3,6 +3,7 @@ import logging
 import re
 import time
 from .public.ai.get_action import get_action
+from .game_new_rule.get_action import get_action as new_rule_get_action
 from .public.sticker import broadcast_sticker
 from ..response import Response, SpectatorInfo
 
@@ -34,6 +35,10 @@ async def handle_gamestate_message(game_server, Connect_id: str, message: dict, 
         await handle_riichi_cut(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/riichi/send_action":
         await handle_send_action(game_server, Connect_id, message, websocket)
+    elif message_type == "gamestate/new_rule/cut_tile":
+        await handle_new_rule_cut_tile(game_server, Connect_id, message, websocket)
+    elif message_type == "gamestate/new_rule/send_action":
+        await handle_new_rule_send_action(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/riichi/set_ryuukyoku_tenpai":
         await handle_set_ryuukyoku_tenpai(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/GB/add_spectator":
@@ -118,6 +123,66 @@ async def handle_send_action(game_server, Connect_id: str, message: dict, websoc
         )
     except Exception as e:
         logger.error(f"处理发送操作请求失败: {e}", exc_info=True)
+
+async def handle_new_rule_cut_tile(game_server, Connect_id: str, message: dict, websocket):
+    """Route a new-rule discard request to the new-rule action adapter."""
+    try:
+        gamestate_id = message.get("gamestate_id")
+        if not gamestate_id:
+            logger.warning(f"new_rule cut_tile missing gamestate_id: {message}")
+            return
+
+        game_state = game_server.gamestate_manager.get_game_state_by_gamestate_id(gamestate_id)
+        if not game_state:
+            logger.warning(f"new_rule gamestate_id not found: {gamestate_id}")
+            return
+        if getattr(game_state, "room_rule", None) != "new_rule":
+            logger.warning(f"new_rule cut_tile routed to non-new-rule state: {gamestate_id}")
+            return
+
+        await new_rule_get_action(
+            game_state,
+            Connect_id,
+            "cut",
+            message.get("cutClass"),
+            message.get("TileId"),
+            cutIndex=message.get("cutIndex"),
+            target_tile=None,
+            action_tick=message.get("action_tick"),
+        )
+    except Exception as e:
+        logger.error(f"handle new_rule cut_tile failed: {e}", exc_info=True)
+
+
+async def handle_new_rule_send_action(game_server, Connect_id: str, message: dict, websocket):
+    """Route a new-rule non-discard action request to the new-rule action adapter."""
+    try:
+        gamestate_id = message.get("gamestate_id")
+        if not gamestate_id:
+            logger.warning(f"new_rule send_action missing gamestate_id: {message}")
+            return
+
+        game_state = game_server.gamestate_manager.get_game_state_by_gamestate_id(gamestate_id)
+        if not game_state:
+            logger.warning(f"new_rule gamestate_id not found: {gamestate_id}")
+            return
+        if getattr(game_state, "room_rule", None) != "new_rule":
+            logger.warning(f"new_rule send_action routed to non-new-rule state: {gamestate_id}")
+            return
+
+        await new_rule_get_action(
+            game_state,
+            Connect_id,
+            message.get("action"),
+            cutClass=None,
+            TileId=None,
+            cutIndex=None,
+            target_tile=message.get("targetTile"),
+            action_tick=message.get("action_tick"),
+        )
+    except Exception as e:
+        logger.error(f"handle new_rule send_action failed: {e}", exc_info=True)
+
 
 async def handle_send_sticker(game_server, Connect_id: str, message: dict, websocket):
     """处理对局表情包发送请求（仅对局玩家可发）。"""

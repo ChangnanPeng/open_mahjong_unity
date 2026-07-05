@@ -36,6 +36,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_start":
             case "gamestate/riichi/game_start":
             case "gamestate/sichuan/game_start":
+            case "gamestate/new_rule/game_start":
                 HandleGameStart(response);
                 break;
             case "gamestate/guobiao/broadcast_hand_action":
@@ -43,6 +44,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/broadcast_hand_action":
             case "gamestate/riichi/broadcast_hand_action":
             case "gamestate/sichuan/broadcast_hand_action":
+            case "gamestate/new_rule/broadcast_hand_action":
                 HandleBroadcastHandAction(response);
                 break;
             case "gamestate/guobiao/ask_other_action":
@@ -50,6 +52,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ask_other_action":
             case "gamestate/riichi/ask_other_action":
             case "gamestate/sichuan/ask_other_action":
+            case "gamestate/new_rule/ask_other_action":
                 HandleAskOtherAction(response);
                 break;
             case "gamestate/guobiao/do_action":
@@ -57,6 +60,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/do_action":
             case "gamestate/riichi/do_action":
             case "gamestate/sichuan/do_action":
+            case "gamestate/new_rule/do_action":
                 HandleDoAction(response);
                 break;
             case "gamestate/guobiao/show_result":
@@ -64,7 +68,13 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/show_result":
             case "gamestate/riichi/show_result":
             case "gamestate/sichuan/show_result":
+            case "gamestate/new_rule/show_result":
+            case "gamestate/new_rule/final_settlement":
                 HandleShowResult(response);
+                break;
+            case "gamestate/new_rule/ask_action":
+            case "gamestate/new_rule/reconnect":
+                HandleNewRuleBridgeMessage(response);
                 break;
             case "gamestate/guobiao/game_end":
             case "gamestate/qingque/game_end":
@@ -119,9 +129,44 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleGameStart(Response response) {
         Debug.Log($"游戏开始: {response.message}");
         AutoReconnect.OnGameRestored();
-        NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
+        NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.unity_game_info ?? response.game_info);
     }
-    
+
+    private void HandleNewRuleBridgeMessage(Response response) {
+        if (NormalGameStateManager.Instance == null) {
+            Debug.LogWarning("New-rule bridge message arrived before NormalGameStateManager was ready.");
+            return;
+        }
+        if (response.do_action_info == null) {
+            SyncNewRuleUnityGameInfo(response);
+        }
+        if (response.unity_game_info != null && (
+            string.IsNullOrEmpty(NormalGameStateManager.Instance.roomRule) ||
+            NormalGameStateManager.Instance.roomRule != "new_rule"
+        )) {
+            NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.unity_game_info);
+        }
+        if (response.ask_hand_action_info != null) {
+            HandleBroadcastHandAction(response);
+        }
+        if (response.ask_other_action_info != null) {
+            HandleAskOtherAction(response);
+        }
+        if (response.do_action_info != null) {
+            HandleDoAction(response);
+        }
+        if (response.show_result_info != null) {
+            HandleShowResult(response);
+        }
+    }
+
+    private void SyncNewRuleUnityGameInfo(Response response) {
+        if (response.unity_game_info == null || NormalGameStateManager.Instance == null) return;
+        if (response.unity_game_info.room_rule != "new_rule") return;
+        NormalGameStateManager.Instance.remainTiles = response.unity_game_info.tile_count;
+        BoardCanvas.Instance?.UpdateRemainTiles(response.unity_game_info.tile_count);
+    }
+
     /// <summary>
     /// 处理手牌轮操作广播
     /// </summary>
@@ -205,6 +250,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.gang_score_changes,
             doresponse.is_mo_buhua
         );
+        SyncNewRuleUnityGameInfo(response);
     }
     
     /// <summary>
@@ -212,6 +258,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     /// </summary>
     private void HandleShowResult(Response response) {
         Debug.Log($"收到显示结算结果消息: {response.show_result_info}");
+        SyncNewRuleUnityGameInfo(response);
         ShowResultInfo showresponse = response.show_result_info;
         if (showresponse == null) return;
         RiichiEndResultExtras riichiExtras = BuildRiichiExtrasIfAny(showresponse);
@@ -340,7 +387,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SendChineseGameTileRequest {
-                type = "gamestate/GB/cut_tile",
+                type = IsNewRuleActive() ? "gamestate/new_rule/cut_tile" : "gamestate/GB/cut_tile",
                 cutClass = cutClass,
                 TileId = tileId,
                 cutIndex = cutIndex,
@@ -359,7 +406,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SendActionRequest {
-                type = "gamestate/GB/send_action",
+                type = IsNewRuleActive() ? "gamestate/new_rule/send_action" : "gamestate/GB/send_action",
                 gamestate_id = UserDataManager.Instance.GamestateId,
                 action = action,
                 targetTile = targetTile,
@@ -372,6 +419,12 @@ public class GameStateNetworkManager : MonoBehaviour {
         } catch (Exception e) {
             Debug.LogError($"发送操作消息失败: {e.Message}");
         }
+    }
+
+    private static bool IsNewRuleActive() {
+        NormalGameStateManager manager = NormalGameStateManager.Instance;
+        if (manager == null) return false;
+        return manager.roomRule == "new_rule" || (!string.IsNullOrEmpty(manager.subRule) && manager.subRule.StartsWith("new_rule"));
     }
 
     public async void SetRyuukyokuTenpai(bool tenpai) {

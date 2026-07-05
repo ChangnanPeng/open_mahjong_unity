@@ -3,7 +3,7 @@
 提供线程安全的和牌检查和听牌检查服务
 """
 import threading
-from typing import List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 from time import time
 
 # 国标和牌：标准与小林规各独立脚本，外部获取结果后调用实例的剔除方法再 return
@@ -19,6 +19,7 @@ try:
     from .riichi.riichi_tingpai_check import Riichi_Tingpai_Check
     from .sichuan.sichuan_hepai_check import Sichuan_Hepai_Check, sichuan_base_from_fan
     from .sichuan.sichuan_tingpai_check import Sichuan_Tingpai_Check
+    from .new_rule import HandContext as NewRuleHandContext, score_hand as new_rule_score_hand, tingpai_check as new_rule_tingpai_check
 except ImportError:
     from guobiao_hepai_check import Chinese_Hepai_Check, PlayerTiles  # type: ignore
     from guobiao_xiaolin_hepai_check import Xiaolin_Hepai_Check  # type: ignore
@@ -31,6 +32,7 @@ except ImportError:
     from riichi.riichi_tingpai_check import Riichi_Tingpai_Check  # type: ignore
     from sichuan.sichuan_hepai_check import Sichuan_Hepai_Check, sichuan_base_from_fan  # type: ignore
     from sichuan.sichuan_tingpai_check import Sichuan_Tingpai_Check  # type: ignore
+    from new_rule import HandContext as NewRuleHandContext, score_hand as new_rule_score_hand, tingpai_check as new_rule_tingpai_check  # type: ignore
 
 # Qingque13 C# 桥接模块
 try:
@@ -193,6 +195,83 @@ class GameCalculationService:
         """
         with self._lock:
             return self._tingpai_check.tingpai_check(hand_tile_list, combination_list)
+
+    def NewRule_tingpai_check(
+        self,
+        hand_tile_list: List[int],
+        combination_list: List[str],
+        context: Dict[str, Any] = None,
+    ) -> Set[int]:
+        """Check waiting tiles with the new-rule scoring engine."""
+        with self._lock:
+            return new_rule_tingpai_check(hand_tile_list, combination_list, context)
+
+    def NewRule_hepai_check(
+        self,
+        hand_list: List[int],
+        tiles_combination: List[str],
+        way_to_hepai: List[str],
+        get_tile: int,
+        context: Dict[str, Any] = None,
+    ) -> Tuple[int, List[str]]:
+        """New rule scoring entry point.
+
+        This thin adapter keeps the existing calculation-service calling style
+        while the new rule calculator remains independently testable.
+        `hand_list` should be the winner's final concealed hand tiles, and
+        `tiles_combination` should contain meld codes such as `s12`, `k45`,
+        `g45`, or `G45`.
+        """
+        detail = self.NewRule_hepai_detail(
+            hand_list,
+            tiles_combination,
+            way_to_hepai,
+            get_tile,
+            context,
+        )
+        return detail["points"], detail["fan_names"]
+
+    def NewRule_hepai_detail(
+        self,
+        hand_list: List[int],
+        tiles_combination: List[str],
+        way_to_hepai: List[str],
+        get_tile: int,
+        context: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """Return full new-rule scoring details for tests and future game flow."""
+        context = context or {}
+        win_source = context.get("win_source") or self._new_rule_win_source(way_to_hepai)
+        new_rule_context = NewRuleHandContext(
+            hand_tiles=list(hand_list),
+            meld_codes=list(tiles_combination),
+            winning_tile=get_tile,
+            win_source=win_source,
+            pre_win_tiles=context.get("pre_win_tiles"),
+            heavenly_win=bool(context.get("heavenly_win") or "天和" in way_to_hepai),
+            earthly_win=bool(context.get("earthly_win") or "地和" in way_to_hepai),
+            haitei=bool(context.get("haitei") or "海底捞月" in way_to_hepai),
+            houtei=bool(context.get("houtei") or "河底捞鱼" in way_to_hepai),
+            rinshan=bool(context.get("rinshan") or "杠上开花" in way_to_hepai),
+            chankan=bool(context.get("chankan") or "抢杠" in way_to_hepai),
+        )
+        with self._lock:
+            result = new_rule_score_hand(new_rule_context)
+            return {
+                "is_win": result.is_win,
+                "points": result.points,
+                "raw_points": result.raw_points,
+                "fan_ids": list(result.fan_ids),
+                "fan_names": list(result.fan_names),
+            }
+
+    @staticmethod
+    def _new_rule_win_source(way_to_hepai: List[str]) -> str:
+        if "抢杠" in way_to_hepai:
+            return "rob_kong"
+        if "点和" in way_to_hepai or "河底捞鱼" in way_to_hepai:
+            return "discard"
+        return "self_draw"
 
     def Classical_hepai_check(
         self, hand_list: List[int], tiles_combination: List[str], way_to_hepai: List[str], get_tile: int

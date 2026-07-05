@@ -105,6 +105,16 @@ public class CreatePanel : MonoBehaviour {
             { CfgTacticalCall,   false }, // 战术鸣牌
             { CfgBloodBattle,    true },  // 血战到底：默认开
         } },
+        { "new_rule", new Dictionary<string, object> {
+            { CfgGameRound,      1 },
+            { CfgRoundTimer,     2 },
+            { CfgStepTimer,      1 },
+            { CfgTips,           false },
+            { CfgPassword,       false },
+            { CfgRandomSeed,     false },
+            { CfgTouristLimit,   false },
+            { CfgAllowSpectator, false },
+        } },
     };
 
     /// <summary>规则状态：guobiao / riichi / qingque / classical，与 chooseRule 下拉索引对应 0/1/2/3。</summary>
@@ -159,6 +169,7 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private Button addRuleButton;
 
     private void Start() {
+        EnsureNewRuleOption();
         chooseRule.onValueChanged.AddListener(OnRuleDropdownChanged);
         closeButton.onClick.AddListener(ClosePanel);
         createButton.onClick.AddListener(CreateRoom);
@@ -199,6 +210,7 @@ public class CreatePanel : MonoBehaviour {
             2 => "qingque",
             3 => "classical",
             4 => "sichuan",
+            5 => "new_rule",
             _ => "guobiao"
         };
         bool hasSubRule = RuleConfigs[_ruleState].ContainsKey(CfgSubRule);
@@ -294,8 +306,18 @@ public class CreatePanel : MonoBehaviour {
         if (_ruleState == "qingque") return "qingque/standard";
         if (_ruleState == "classical") return "classical/standard";
         if (_ruleState == "sichuan") return "sichuan/standard";
+        if (_ruleState == "new_rule") return "new_rule/standard";
         if (_ruleState == "riichi") return GetSelectedRiichiSubRule();
         return GetSelectedSubRule();
+    }
+
+    private void EnsureNewRuleOption() {
+        if (chooseRule == null) return;
+        foreach (TMP_Dropdown.OptionData option in chooseRule.options) {
+            if (option.text == "新规则测试") return;
+        }
+        chooseRule.options.Add(new TMP_Dropdown.OptionData("新规则测试"));
+        chooseRule.RefreshShownValue();
     }
 
     private string GetSelectedRiichiSubRule() {
@@ -437,6 +459,11 @@ public class CreatePanel : MonoBehaviour {
 
         if (_ruleState == "sichuan") {
             CreateSichuanRoom();
+            return;
+        }
+
+        if (_ruleState == "new_rule") {
+            CreateNewRuleRoom();
         }
     }
 
@@ -608,6 +635,30 @@ public class CreatePanel : MonoBehaviour {
             return;
         }
         RoomNetworkManager.Instance.Create_Sichuan_Room(config);
+    }
+
+    private void CreateNewRuleRoom() {
+        var config = new Qingque_Create_RoomConfig {
+            RoomName = roomNameInput.text.Trim(),
+            GameRound = GetSelectedGameTime(),
+            Password = passwordToggle.isOn ? passwordInput.text.Trim() : "",
+            RandomSeed = SetRandomSeedToggle.isOn ? randomSeedInput.text.Trim() : "",
+            Rule = "new_rule",
+            SubRule = "new_rule/standard",
+            RoundTimer = GetSelectedRoundTimer(),
+            StepTimer = GetSelectedStepTimer(),
+            Tips = false,
+            TouristLimit = TouristLimitToggle.isOn,
+            AllowSpectator = false,
+            TacticalCall = false,
+        };
+
+        if (!config.Validate(out string error, passwordToggle.isOn, SetRandomSeedToggle.isOn)) {
+            Debug.LogWarning(error);
+            NotificationManager.Instance.ShowTip("create_room", false, $"创建房间失败: {error}");
+            return;
+        }
+        RoomNetworkManager.Instance.Create_NewRule_Room(config);
     }
 
     private int GetSelectedGameTime() {

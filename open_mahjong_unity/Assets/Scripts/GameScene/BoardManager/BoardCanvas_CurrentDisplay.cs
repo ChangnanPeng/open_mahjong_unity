@@ -55,6 +55,10 @@ public partial class BoardCanvas {
         remiansTilesText.text = $"余:{remainTiles}";
     }
 
+    public void UpdateRemainTiles(int remainTiles) {
+        remiansTilesText.text = $"余:{Mathf.Max(remainTiles, 0)}";
+    }
+
     private IEnumerator FlashImage(Image image) {
         float cycleDuration = 2.0f;
         float elapsedTime = 0f;

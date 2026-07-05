@@ -64,6 +64,8 @@ async def handle_room_message(game_server, Connect_id: str, message: dict, webso
         await handle_create_Classical_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Sichuan_room":
         await handle_create_Sichuan_room(game_server, Connect_id, message, websocket)
+    elif message_type == "room/create_NewRule_room":
+        await handle_create_NewRule_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Riichi_room":
         await handle_create_Riichi_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/get_room_list":
@@ -195,6 +197,32 @@ async def handle_create_Sichuan_room(game_server, Connect_id: str, message: dict
         message.get("allow_spectator", True),
         message.get("tactical_call", False),
         message.get("blood_battle", True),
+        message.get("claim_protection", True),
+    )
+    await websocket.send_json(response.dict(exclude_none=True))
+
+async def handle_create_NewRule_room(game_server, Connect_id: str, message: dict, websocket):
+    logging.info(f"创建新规则隐藏测试房间请求 - 用户名: {Connect_id}")
+    if Connect_id in game_server.players:
+        player = game_server.players[Connect_id]
+        blocked = _reject_room_entry(game_server, player)
+        if blocked:
+            await websocket.send_json(blocked.dict(exclude_none=True))
+            return
+
+    response = await game_server.create_NewRule_room(
+        Connect_id,
+        message["roomname"],
+        message["gameround"],
+        message["password"],
+        message["roundTimerValue"],
+        message["stepTimerValue"],
+        message["tips"],
+        message.get("random_seed", 0),
+        message.get("sub_rule", "new_rule/standard"),
+        message.get("tourist_limit", False),
+        message.get("allow_spectator", False),
+        message.get("tactical_call", False),
         message.get("claim_protection", True),
     )
     await websocket.send_json(response.dict(exclude_none=True))
