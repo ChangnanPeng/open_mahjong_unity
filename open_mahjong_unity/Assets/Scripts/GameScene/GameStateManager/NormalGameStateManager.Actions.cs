@@ -19,7 +19,7 @@ public partial class NormalGameStateManager {
         if (playerIndex == selfIndex){
             allowActionList.Clear();
             // 存储全部可用行动；riichi_cut 在 UI 上以「立直」按钮展示
-            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self" , "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
+            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self" , "buzhang", "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
             foreach (string action in action_list){
                 if (AllowHandActionCheck.Contains(action)){
                     allowActionList.Add(action);
@@ -66,11 +66,14 @@ public partial class NormalGameStateManager {
 
             Debug.Log($"执行DoAction操作: {action} (silent={isSilent})");
             bool deferMeldFeedback = !isSilent && meldRevealDelaySec > 0f && IsChiPengMingGangAction(action);
+            string soundAction = action == "buzhang"
+                ? (!string.IsNullOrEmpty(combination_target) && combination_target.StartsWith("G") ? "angang" : "jiagang")
+                : action;
             if (!isSilent && !deferMeldFeedback) {
-                SoundManager.Instance.PlayActionSound(GetCardPlayer, action);
+                SoundManager.Instance.PlayActionSound(GetCardPlayer, soundAction);
                 // 切牌物理音改在 3D 出牌手牌队列中播放，避免吃牌后立刻收到 cut 消息时声音早于出牌动画
                 if (action != "cut") {
-                    SoundManager.Instance.PlayPhysicsSound(action);
+                    SoundManager.Instance.PlayPhysicsSound(soundAction);
                 }
                 GameCanvas.Instance.ShowActionDisplay(GetCardPlayer, action, roomRule);
             }
@@ -147,8 +150,14 @@ public partial class NormalGameStateManager {
                     break;
 
                 // 吃碰杠
-                case "chi_left": case"chi_mid": case"chi_right": case "angang": case "jiagang": case "peng": case "gang":
-                    if (action == "jiagang"){
+                case "chi_left": case"chi_mid": case"chi_right": case "buzhang": case "angang": case "jiagang": case "peng": case "gang":
+                    bool isBuzhangJiagang = action == "buzhang"
+                        && !string.IsNullOrEmpty(combination_target)
+                        && combination_target.StartsWith("k");
+                    bool isBuzhangAngang = action == "buzhang"
+                        && !string.IsNullOrEmpty(combination_target)
+                        && combination_target.StartsWith("G");
+                    if (action == "jiagang" || isBuzhangJiagang){
                         pendingAskFromJiagang = true;
                         var meldPlayer = player_to_info[GetCardPlayer];
                         int meldIdx = GameRecordMeldCodec.FindCombinationIndex(meldPlayer.combination_tiles, combination_target);
@@ -181,7 +190,7 @@ public partial class NormalGameStateManager {
                         }
                         Game3DManager.Instance.Change3DTile("jiagang", tile_id, 1, GetCardPlayer, isMoGang, combination_mask);
                     }
-                    else if (action == "angang"){
+                    else if (action == "angang" || isBuzhangAngang){
                         bool isMoGang = is_mo_gang == true;
                         player_to_info[GetCardPlayer].combination_tiles.Add(combination_target);
                         AppendCombinationMask(player_to_info[GetCardPlayer], combination_mask);

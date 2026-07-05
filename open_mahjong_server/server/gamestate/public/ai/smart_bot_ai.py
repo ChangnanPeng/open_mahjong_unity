@@ -101,6 +101,32 @@ async def _handle_hand_action(game_state, player_index, action_list, player):
     meld_count = count_melds(combs)
     visible = count_visible_tiles(game_state)
 
+    if "buzhang" in action_list:
+        for c in combs:
+            if c.startswith("k"):
+                try:
+                    ktile = int(c[1:])
+                except ValueError:
+                    continue
+                if ktile in hand:
+                    test_hand = hand[:]
+                    test_hand.remove(ktile)
+                    base_score = evaluate_hand(hand, meld_count, visible)
+                    buzhang_score = evaluate_hand(test_hand, meld_count, visible)
+                    if buzhang_score >= base_score:
+                        logger.info(f"牌效AI {player_index} ({player.username}) 选择 buzhang, tile={ktile}")
+                        await get_ai_action(game_state, player_index, "buzhang", None, None, None, ktile)
+                        return
+        for tile in set(hand):
+            if hand.count(tile) >= 4:
+                test_hand = [t for t in hand if t != tile]
+                base_score = evaluate_hand(hand, meld_count, visible)
+                buzhang_score = evaluate_hand(test_hand, meld_count + 1, visible)
+                if buzhang_score >= base_score:
+                    logger.info(f"牌效AI {player_index} ({player.username}) 选择 buzhang, tile={tile}")
+                    await get_ai_action(game_state, player_index, "buzhang", None, None, None, tile)
+                    return
+
     # 评估暗杠：暗杠后手牌不变差则执行（定缺花色不可暗杠）
     if "angang" in action_list:
         dingque = getattr(player, "dingque_suit", 0)

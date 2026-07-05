@@ -29,6 +29,7 @@ public partial class GameCanvas : MonoBehaviour {
         public ActionButtonColorPreset chi = new ActionButtonColorPreset();
         public ActionButtonColorPreset peng = new ActionButtonColorPreset();
         public ActionButtonColorPreset gang = new ActionButtonColorPreset();
+        public ActionButtonColorPreset buzhang = new ActionButtonColorPreset();
         public ActionButtonColorPreset angang = new ActionButtonColorPreset();
         public ActionButtonColorPreset jiagang = new ActionButtonColorPreset();
         public ActionButtonColorPreset hu = new ActionButtonColorPreset();
@@ -65,6 +66,8 @@ public partial class GameCanvas : MonoBehaviour {
                 return actionButtonColorPresets.peng;
             case "gang":
                 return actionButtonColorPresets.gang;
+            case "buzhang":
+                return actionButtonColorPresets.buzhang;
             case "angang":
                 return actionButtonColorPresets.angang;
             case "jiagang":
@@ -116,6 +119,8 @@ public partial class GameCanvas : MonoBehaviour {
         ActionButton chiButton = null;
         // 用于跟踪暗杠按钮
         ActionButton angangButton = null;
+        // 用于跟踪补张按钮
+        ActionButton buzhangButton = null;
         // 用于跟踪加杠按钮
         ActionButton jiagangButton = null;
 
@@ -180,18 +185,29 @@ public partial class GameCanvas : MonoBehaviour {
                 if (angangButton == null) {
                     angangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = angangButton.TextObject;
-                    buttonText.text = "暗杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "暗杠";
                     Debug.Log($"暗杠按钮: {angangButton}");
                 }
                 angangButton.actionTypeList.Add(action_list[i]);
                 Debug.Log($"添加暗杠选项: {action_list[i]}");
+            }
+            // 补张
+            else if (action_list[i] == "buzhang"){
+                if (buzhangButton == null) {
+                    buzhangButton = CreateActionButton(colorPreset);
+                    TMP_Text buttonText = buzhangButton.TextObject;
+                    buttonText.text = "补张";
+                    Debug.Log($"补张按钮: {buzhangButton}");
+                }
+                buzhangButton.actionTypeList.Add(action_list[i]);
+                Debug.Log($"添加补张选项: {action_list[i]}");
             }
             // 加杠
             else if (action_list[i] == "jiagang"){
                 if (jiagangButton == null) {
                     jiagangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = jiagangButton.TextObject;
-                    buttonText.text = "加杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "加杠";
                     Debug.Log($"加杠按钮: {jiagangButton}");
                 }
                 jiagangButton.actionTypeList.Add(action_list[i]);

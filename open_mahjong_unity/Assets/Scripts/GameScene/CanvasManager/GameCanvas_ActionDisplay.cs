@@ -152,8 +152,12 @@ public partial class GameCanvas{
         } else if (actionType == "peng"){
             return "碰";
         } else if (actionType == "angang"){
+            if (roomRule == "changsha") return "开杠";
             return "暗杠";
+        } else if (actionType == "buzhang"){
+            return "补张";
         } else if (actionType == "jiagang"){
+            if (roomRule == "changsha") return "开杠";
             return "加杠";
         } else if (actionType == "gang"){
             if (roomRule == "changsha") return "开杠";
