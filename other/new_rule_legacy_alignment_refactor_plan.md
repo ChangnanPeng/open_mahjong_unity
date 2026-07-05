@@ -347,8 +347,8 @@ Phase 4c verification:
 - If the hand is already `END`, reconnect resends `gamestate/new_rule/show_result` after the restored `game_start`.
 - Unity no longer dispatches or handles `gamestate/new_rule/reconnect`.
 - `rg -n "gamestate/new_rule/reconnect|HandleNewRuleBridgeMessage|reconnect_payload|build_reconnect_payload" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
-- `test_new_rule_boardcast.py`: 14 tests passed.
-- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_boardcast.py`: 15 tests passed.
+- `test_new_rule_gamestate.py`: 59 tests passed.
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
 
@@ -370,29 +370,28 @@ Goal: make new-rule records look like existing records so data storage, record l
 
 Backend record tasks:
 
-- [ ] Confirm `init_game_record(self)` is used and `game_title` includes:
+- [x] Confirm `init_game_record(self)` is used and `game_title` includes:
   - `rule`
   - `sub_rule`
   - `max_round`
   - `start_time`
   - `room_type`
-  - `match_type`
   - `hepai_limit`
   - new-rule-specific flags only if needed.
-- [ ] Confirm each hand calls `init_game_round(self)`.
-- [ ] Use existing `player_action_record_deal`.
-- [ ] Use existing `player_action_record_cut`.
-- [ ] Use existing `player_action_record_angang`.
+- [x] Confirm each hand calls `init_game_round(self)`.
+- [x] Use existing `player_action_record_deal`.
+- [x] Use existing `player_action_record_cut`.
+- [x] Use existing `player_action_record_angang`.
 - [ ] Use existing `player_action_record_jiagang`.
-- [ ] Use existing `player_action_record_chipenggang`.
-- [ ] Use existing `player_action_record_hu` where compatible.
+- [x] Use existing `player_action_record_chipenggang`.
+- [x] Use existing `player_action_record_hu` where compatible.
 - [ ] Add narrowly scoped new-rule record helpers only for truly new concepts:
   - mid-hand winner exits;
   - deferred final settlement reveal;
   - same-tile lockout should probably not appear as a replay action unless useful for debugging.
-- [ ] Use `player_action_record_liuju` for wall exhaustion if compatible.
-- [ ] Use `player_action_record_round_end`.
-- [ ] Use `end_game_record`.
+- [x] Use `player_action_record_liuju` for wall exhaustion if compatible.
+- [x] Use `player_action_record_round_end`.
+- [x] Use `end_game_record`.
 - [ ] Ensure `score_changes` are shaped by seat/original index consistently with old rules.
 - [ ] Ensure `record_counter` fields are updated:
   - `zimo_times`
@@ -403,6 +402,20 @@ Backend record tasks:
   - `win_score`
   - `win_turn`
   - `rank_result`
+
+Phase 5a status:
+
+- Minimal standard `game_record` scaffolding is now present in `NewRuleGameState`.
+- The live loop initializes `game_title` and `round_index_1`, records visible cut/deal/chi/peng/gang/angang ticks, and writes final hu/liuju + `end`.
+- `RecordCounter` exists for new-rule players and is updated for zimo/dianhe/fangchong/win score on final settlements.
+- Storage, record list/replay validation, spectator incremental record updates, multi-round lifecycle, final ranks, and clean jiagang record timing are still pending.
+
+Phase 5a verification:
+
+- `test_new_rule_gamestate.py`: 59 tests passed.
+- `test_new_rule_boardcast.py`: 15 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Known Windows logging rollover `PermissionError` noise still appears, but all tests exit successfully.
 
 Database tasks:
 

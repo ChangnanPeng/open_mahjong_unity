@@ -131,6 +131,26 @@ def test_final_settlement_keeps_zero_point_empty_fan_result() -> None:
     assert payload["show_result_info"]["hu_fan"] == []
 
 
+def test_final_settlement_preserves_zero_discarder_index() -> None:
+    game = NewRuleGameState()
+    game.deferred_hu_settlements = [
+        {
+            "source": "discard",
+            "discarder": 0,
+            "winner": 1,
+            "tile": 41,
+            "points": 8,
+            "fan_ids": ["pinfu"],
+            "score_changes": [-48, 48, 0, 0],
+        }
+    ]
+    game.ended_by = "win"
+
+    payload = final_settlement_payload(game, 2)
+
+    assert payload["show_result_info"]["ron_discarder_index"] == 0
+
+
 def test_final_settlement_applies_score_changes_once() -> None:
     game = NewRuleGameState()
     game.deferred_hu_settlements = [
@@ -305,6 +325,7 @@ def run() -> None:
         test_deal_tile_payload_hides_drawn_tile_from_other_viewers,
         test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results,
         test_final_settlement_keeps_zero_point_empty_fan_result,
+        test_final_settlement_preserves_zero_discarder_index,
         test_final_settlement_applies_score_changes_once,
         test_final_settlement_sums_multiple_score_changes_once,
         test_final_settlement_without_winners_emits_unity_draw_result,

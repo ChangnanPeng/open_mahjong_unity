@@ -6,8 +6,22 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .init_tiles import init_new_rule_tiles
+from ..public.random_seed_manager import setup_random_seed_system
 
 logger = logging.getLogger(__name__)
+
+
+class RecordCounter:
+    def __init__(self) -> None:
+        self.fulu_times = 0
+        self.recorded_fans = []
+        self.rank_result = 0
+        self.zimo_times = 0
+        self.dianhe_times = 0
+        self.fangchong_times = 0
+        self.fangchong_score = 0
+        self.win_turn = 0
+        self.win_score = 0
 
 
 @dataclass
@@ -29,6 +43,9 @@ class NewRulePlayer:
     hu_order: int = 0
     has_draw_slot: bool = False
     discard_win_lockout_tiles: set[int] = field(default_factory=set)
+    record_counter: RecordCounter = field(default_factory=RecordCounter)
+    score_history: list[str] = field(default_factory=list)
+    round_number_history: list[int] = field(default_factory=list)
 
     @property
     def is_bot(self) -> bool:
@@ -84,6 +101,12 @@ class NewRuleGameState:
         self.room_type = room_data.get("room_type", "custom")
         self.sub_rule = room_data.get("sub_rule", "new_rule/standard")
         self.room_random_seed = room_data.get("random_seed", 0)
+        self.master_seed, self.salt, self.commitment, self.isPlayerSetRandomSeed = setup_random_seed_system(
+            self.room_random_seed if self.room_random_seed else None
+        )
+        self.open_cuohe = False
+        self.show_moqie_hint = False
+        self.hepai_limit = 0
         self.allow_spectator_config = False
         self.spectator_enabled = False
         self.realtime_spectators = []
@@ -112,6 +135,9 @@ class NewRuleGameState:
         self.dead_wall_count = 0
         self.server_action_tick = 0
         self.game_task: Optional[asyncio.Task] = None
+        self.game_record: dict = {}
+        self.player_action_tick = 0
+        self.round_record_finalized = False
         self.action_events: Dict[int, asyncio.Event] = {i: asyncio.Event() for i in range(4)}
         self.action_queues: Dict[int, asyncio.Queue] = {i: asyncio.Queue() for i in range(4)}
         self.waiting_players_list: list[int] = []
@@ -142,12 +168,16 @@ class NewRuleGameState:
         game_server connection map is available.
         """
         try:
+            self.start_game_recording()
             self.initialize_round()
+            self.start_round_recording()
             self.open_action_window(self.begin_hand_action(self.current_player_index))
             await self.flush_outbound_payloads()
             while self.game_status != "END":
                 await self.resolve_action_window()
                 await self.flush_outbound_payloads()
+            self.finalize_round_recording()
+            self.finalize_game_recording()
         except asyncio.CancelledError:
             logger.info("New rule draft game loop cancelled, room_id=%s", self.room_id)
             raise
@@ -343,6 +373,7 @@ class NewRuleGameState:
     def emit_visible_action_payloads(self, action_info: dict, *, reveal_final: bool = False) -> list[dict]:
         from .boardcast import visible_action_payload
 
+        self.record_visible_action(action_info)
         payloads = [
             {
                 **visible_action_payload(self, idx, action_info, reveal_final=reveal_final),
@@ -352,6 +383,123 @@ class NewRuleGameState:
         ]
         self.outbound_payloads.extend(payloads)
         return payloads
+
+    def start_game_recording(self) -> None:
+        from ..public.game_record_manager import init_game_record
+
+        init_game_record(self)
+        self.game_record["game_title"]["sub_rule"] = self.sub_rule
+        self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
+
+    def start_round_recording(self) -> None:
+        from ..public.game_record_manager import init_game_round
+
+        if not self.game_record:
+            self.start_game_recording()
+        init_game_round(self)
+        self.round_record_finalized = False
+
+    def _has_active_round_record(self) -> bool:
+        return bool(
+            self.game_record.get("game_round", {}).get(f"round_index_{self.round_index}")
+        ) and not self.round_record_finalized
+
+    def record_visible_action(self, action_info: dict) -> None:
+        if not self._has_active_round_record():
+            return
+
+        from ..public.game_record_manager import (
+            player_action_record_angang,
+            player_action_record_chipenggang,
+            player_action_record_cut,
+            player_action_record_deal,
+        )
+
+        action = action_info.get("action")
+        tile = action_info.get("tile")
+        if action == "cut":
+            player_action_record_cut(self, cut_tile=tile, is_moqie=bool(action_info.get("cutClass", False)))
+        elif action == "deal_tile":
+            player_action_record_deal(self, deal_tile=tile, deal_type="d")
+        elif action == "deal_gang_tile":
+            player_action_record_deal(self, deal_tile=tile, deal_type="gd")
+        elif action == "angang":
+            player_action_record_angang(self, angang_tile=tile, is_mo_gang=False)
+        elif action in {"chi_left", "chi_mid", "chi_right", "peng", "gang"}:
+            player_action_record_chipenggang(
+                self,
+                action_type=action,
+                mingpai_tile=tile,
+                action_player=action_info.get("player"),
+                combination_mask=action_info.get("combination_mask"),
+            )
+
+    def finalize_round_recording(self) -> None:
+        if not self._has_active_round_record():
+            return
+
+        from ..public.game_record_manager import (
+            player_action_record_hu,
+            player_action_record_liuju,
+            player_action_record_round_end,
+        )
+
+        self.apply_deferred_score_changes()
+        if self.deferred_hu_settlements:
+            for settlement in self.deferred_hu_settlements:
+                winner_index = settlement.get("winner", -1)
+                source = settlement.get("source")
+                hu_class = "hu_self" if source == "self_draw" else "hu"
+                hu_fan = list(settlement.get("fan_names") or settlement.get("fan_ids") or [])
+                score_changes = list(settlement.get("score_changes") or [0, 0, 0, 0])
+                player_action_record_hu(
+                    self,
+                    hu_class=hu_class,
+                    hu_score=settlement.get("points", 0),
+                    hu_fan=hu_fan,
+                    hepai_player_index=winner_index,
+                    score_changes=score_changes,
+                    hepai_tile=settlement.get("tile"),
+                    ron_discarder_index=self._settlement_payer_index(settlement),
+                )
+                self._update_record_counter_for_settlement(settlement, hu_fan)
+        else:
+            player_action_record_liuju(self)
+
+        player_action_record_round_end(self)
+        self.round_record_finalized = True
+
+    def finalize_game_recording(self) -> None:
+        if not self.game_record or "game_title" not in self.game_record:
+            return
+        from ..public.game_record_manager import end_game_record
+
+        end_game_record(self)
+
+    def _update_record_counter_for_settlement(self, settlement: dict, hu_fan: list[str]) -> None:
+        winner_index = settlement.get("winner")
+        if winner_index not in range(len(self.player_list)):
+            return
+        winner = self.player_list[winner_index]
+        points = int(settlement.get("points", 0) or 0)
+        winner.record_counter.recorded_fans.append(hu_fan)
+        winner.record_counter.win_score += points
+        if settlement.get("source") == "self_draw":
+            winner.record_counter.zimo_times += 1
+        else:
+            winner.record_counter.dianhe_times += 1
+            payer_index = self._settlement_payer_index(settlement)
+            if payer_index in range(len(self.player_list)):
+                payer = self.player_list[payer_index]
+                payer.record_counter.fangchong_times += 1
+                payer.record_counter.fangchong_score += points
+
+    @staticmethod
+    def _settlement_payer_index(settlement: dict) -> Optional[int]:
+        payer_index = settlement.get("discarder")
+        if payer_index is not None:
+            return payer_index
+        return settlement.get("kong_player")
 
     def build_game_start_payload(self, player_index: int) -> dict:
         from .boardcast import game_start_payload

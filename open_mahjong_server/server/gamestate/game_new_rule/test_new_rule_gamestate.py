@@ -976,6 +976,93 @@ def test_run_game_loop_starts_draft_loop_and_can_be_cancelled() -> None:
     asyncio.run(scenario())
 
 
+def test_recording_initializes_standard_game_record_round() -> None:
+    game = NewRuleGameState()
+    game.start_game_recording()
+    game.initialize_round()
+    game.start_round_recording()
+
+    title = game.game_record["game_title"]
+    round_record = game.game_record["game_round"]["round_index_1"]
+
+    assert title["rule"] == "new_rule"
+    assert title["sub_rule"] == "new_rule/standard"
+    assert title["hepai_limit"] == 0
+    assert round_record["current_round"] == 1
+    assert round_record["dealer_index"] == 0
+    assert len(round_record["p0_tiles"]) == 14
+    assert len(round_record["p1_tiles"]) == 13
+    assert round_record["action_ticks"] == []
+
+
+def test_recording_tracks_visible_cut_claim_and_draw_ticks() -> None:
+    game = NewRuleGameState()
+    game.start_game_recording()
+    game.initialize_round()
+    game.start_round_recording()
+
+    game.record_visible_action({"action": "cut", "player": 0, "tile": 41, "cutClass": False})
+    game.record_visible_action(
+        {
+            "action": "peng",
+            "player": 2,
+            "tile": 41,
+            "combination_mask": [1, 41, 0, 41, 0, 41],
+        }
+    )
+    game.record_visible_action({"action": "deal_tile", "player": 1, "tile": 33})
+
+    ticks = game.game_record["game_round"]["round_index_1"]["action_ticks"]
+    assert ticks == [
+        ["c", 41, "F"],
+        ["p", 41, 2, 41, 41],
+        ["d", 33],
+    ]
+
+
+def test_recording_finalizes_deferred_hu_at_round_end() -> None:
+    game = NewRuleGameState()
+    game.start_game_recording()
+    game.initialize_round()
+    game.start_round_recording()
+    game.deferred_hu_settlements = [
+        {
+            "source": "discard",
+            "discarder": 0,
+            "winner": 2,
+            "tile": 41,
+            "points": 8,
+            "fan_ids": ["duiduihu"],
+            "score_changes": [-48, 0, 48, 0],
+        }
+    ]
+
+    game.finalize_round_recording()
+    game.finalize_game_recording()
+
+    ticks = game.game_record["game_round"]["round_index_1"]["action_ticks"]
+    assert ticks[-2:] == [
+        ["hu", 2, 8, ["duiduihu"], [-48, 0, 48, 0], 41, 0],
+        ["end"],
+    ]
+    assert game.player_list[2].record_counter.dianhe_times == 1
+    assert game.player_list[2].record_counter.win_score == 8
+    assert game.player_list[0].record_counter.fangchong_times == 1
+    assert "end_time" in game.game_record["game_title"]
+
+
+def test_recording_finalizes_wall_draw_round() -> None:
+    game = NewRuleGameState()
+    game.start_game_recording()
+    game.initialize_round()
+    game.start_round_recording()
+
+    game.finalize_round_recording()
+
+    ticks = game.game_record["game_round"]["round_index_1"]["action_ticks"]
+    assert ticks[-2:] == [["liuju"], ["end"]]
+
+
 def test_open_action_window_sets_live_action_fields() -> None:
     game = NewRuleGameState()
     game.initialize_round()
@@ -1207,6 +1294,10 @@ def run() -> None:
         test_disconnect_reconnect_tags_are_local_shell_behavior,
         test_cleanup_cancels_attached_game_task,
         test_run_game_loop_starts_draft_loop_and_can_be_cancelled,
+        test_recording_initializes_standard_game_record_round,
+        test_recording_tracks_visible_cut_claim_and_draw_ticks,
+        test_recording_finalizes_deferred_hu_at_round_end,
+        test_recording_finalizes_wall_draw_round,
         test_open_action_window_sets_live_action_fields,
         test_resolve_action_window_applies_queued_cut,
         test_resolve_action_window_applies_discard_win_and_opens_next_draw,

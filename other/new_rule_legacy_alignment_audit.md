@@ -132,8 +132,35 @@ Phase 4c verification:
 - If the game is already `END`, the server sends `gamestate/new_rule/show_result` after `game_start` so Unity can restore the result panel.
 - Unity no longer has `HandleNewRuleBridgeMessage()` and no longer routes `gamestate/new_rule/reconnect`.
 - `rg -n "gamestate/new_rule/reconnect|HandleNewRuleBridgeMessage|reconnect_payload|build_reconnect_payload" open_mahjong_server open_mahjong_unity\Assets` returns no matches.
-- `test_new_rule_boardcast.py`: 14 tests passed.
-- `test_new_rule_gamestate.py`: 55 tests passed.
+- `test_new_rule_boardcast.py`: 15 tests passed.
+- `test_new_rule_gamestate.py`: 59 tests passed.
+- `test_new_rule_room_creation.py`: 38 tests passed.
+- Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
+
+## Phase 5a Verification
+
+Minimal record alignment is now in place:
+
+- `NewRuleGameState` now has standard random-seed/commitment fields required by shared record helpers.
+- New-rule players now have `record_counter`, `score_history`, and `round_number_history` fields like existing rule players.
+- The live loop initializes `game_record` with `init_game_record()` and `init_game_round()`.
+- Visible actions record existing short-code ticks for cut, deal, chi/peng/gang, and concealed kong.
+- Terminal settlement records deferred hu ticks or liuju, then `end`, then finalizes `game_title` with `end_game_record()`.
+- Player `0` is preserved as a valid `ron_discarder_index`; this fixed an `or`-based bug in both result payload and record finalization.
+
+Still pending:
+
+- Database storage function and `db_manager` registration.
+- Record/replay validation in Unity.
+- Spectator incremental record updates.
+- Clean jiagang record timing after rob-kong resolution.
+- Mid-hand winner-exit replay representation without exposing fan/score details early.
+- Multi-round lifecycle and final rank assignment.
+
+Verification:
+
+- `test_new_rule_gamestate.py`: 59 tests passed.
+- `test_new_rule_boardcast.py`: 15 tests passed.
 - `test_new_rule_room_creation.py`: 38 tests passed.
 - Windows logging rollover `PermissionError` noise still appears, but tests exit successfully.
 
@@ -165,10 +192,10 @@ Phase 3 verification:
 
 ## Deferred Areas
 
-Do not mix these into Phase 2/3/4:
+Do not mix these into Phase 2/3/4 or Phase 5a:
 
 - Adding database storage.
-- Reworking record/replay.
+- Full record/replay validation.
 - Replacing bot scheduling.
 - Fan localization.
 

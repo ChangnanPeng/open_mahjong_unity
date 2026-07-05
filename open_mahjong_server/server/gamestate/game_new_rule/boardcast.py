@@ -274,8 +274,15 @@ def _final_show_result_info(game_state: Any) -> dict:
         "suppress_hand_reveal": False,
         "defer_score_settlement": False,
         "is_qianggang": source == "rob_kong",
-        "ron_discarder_index": settlement.get("discarder") or settlement.get("kong_player"),
+        "ron_discarder_index": _settlement_payer_index(settlement),
     }
+
+
+def _settlement_payer_index(settlement: dict) -> Optional[int]:
+    payer_index = settlement.get("discarder")
+    if payer_index is not None:
+        return payer_index
+    return settlement.get("kong_player")
 
 
 def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> dict:
