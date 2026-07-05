@@ -1,7 +1,11 @@
+import asyncio
+import importlib
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from server.game_calculation.changsha.changsha_hepai_check import (
+    Changsha_Hepai_Check,
     INITIAL_HU_NAMES,
     changsha_base_from_fans,
     evaluate_changsha_initial_hu,
@@ -9,6 +13,7 @@ from server.game_calculation.changsha.changsha_hepai_check import (
 from server.gamestate.game_changsha.ChangshaGameState import ChangshaGameState
 from server.gamestate.game_changsha.action_check import (
     check_action_after_cut,
+    check_action_hand_action,
     check_hepai,
     refresh_waiting_tiles,
 )
@@ -16,6 +21,8 @@ from server.gamestate.game_changsha.boardcast import _build_do_action_payload
 from server.gamestate.game_changsha.init_tiles import init_changsha_tiles
 from server.gamestate.public.next_game_round import next_game_round_random_switchseat
 from server.room.room_validators import ChangshaRoomValidator
+
+wait_action_module = importlib.import_module("server.gamestate.game_changsha.wait_action")
 
 
 class DummyPlayer:
@@ -129,7 +136,7 @@ class ChangshaRulesTest(unittest.TestCase):
                 DummyPlayer(2, [12, 14, 26]),
                 DummyPlayer(3, [11, 12, 13]),
             ],
-            current_player_index=1,
+            current_player_index=3,
             tiles_list=[21],
             dihe_possible=True,
             calculation_service=FixedTingpai([]),
@@ -139,9 +146,29 @@ class ChangshaRulesTest(unittest.TestCase):
 
         self.assertIn("chi_left", actions[0])
         self.assertIn("pass", actions[0])
-        self.assertEqual(actions[1], [])
+        self.assertEqual(actions[3], [])
         self.assertNotIn("chi_mid", actions[2])
-        self.assertNotIn("chi_mid", actions[3])
+        self.assertNotIn("chi_mid", actions[1])
+
+    def test_discard_check_rejects_lower_player_chi(self):
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [11, 12, 25]),
+                DummyPlayer(1, [31, 32, 33]),
+                DummyPlayer(2, [12, 14, 26]),
+                DummyPlayer(3, [11, 12, 13]),
+            ],
+            current_player_index=1,
+            tiles_list=[21],
+            dihe_possible=True,
+            calculation_service=FixedTingpai([]),
+        )
+
+        actions = check_action_after_cut(state, 13)
+
+        self.assertNotIn("chi_left", actions[0])
+        self.assertNotIn("chi_mid", actions[0])
+        self.assertNotIn("chi_right", actions[0])
 
     def test_discard_open_kong_requires_ready_hand(self):
         state = SimpleNamespace(
@@ -187,6 +214,49 @@ class ChangshaRulesTest(unittest.TestCase):
 
         self.assertIn("gang", actions[1])
         self.assertIn(([12, 13, 14], ["g11"]), checker.calls)
+
+    def test_self_replacement_without_ready_only_offers_buzhang(self):
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [17, 12, 13]),
+                DummyPlayer(1),
+                DummyPlayer(2),
+                DummyPlayer(3),
+            ],
+            tiles_list=[31],
+            calculation_service=FixedTingpai([]),
+        )
+        state.player_list[0].combination_tiles = ["k17"]
+        state._is_open_kong_ready_after_declared = lambda player, tile: ChangshaGameState._is_open_kong_ready_after_declared(state, player, tile)
+
+        actions = check_action_hand_action(state, 0)
+
+        self.assertIn("buzhang", actions[0])
+        self.assertNotIn("jiagang", actions[0])
+
+    def test_self_replacement_ready_offers_buzhang_and_open_kong(self):
+        checker = ConditionalTingpai(
+            expected_hand=[12, 13],
+            expected_melds=["g17"],
+            waiting_tiles=[14],
+        )
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [17, 12, 13]),
+                DummyPlayer(1),
+                DummyPlayer(2),
+                DummyPlayer(3),
+            ],
+            tiles_list=[31],
+            calculation_service=checker,
+        )
+        state.player_list[0].combination_tiles = ["k17"]
+        state._is_open_kong_ready_after_declared = lambda player, tile: ChangshaGameState._is_open_kong_ready_after_declared(state, player, tile)
+
+        actions = check_action_hand_action(state, 0)
+
+        self.assertIn("buzhang", actions[0])
+        self.assertIn("jiagang", actions[0])
 
     def test_initial_hu_types_match_classic_changsha_patterns(self):
         hand = [11, 11, 11, 11, 13, 13, 23, 23, 33, 33, 24, 24, 24]
@@ -235,6 +305,17 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(changsha_base_from_fans(["小胡"], dealer_related=True), 2)
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=False), 12)
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=True), 14)
+
+    def test_jiangjianghu_is_detected_and_displayed(self):
+        score, fan_list = Changsha_Hepai_Check().hepai_check(
+            [12, 12, 12, 15, 15, 15, 18, 18, 18, 22, 22, 22, 25, 25],
+            [],
+            ["自摸"],
+            25,
+        )
+
+        self.assertEqual(score, 12)
+        self.assertIn("将将胡", fan_list)
 
 
     def test_changsha_room_validator_uses_four_eight_sixteen_hands(self):
@@ -405,6 +486,27 @@ class ChangshaRulesTest(unittest.TestCase):
 
         self.assertEqual(ChangshaGameState._next_sea_bottom_player(state), 2)
 
+    def test_sea_bottom_rechecks_and_clears_stale_waiting_tiles(self):
+        stale_player = DummyPlayer(1, [11, 12, 13], waiting_tiles=[14])
+        tenpai_player = DummyPlayer(2, [21, 22, 23])
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [31, 32, 33]),
+                stale_player,
+                tenpai_player,
+                DummyPlayer(3, [17, 18, 19]),
+            ],
+            current_player_index=0,
+            calculation_service=HandMappedTingpai({
+                tuple(stale_player.hand_tiles): [],
+                tuple(tenpai_player.hand_tiles): [24],
+            }),
+        )
+        state._player_by_index = lambda index: ChangshaGameState._player_by_index(state, index)
+
+        self.assertEqual(ChangshaGameState._next_sea_bottom_player(state), 2)
+        self.assertEqual(stale_player.waiting_tiles, set())
+
     def test_sea_bottom_ends_when_no_player_is_tenpai(self):
         state = SimpleNamespace(
             player_list=[
@@ -435,6 +537,85 @@ class ChangshaRulesTest(unittest.TestCase):
 
         self.assertEqual(payload["combination_mask"], mask)
         self.assertEqual(payload["combination_target"], "G11")
+
+    def test_buzhang_from_peng_uses_single_replacement_and_broadcasts_buzhang(self):
+        player = DummyPlayer(0, [17, 12, 13])
+        player.combination_tiles = ["k17"]
+        player.combination_mask = [[1, 17, 0, 17, 0, 17]]
+        state = SimpleNamespace(
+            player_list=[player, DummyPlayer(1), DummyPlayer(2), DummyPlayer(3)],
+            action_dict={},
+            jiagang_tile=None,
+        )
+        payloads = []
+        state.prepare_gang_replacement = lambda count, forced: setattr(
+            state, "replacement_args", (count, forced)
+        )
+
+        async def capture_broadcast(*args, **kwargs):
+            payloads.append(kwargs)
+
+        with patch.object(wait_action_module, "broadcast_do_action", capture_broadcast), \
+            patch.object(wait_action_module, "player_action_record_jiagang", lambda *args, **kwargs: None), \
+            patch.object(wait_action_module, "check_action_jiagang", lambda *args, **kwargs: {0: [], 1: [], 2: [], 3: []}):
+            asyncio.run(wait_action_module._execute_jiagang_replacement(state, 0, 17, "buzhang", 1, False))
+
+        self.assertEqual(player.combination_tiles, ["g17"])
+        self.assertEqual(state.replacement_args, (1, False))
+        self.assertEqual(state.game_status, "deal_card_after_gang")
+        self.assertEqual(payloads[0]["action_list"], ["buzhang"])
+        self.assertEqual(payloads[0]["combination_target"], "k17")
+
+    def test_open_jiagang_uses_configured_replacement_and_forced_discard(self):
+        player = DummyPlayer(0, [17, 12, 13])
+        player.combination_tiles = ["k17"]
+        player.combination_mask = [[1, 17, 0, 17, 0, 17]]
+        state = SimpleNamespace(
+            player_list=[player, DummyPlayer(1), DummyPlayer(2), DummyPlayer(3)],
+            action_dict={},
+            jiagang_tile=None,
+        )
+        payloads = []
+        state.prepare_gang_replacement = lambda count, forced: setattr(
+            state, "replacement_args", (count, forced)
+        )
+
+        async def capture_broadcast(*args, **kwargs):
+            payloads.append(kwargs)
+
+        with patch.object(wait_action_module, "broadcast_do_action", capture_broadcast), \
+            patch.object(wait_action_module, "player_action_record_jiagang", lambda *args, **kwargs: None), \
+            patch.object(wait_action_module, "check_action_jiagang", lambda *args, **kwargs: {0: [], 1: [], 2: [], 3: []}):
+            asyncio.run(wait_action_module._execute_jiagang_replacement(state, 0, 17, "jiagang", 2, True))
+
+        self.assertEqual(player.combination_tiles, ["g17"])
+        self.assertEqual(state.replacement_args, (2, True))
+        self.assertEqual(state.game_status, "deal_card_after_gang")
+        self.assertEqual(payloads[0]["action_list"], ["jiagang"])
+        self.assertEqual(payloads[0]["combination_target"], "k17")
+
+    def test_angang_execution_broadcasts_revealed_mask(self):
+        player = DummyPlayer(0, [11, 11, 11, 11, 12, 13])
+        state = SimpleNamespace(
+            player_list=[player, DummyPlayer(1), DummyPlayer(2), DummyPlayer(3)],
+        )
+        payloads = []
+        state.prepare_gang_replacement = lambda count, forced: setattr(
+            state, "replacement_args", (count, forced)
+        )
+
+        async def capture_broadcast(*args, **kwargs):
+            payloads.append(kwargs)
+
+        with patch.object(wait_action_module, "broadcast_do_action", capture_broadcast), \
+            patch.object(wait_action_module, "player_action_record_angang", lambda *args, **kwargs: None):
+            asyncio.run(wait_action_module._execute_angang_replacement(state, 0, 11, "angang", 2, True))
+
+        self.assertEqual(player.combination_tiles, ["G11"])
+        self.assertEqual(player.combination_mask, [[0, 11, 0, 11, 0, 11, 0, 11]])
+        self.assertEqual(state.replacement_args, (2, True))
+        self.assertEqual(payloads[0]["action_list"], ["angang"])
+        self.assertEqual(payloads[0]["combination_mask"], [0, 11, 0, 11, 0, 11, 0, 11])
 
     def test_winner_becomes_next_round_dealer(self):
         players = [

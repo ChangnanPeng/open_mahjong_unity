@@ -142,7 +142,7 @@ public partial class NormalGameStateManager {
                     }
                 }
 
-                List<string> allowActionWithoutCut = new List<string>{"angang","jiagang","hu_self","buhua"};
+                List<string> allowActionWithoutCut = new List<string>{"buzhang","angang","jiagang","hu_self","buhua"};
                 // 如果允许操作列表有除去cut的其他操作 则转到玩家操作
                 if (allowActionWithoutCut.Any(allowActionList.Contains)){
                     yield return null;

@@ -1,6 +1,6 @@
 from typing import Dict
 import logging
-from ..public.logic_common import get_index_relative_position, back_current_num
+from ..public.logic_common import get_index_relative_position, next_current_num
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def _has_tiles(hand_tiles, needed_tiles) -> bool:
 
 
 def _append_chi_actions(self, temp_action_dict: Dict[int, list], cut_tile: int) -> None:
-    chi_player_index = back_current_num(self.current_player_index)
+    chi_player_index = next_current_num(self.current_player_index)
     chi_player = self.player_list[chi_player_index]
     chi_shapes = (
         ("chi_left", (cut_tile - 2, cut_tile - 1, cut_tile), (cut_tile - 2, cut_tile - 1)),
@@ -51,6 +51,10 @@ def _is_ready_for_open_kong_claim(self, player_item, tile: int) -> bool:
         remaining.remove(tile)
     melds = list(player_item.combination_tiles) + [f"g{tile}"]
     return bool(checker(remaining, melds))
+
+def _append_unique(actions: list, action: str) -> None:
+    if action not in actions:
+        actions.append(action)
 
 # 切牌后检查 存储 吃chi 碰peng 杠gang 胡hu 操作
 def check_action_after_cut(self,cut_tile):
@@ -133,7 +137,9 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
         for carditem in player_item.hand_tiles:
             if carditem not in processed_cards and player_item.hand_tiles.count(carditem) == 4:
                 if self.tiles_list != []:
-                    temp_action_dict[player_index].append("angang")
+                    _append_unique(temp_action_dict[player_index], "buzhang")
+                    if hasattr(self, "_is_open_kong_ready_after_declared") and self._is_open_kong_ready_after_declared(player_item, carditem):
+                        _append_unique(temp_action_dict[player_index], "angang")
                     processed_cards.add(carditem)
 
         # 如果组合牌中有加杠 则可以加杠
@@ -142,7 +148,9 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
                 jiagang_index = int(combination_tile[1:])  # 提取所有数字
                 if jiagang_index in player_item.hand_tiles:
                     if self.tiles_list != []:
-                        temp_action_dict[player_index].append("jiagang")
+                        _append_unique(temp_action_dict[player_index], "buzhang")
+                        if hasattr(self, "_is_open_kong_ready_after_declared") and self._is_open_kong_ready_after_declared(player_item, jiagang_index):
+                            _append_unique(temp_action_dict[player_index], "jiagang")
 
     # 摸牌后可以切牌
     temp_action_dict[player_index].append("cut")
@@ -153,7 +161,7 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
 
     # 如果玩家陪打，只允许加杠、暗杠和切牌
     if "peida" in player_item.tag_list:
-        allowed_actions = {"jiagang", "angang", "cut"}
+        allowed_actions = {"buzhang", "jiagang", "angang", "cut"}
         temp_action_dict[player_index] = [action for action in temp_action_dict[player_index] if action in allowed_actions]
 
     return temp_action_dict

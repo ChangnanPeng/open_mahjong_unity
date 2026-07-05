@@ -41,6 +41,26 @@ def _resolve_jiagang_target(player, target_tile):
         return normal_target
     return _infer_jiagang_target(player)
 
+def _infer_angang_target(player):
+    processed = set()
+    for tile in getattr(player, "hand_tiles", []) or []:
+        normal_tile = _normalize_tile(tile)
+        if normal_tile in processed:
+            continue
+        processed.add(normal_tile)
+        if _count_normalized(player.hand_tiles, normal_tile) >= 4:
+            return normal_tile
+    return None
+
+def _resolve_buzhang_target(player, target_tile):
+    normal_target = _normalize_tile(target_tile) if target_tile is not None else None
+    if normal_target is not None:
+        if f"k{normal_target}" in player.combination_tiles and _count_normalized(player.hand_tiles, normal_target) > 0:
+            return normal_target
+        if _count_normalized(player.hand_tiles, normal_target) >= 4:
+            return normal_target
+    return _infer_jiagang_target(player) or _infer_angang_target(player)
+
 # 获取机器人AI行动（直接使用玩家索引，只检测逻辑合法性）
 async def get_ai_action(game_state, player_index: int, action_type: str, cutClass: bool, TileId: int, cutIndex: int, target_tile: int, chi_combo_index: int = 0):
     """
@@ -115,6 +135,11 @@ async def get_ai_action(game_state, player_index: int, action_type: str, cutClas
                 if target_tile is None:
                     logger.warning(f"加杠失败：玩家没有可加杠的刻子, player_index={player_index}, target_tile={target_tile}, combination_tiles={current_player.combination_tiles}, hand_tiles={current_player.hand_tiles}")
                     return  # 丢弃命令
+            elif action_type == "buzhang":
+                target_tile = _resolve_buzhang_target(current_player, target_tile)
+                if target_tile is None:
+                    logger.warning(f"补张失败：玩家没有可补张的牌, player_index={player_index}, combination_tiles={current_player.combination_tiles}, hand_tiles={current_player.hand_tiles}")
+                    return
             elif action_type == "angang":
                 # 暗杠验证：要求目标牌在自己手上有4张
                 target_tile = _normalize_tile(target_tile)
@@ -238,6 +263,11 @@ async def get_action(game_state, player_id: str, action_type: str, cutClass: boo
                 if target_tile is None:
                     logger.warning(f"加杠失败：玩家没有可加杠的刻子, player_index={player_index}, user_id={user_id}, target_tile={target_tile}, combination_tiles={current_player.combination_tiles}, hand_tiles={current_player.hand_tiles}")
                     return  # 丢弃命令
+            elif action_type == "buzhang":
+                target_tile = _resolve_buzhang_target(current_player, target_tile)
+                if target_tile is None:
+                    logger.warning(f"补张失败：玩家没有可补张的牌, player_index={player_index}, user_id={user_id}, combination_tiles={current_player.combination_tiles}, hand_tiles={current_player.hand_tiles}")
+                    return
             elif action_type == "angang":
                 # 暗杠验证：要求目标牌在自己手上有4张
                 target_tile = _normalize_tile(target_tile)

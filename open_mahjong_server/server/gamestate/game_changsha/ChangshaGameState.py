@@ -18,6 +18,7 @@ from .boardcast import (
     reconnected_send_pending_ask,
 )
 from ..public.logic_common import get_index_relative_position, next_current_index, next_current_num, back_current_num, assign_strict_final_ranks
+from ..public.hand_slot_utils import normalize_tile
 from .init_tiles import init_changsha_tiles
 from ..public.next_game_round import next_game_round_random_switchseat as next_game_round_changsha_switchseat
 from ..public.round_end_timing import hu_result_ready_wait_seconds, liuju_ready_wait_seconds
@@ -207,7 +208,7 @@ class ChangshaGameState:
         "peng": 2, "gang": 2,  # 碰杠优先级 次高优先级
         "chi_left": 1, "chi_mid": 1, "chi_right": 1,
         "ready": 0,  # 准备操作优先级 最低优先级
-        "pass": 0,"cut":0,"angang":0,"jiagang":0,"deal_tile":0,"deal_gang_tile":0 # 其他优先级 最低优先级
+        "pass": 0,"cut":0,"buzhang":0,"angang":0,"jiagang":0,"deal_tile":0,"deal_gang_tile":0 # 其他优先级 最低优先级
         }
 
         self.backward_tiles_list_type = "double"
@@ -448,10 +449,19 @@ class ChangshaGameState:
     def _next_sea_bottom_player(self) -> Optional[int]:
         for offset in range(1, 5):
             player_index = (self.current_player_index + offset) % 4
-            player = self.player_list[player_index]
+            player = self._player_by_index(player_index) if hasattr(self, "_player_by_index") else self.player_list[player_index]
             if "peida" in player.tag_list:
+                logger.info("长沙海底跳过陪打玩家 player=%s", player_index)
                 continue
-            self.refresh_waiting_tiles(player_index)
+            waiting_tiles = self.calculation_service.Changsha_tingpai_check(
+                player.hand_tiles,
+                player.combination_tiles,
+            )
+            if waiting_tiles != player.waiting_tiles:
+                player.waiting_tiles = waiting_tiles
+                logger.info("长沙海底重算听牌 player=%s waiting_tiles=%s", player_index, waiting_tiles)
+            else:
+                logger.info("长沙海底检查 player=%s waiting_tiles=%s", player_index, waiting_tiles)
             if player.waiting_tiles:
                 return player_index
         return None
@@ -474,12 +484,39 @@ class ChangshaGameState:
         self.player_passed_hu_base[player_index] = max(previous, max(hu_bases))
 
     def _is_open_kong_ready_after_declared(self, player: ChangshaPlayer, tile: int) -> bool:
+        normal_tile = normalize_tile(tile)
         remaining = list(player.hand_tiles)
-        for _ in range(4):
-            if tile not in remaining:
+        melds = list(player.combination_tiles)
+        for i, meld in enumerate(melds):
+            if not meld.startswith("k"):
+                continue
+            try:
+                meld_tile = normalize_tile(int(meld[1:]))
+            except ValueError:
+                continue
+            if meld_tile != normal_tile:
+                continue
+            removed = False
+            for hand_tile in list(remaining):
+                if normalize_tile(hand_tile) == normal_tile:
+                    remaining.remove(hand_tile)
+                    removed = True
+                    break
+            if not removed:
                 return False
-            remaining.remove(tile)
-        melds = list(player.combination_tiles) + [f"G{tile}"]
+            melds[i] = f"g{normal_tile}"
+            return bool(self.calculation_service.Changsha_tingpai_check(remaining, melds))
+
+        for _ in range(4):
+            removed = False
+            for hand_tile in list(remaining):
+                if normalize_tile(hand_tile) == normal_tile:
+                    remaining.remove(hand_tile)
+                    removed = True
+                    break
+            if not removed:
+                return False
+        melds.append(f"G{normal_tile}")
         return bool(self.calculation_service.Changsha_tingpai_check(remaining, melds))
 
     def prepare_gang_replacement(self, count: int, forced_discard: bool = False) -> None:
