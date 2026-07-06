@@ -432,6 +432,7 @@ class ChangshaGameState:
         self.pending_gang_replacement_count = 0
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
+        self.sea_bottom_player_index = None
         self.initial_hu_types = {}
         self.player_passed_hu_base = {}
 
@@ -662,6 +663,7 @@ class ChangshaGameState:
                             if sea_bottom_player is None:
                                 self.game_status = "END"
                                 break
+                            self.sea_bottom_player_index = sea_bottom_player
                             self.current_player_index = sea_bottom_player
                         else:
                             self.next_current_index() # 切换到下一个玩家
@@ -893,6 +895,9 @@ class ChangshaGameState:
             # 开启下一局的准备工作
             if self.hu_class in ["hu_self","hu_first","hu_second","hu_third"] and hepai_player_index is not None:
                 self._make_player_next_dealer(hepai_player_index)
+                next_game_round_changsha_switchseat(self, keep_dealer_seat=True)
+            elif self.hu_class == "liuju" and self.sea_bottom_player_index is not None:
+                self._make_player_next_dealer(self.sea_bottom_player_index)
                 next_game_round_changsha_switchseat(self, keep_dealer_seat=True)
             else:
                 next_game_round_changsha_switchseat(self)
