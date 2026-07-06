@@ -341,6 +341,14 @@ async def wait_action(self):
                         ) # 历时行为
 
 
+                elif action_type == "pass":
+                    forced_cut_was_pending = bool(getattr(self, "forced_cut_tiles", []) or getattr(self, "forced_cut_tile", None) is not None)
+                    if forced_cut_was_pending and hasattr(self, "force_cut_gang_replacement_tiles"):
+                        await self.force_cut_gang_replacement_tiles()
+                        return
+                    logger.error(f"摸牌后手牌阶段收到非法pass: action_data={action_data}")
+                    return
+
                 elif action_type == "buzhang":
                     buzhang_tile = action_data.get("target_tile")
                     normal_buzhang = normalize_tile(buzhang_tile)
