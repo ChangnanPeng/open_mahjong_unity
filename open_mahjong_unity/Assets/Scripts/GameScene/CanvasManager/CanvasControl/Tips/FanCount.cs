@@ -20,8 +20,22 @@ public class FanCount : MonoBehaviour {
     public void SetFanCount(string name, string valueDisplay) {
         ConfigureText(FanName, 18f);
         ConfigureText(FanValue, 16f);
+        SplitLongChangshaDetail(ref name, ref valueDisplay);
         FanName.text = name;
         FanValue.text = valueDisplay;
+    }
+
+    private static void SplitLongChangshaDetail(ref string name, ref string valueDisplay) {
+        SplitPrefixDetail(ref name, ref valueDisplay, "鸟牌:");
+        SplitPrefixDetail(ref name, ref valueDisplay, "中鸟:");
+        SplitPrefixDetail(ref name, ref valueDisplay, "扎鸟倍数:");
+    }
+
+    private static void SplitPrefixDetail(ref string name, ref string valueDisplay, string prefix) {
+        if (string.IsNullOrEmpty(name) || !name.StartsWith(prefix)) return;
+        string detail = name.Substring(prefix.Length);
+        name = prefix.TrimEnd(':');
+        valueDisplay = detail;
     }
 
     private static void ConfigureText(TMP_Text text, float minSize) {

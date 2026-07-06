@@ -211,7 +211,9 @@ async def broadcast_ask_hand_action(self):
 
 # 广播询问切牌后操作 碰 杠 胡
 async def broadcast_ask_other_action(self, remaining_time_override: Optional[int] = None, is_tactical_recheck: bool = False):
-    cut_tile = self.player_list[self.current_player_index].discard_tiles[-1]
+    cut_tile = getattr(self, "current_claim_cut_tile", None)
+    if cut_tile is None:
+        cut_tile = self.player_list[self.current_player_index].discard_tiles[-1]
     self.server_action_tick += 1
     self._ask_broadcast_time = time.time()  # 供重连补发时按经过时间重算剩余时间，与观战独立
     # 遍历列表时获取索引
@@ -351,9 +353,11 @@ def _build_do_action_payload(
     viewer_index,
     *,
     cut_tile=None,
+    cut_tiles=None,
     cut_class=None,
     cut_tile_index=None,
     deal_tile=None,
+    deal_tiles=None,
     buhua_tile=None,
     combination_mask=None,
     combination_target=None,
@@ -365,14 +369,19 @@ def _build_do_action_payload(
     viewer_mask = combination_mask
     viewer_target = combination_target
     viewer_deal_tile = sanitize_deal_tile_for_viewer(deal_tile, action_player, viewer_index)
+    viewer_deal_tiles = None
+    if deal_tiles is not None:
+        viewer_deal_tiles = list(deal_tiles) if action_player == viewer_index else [0 for _ in deal_tiles]
     return {
         "action_list": action_list,
         "action_player": action_player,
         "action_tick": self.server_action_tick,
         "cut_tile": cut_tile,
+        "cut_tiles": cut_tiles,
         "cut_class": cut_class,
         "cut_tile_index": cut_tile_index,
         "deal_tile": viewer_deal_tile,
+        "deal_tiles": viewer_deal_tiles,
         "buhua_tile": buhua_tile,
         "combination_mask": viewer_mask,
         "combination_target": viewer_target,
@@ -410,9 +419,11 @@ async def broadcast_do_action(
     action_list: List[str],
     action_player: int,
     cut_tile: int = None,
+    cut_tiles: List[int] = None,
     cut_class: bool = None,
     cut_tile_index: int = None,
     deal_tile: int = None,
+    deal_tiles: List[int] = None,
     buhua_tile: int = None,
     combination_target: str = None,
     combination_mask: List[int] = None,
@@ -471,9 +482,11 @@ async def broadcast_do_action(
                 action_player,
                 i,
                 cut_tile=cut_tile,
+                cut_tiles=cut_tiles,
                 cut_class=cut_class,
                 cut_tile_index=cut_tile_index,
                 deal_tile=deal_tile,
+                deal_tiles=deal_tiles,
                 buhua_tile=buhua_tile,
                 combination_mask=combination_mask,
                 combination_target=combination_target,

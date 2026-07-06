@@ -4,6 +4,13 @@ from ..public.logic_common import get_index_relative_position, next_current_num
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_ACTION_PRIORITY = {
+    "hu_self": 6, "hu_first": 5, "hu_second": 4, "hu_third": 3,
+    "peng": 2, "gang": 2,
+    "chi_left": 1, "chi_mid": 1, "chi_right": 1,
+    "pass": 0,
+}
+
 # 检查操作 返回 action_dict
 
 def _is_number_tile(tile: int) -> bool:
@@ -188,28 +195,56 @@ def check_only_cut(self, player_index):
 
     return temp_action_dict
 
+def _max_claim_priority(self, action_dict):
+    action_priority = getattr(self, "action_priority", DEFAULT_ACTION_PRIORITY)
+    max_priority = 0
+    for actions in action_dict.values():
+        for action in actions:
+            if action == "pass":
+                continue
+            max_priority = max(max_priority, action_priority.get(action, 0))
+    return max_priority
+
+
+def _filter_action_dict_to_priority(self, action_dict, priority):
+    action_priority = getattr(self, "action_priority", DEFAULT_ACTION_PRIORITY)
+    filtered: Dict[int, list] = {0: [], 1: [], 2: [], 3: []}
+    for player_index, actions in action_dict.items():
+        kept = [
+            action for action in actions
+            if action != "pass" and action_priority.get(action, 0) == priority
+        ]
+        if kept:
+            kept.append("pass")
+        filtered[player_index] = kept
+    filtered[self.current_player_index] = []
+    return filtered
+
+
 def check_action_after_gang_forced_cut(self, cut_tile):
-    temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
+    return check_action_after_batch_gang_forced_cut(self, [cut_tile])
 
-    for item in self.player_list:
-        if item.player_index != self.current_player_index:
-            refresh_waiting_tiles(self, item.player_index)
-        if cut_tile in item.waiting_tiles and item.player_index != self.current_player_index:
-            check_hepai(self,temp_action_dict,cut_tile,item.player_index,"dianhe")
 
-    for i in temp_action_dict:
-        if temp_action_dict[i] != []:
-            temp_action_dict[i].append("pass")
+def check_action_after_batch_gang_forced_cut(self, cut_tiles):
+    original_result_dict = dict(getattr(self, "result_dict", {}))
+    best_tile = None
+    best_priority = 0
 
-    temp_action_dict[self.current_player_index] = []
+    for cut_tile in cut_tiles:
+        self.result_dict = dict(original_result_dict)
+        candidate_actions = check_action_after_cut(self, cut_tile)
+        candidate_priority = _max_claim_priority(self, candidate_actions)
+        if candidate_priority > best_priority:
+            best_priority = candidate_priority
+            best_tile = cut_tile
 
-    for item in self.player_list:
-        if "peida" in item.tag_list:
-            temp_action_dict[item.player_index] = []
+    self.result_dict = dict(original_result_dict)
+    self.current_claim_cut_tile = best_tile
+    if best_tile is None or best_priority <= 0:
+        return {0: [], 1: [], 2: [], 3: []}
 
-    self.dihe_possible = False
-
-    return temp_action_dict
+    final_actions = check_action_after_cut(self, best_tile)
+    return _filter_action_dict_to_priority(self, final_actions, best_priority)
 
 # 检查等待牌操作 用来在玩家手牌发生改变时检测监听的卡牌
 def refresh_waiting_tiles(self,player_index,is_first_action=False):

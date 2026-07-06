@@ -2,7 +2,7 @@
 import asyncio
 import time
 import logging
-from .action_check import check_action_after_cut, check_action_after_gang_forced_cut, check_action_jiagang, refresh_waiting_tiles
+from .action_check import check_action_after_cut, check_action_after_batch_gang_forced_cut, check_action_jiagang, refresh_waiting_tiles
 from .boardcast import broadcast_do_action, broadcast_ready_status, broadcast_ask_other_action
 from ..public.logic_common import get_index_relative_position, next_current_num
 from ..public.game_record_manager import (
@@ -43,6 +43,35 @@ def _find_jiagang_combination_index(player, normal_tile: int) -> int:
 
 def _has_jiagang_target(player, normal_tile: int) -> bool:
     return _find_jiagang_combination_index(player, normal_tile) >= 0
+
+def _consume_forced_gang_cut_tiles(self, player_index: int):
+    forced_tiles = list(getattr(self, "forced_cut_tiles", []) or [])
+    forced_tile = getattr(self, "forced_cut_tile", None)
+    if not forced_tiles and forced_tile is not None:
+        forced_tiles = [forced_tile]
+    if not forced_tiles:
+        return []
+
+    hand = self.player_list[player_index].hand_tiles
+    for tile in forced_tiles:
+        if tile in hand:
+            hand.remove(tile)
+        else:
+            logger.warning(
+                f"Missing forced gang cut tile in hand: player={player_index}, tile={tile}, hand={hand}"
+            )
+    clear_draw_slot(self.player_list[player_index])
+    self.forced_cut_tile = None
+    self.forced_cut_tiles = []
+    return forced_tiles
+
+def _remove_claimed_discard(discard_tiles, tile_id):
+    for i in range(len(discard_tiles) - 1, -1, -1):
+        if discard_tiles[i] == tile_id:
+            discard_tiles.pop(i)
+            return
+    if discard_tiles:
+        discard_tiles.pop(-1)
 
 async def _execute_angang_replacement(self, player_index: int, target_tile: int, broadcast_action: str, replacement_count: int, forced_discard: bool) -> None:
     normal_angang = normalize_tile(target_tile)
@@ -270,32 +299,36 @@ async def wait_action(self):
         case "waiting_hand_action":
             if action_data:
                 if action_type == "cut": # 切牌
-                    forced_tile = getattr(self, "forced_cut_tile", None)
-                    if forced_tile is not None and action_data.get("TileId") != forced_tile:
-                        logger.warning(
-                            f"开杠补张必须打出指定杠张 player={player_index}, forced={forced_tile}, action_data={action_data}"
-                        )
-                        return
-                    cut_result = await apply_player_cut(self, player_index, action_data)
-                    if cut_result is None:
-                        return
-                    tile_id, is_moqie, cut_tile_index = cut_result
-                    forced_cut_was_pending = forced_tile is not None
-                    self.forced_cut_tile = None
-                    self.player_list[player_index].discard_tiles.append(tile_id)
-                    player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
-                    # 广播切牌操作
+                    forced_cut_was_pending = bool(getattr(self, "forced_cut_tiles", []) or getattr(self, "forced_cut_tile", None) is not None)
+                    if forced_cut_was_pending:
+                        cut_tiles = _consume_forced_gang_cut_tiles(self, player_index)
+                        if not cut_tiles:
+                            return
+                        tile_id = cut_tiles[-1]
+                        is_moqie = True
+                        cut_tile_index = None
+                    else:
+                        cut_result = await apply_player_cut(self, player_index, action_data)
+                        if cut_result is None:
+                            return
+                        tile_id, is_moqie, cut_tile_index = cut_result
+                        cut_tiles = [tile_id]
+                    for cut_item in cut_tiles:
+                        self.player_list[player_index].discard_tiles.append(cut_item)
+                        player_action_record_cut(self,cut_tile = cut_item,is_moqie = is_moqie)
+                    # broadcast cut
                     if self.current_player_index == 0:
                         self.xunmu += 1
-                    refresh_waiting_tiles(self,self.current_player_index) # 更新听牌
+                    refresh_waiting_tiles(self,self.current_player_index) # refresh waiting tiles
                     pre_action_dict = (
-                        check_action_after_gang_forced_cut(self, tile_id)
+                        check_action_after_batch_gang_forced_cut(self, cut_tiles)
                         if forced_cut_was_pending
                         else check_action_after_cut(self,tile_id)
                     )
                     self.last_draw_was_gang = False
                     begin_claim_protection_interval(self, pre_action_dict, self.current_player_index)
-                    await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = tile_id,cut_class = is_moqie,cut_tile_index = cut_tile_index) # 广播切牌动画 切牌玩家索引 手模切 切牌id 操作帧
+                    broadcast_cut_tile = getattr(self, "current_claim_cut_tile", None) or tile_id
+                    await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = broadcast_cut_tile,cut_tiles = cut_tiles if len(cut_tiles) > 1 else None,cut_class = is_moqie,cut_tile_index = cut_tile_index) # broadcast cut action
                     self.action_dict = pre_action_dict
 
                     if any(self.action_dict[i] for i in self.action_dict):
@@ -416,26 +449,34 @@ async def wait_action(self):
                 hand = player.hand_tiles
                 draw_slot = has_draw_slot(player)
                 is_moqie = draw_slot
-                forced_tile = getattr(self, "forced_cut_tile", None)
-                tile_id = forced_tile if forced_tile is not None else (hand[-1] if draw_slot else pick_timeout_discard_tile(hand))
-                remove_cut_tile(hand, tile_id, is_moqie, draw_slot=draw_slot)
-                clear_draw_slot(player)
-                forced_cut_was_pending = forced_tile is not None
-                self.forced_cut_tile = None
-                self.player_list[self.current_player_index].discard_tiles.append(tile_id)
-                player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
-                # 广播摸切操作
+                forced_cut_was_pending = bool(getattr(self, "forced_cut_tiles", []) or getattr(self, "forced_cut_tile", None) is not None)
+                if forced_cut_was_pending:
+                    cut_tiles = _consume_forced_gang_cut_tiles(self, self.current_player_index)
+                    if not cut_tiles:
+                        return
+                    tile_id = cut_tiles[-1]
+                    is_moqie = True
+                else:
+                    tile_id = hand[-1] if draw_slot else pick_timeout_discard_tile(hand)
+                    remove_cut_tile(hand, tile_id, is_moqie, draw_slot=draw_slot)
+                    clear_draw_slot(player)
+                    cut_tiles = [tile_id]
+                for cut_item in cut_tiles:
+                    self.player_list[self.current_player_index].discard_tiles.append(cut_item)
+                    player_action_record_cut(self,cut_tile = cut_item,is_moqie = is_moqie)
+                # broadcast cut
                 if self.current_player_index == 0:
                     self.xunmu += 1
-                refresh_waiting_tiles(self,self.current_player_index) # 更新听牌
+                refresh_waiting_tiles(self,self.current_player_index) # refresh waiting tiles
                 pre_action_dict = (
-                    check_action_after_gang_forced_cut(self, tile_id)
+                    check_action_after_batch_gang_forced_cut(self, cut_tiles)
                     if forced_cut_was_pending
                     else check_action_after_cut(self,tile_id)
                 )
                 self.last_draw_was_gang = False
                 begin_claim_protection_interval(self, pre_action_dict, self.current_player_index)
-                await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = tile_id,cut_class = is_moqie)
+                broadcast_cut_tile = getattr(self, "current_claim_cut_tile", None) or tile_id
+                await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = broadcast_cut_tile,cut_tiles = cut_tiles if len(cut_tiles) > 1 else None,cut_class = is_moqie)
                 self.action_dict = pre_action_dict
                 if any(self.action_dict[i] for i in self.action_dict):
                     self.game_status = "waiting_action_after_cut" # 转移行为
@@ -450,7 +491,9 @@ async def wait_action(self):
         # 切牌后手牌case 包含 碰 杠 胡 其中碰杠是转移行为 胡是终结行为
         # 由于切后询问行为时的current_player_index还未进行历时操作 当前玩家弃牌堆的最后一张牌就是待碰杠和的牌
         case "waiting_action_after_cut":
-            tile_id = self.player_list[self.current_player_index].discard_tiles[-1] # 获取操作牌
+            tile_id = getattr(self, "current_claim_cut_tile", None)
+            if tile_id is None:
+                tile_id = self.player_list[self.current_player_index].discard_tiles[-1] # 获取操作牌
             combination_mask = []
             combination_target = ""
             if action_data:
@@ -580,7 +623,7 @@ async def wait_action(self):
                 if action_type in ("chi_left", "chi_mid", "chi_right", "peng", "gang"):
                     if getattr(self, "pending_gang_forced_discard", False):
                         self.prepare_gang_replacement(0, False)
-                    self.player_list[self.current_player_index].discard_tiles.pop(-1) # 删除弃牌堆的最后一张
+                    _remove_claimed_discard(self.player_list[self.current_player_index].discard_tiles, tile_id) # 删除弃牌堆中被鸣走的牌
                     self.player_list[self.current_player_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
                     self.player_list[player_index].combination_mask.append(combination_mask) # 添加组合掩码
                     clear_draw_slot(self.player_list[player_index])
@@ -600,6 +643,7 @@ async def wait_action(self):
                         self.prepare_gang_replacement(getattr(self, "open_kong_replacement_count", 2), True)
                         self.game_status = "deal_card_after_gang" # 转移行为
                     else:
+                        self.current_claim_cut_tile = None
                         self.game_status = "onlycut_after_action" # 转移行为
                     return
 
@@ -607,6 +651,7 @@ async def wait_action(self):
                     flush_unexecuted_claim_applications(self, tile_id)
                     await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
                     self.game_status = self.next_status_after_claim_window() if hasattr(self, "next_status_after_claim_window") else "deal_card"
+                    self.current_claim_cut_tile = None
                     return
 
             else:
@@ -614,6 +659,7 @@ async def wait_action(self):
                 flush_unexecuted_claim_applications(self, tile_id)
                 await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
                 self.game_status = self.next_status_after_claim_window() if hasattr(self, "next_status_after_claim_window") else "deal_card"
+                self.current_claim_cut_tile = None
                 return
 
         # 在转移行为以后只能进行切牌操作

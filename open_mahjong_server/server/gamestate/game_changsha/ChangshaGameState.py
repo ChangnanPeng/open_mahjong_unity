@@ -3,7 +3,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 import time
 import logging
-from .action_check import check_action_after_cut,check_action_after_gang_forced_cut,check_action_jiagang,check_action_hand_action,check_only_cut,refresh_waiting_tiles
+from .action_check import check_action_after_cut,check_action_after_gang_forced_cut,check_action_after_batch_gang_forced_cut,check_action_jiagang,check_action_hand_action,check_hepai,check_only_cut,refresh_waiting_tiles
 from .wait_action import wait_action
 from .boardcast import (
     broadcast_game_start,
@@ -192,6 +192,8 @@ class ChangshaGameState:
         self.pending_gang_replacement_count = 0
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
+        self.forced_cut_tiles = []
+        self.current_claim_cut_tile = None
         self.initial_hu_types = {}
         self.player_passed_hu_base = {}
         self.temp_fan = [] ###### 临时番数 不启用 暂时通过不同的和牌检测和给和牌检测传递is_first or if tiles_list == [] 来计算额外加减的役
@@ -527,14 +529,20 @@ class ChangshaGameState:
         self.pending_gang_replacement_count = max(0, int(count))
         self.pending_gang_forced_discard = forced_discard and self.pending_gang_replacement_count > 0
         self.forced_cut_tile = None
+        self.forced_cut_tiles = []
+        self.current_claim_cut_tile = None
 
     def next_status_after_claim_window(self) -> str:
         if self.pending_gang_forced_discard and self.pending_gang_replacement_count > 0:
             self.forced_cut_tile = None
+            self.forced_cut_tiles = []
+            self.current_claim_cut_tile = None
             return "deal_card_after_gang"
         self.pending_gang_replacement_count = 0
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
+        self.forced_cut_tiles = []
+        self.current_claim_cut_tile = None
         return "deal_card"
 
     def _score_changsha_win(self, winner: int, fan_list: List[str], is_zimo: bool, discarder: int = None):
@@ -693,20 +701,42 @@ class ChangshaGameState:
                             self.prepare_gang_replacement(1, False)
                         self.dihe_possible = False # 庄家暗杠/加杠/明杠后，地和不再可能
                         self.last_draw_was_gang = True
-                        self.refresh_waiting_tiles(self.current_player_index) # 摸牌前更新听牌
-                        deal_tile = self.player_list[self.current_player_index].get_gang_tile(self.tiles_list, self) # 倒序摸牌
-                        self.pending_gang_replacement_count = max(0, self.pending_gang_replacement_count - 1)
-                        # 牌谱记录摸牌
-                        player_action_record_deal(self,deal_tile = deal_tile,deal_type = "gd")
-                        # 广播摸牌操作
+                        self.refresh_waiting_tiles(self.current_player_index)
+                        player = self.player_list[self.current_player_index]
+                        pre_draw_waiting_tiles = set(player.waiting_tiles)
+                        pre_draw_hand_tiles = list(player.hand_tiles)
+                        deal_tiles = []
+                        draw_count = max(1, self.pending_gang_replacement_count)
+                        for _ in range(draw_count):
+                            if self.tiles_list == []:
+                                break
+                            deal_item = self.player_list[self.current_player_index].get_gang_tile(self.tiles_list, self)
+                            deal_tiles.append(deal_item)
+                            player_action_record_deal(self,deal_tile = deal_item,deal_type = "gd")
+                        if not deal_tiles:
+                            self.game_status = "END"
+                            break
+                        deal_tile = deal_tiles[-1]
+                        self.pending_gang_replacement_count = 0
                         await self.broadcast_do_action(
                             action_list = ["deal_gang_tile"],
                             action_player = self.current_player_index,
                             deal_tile = deal_tile,
+                            deal_tiles = deal_tiles,
                         )
-                        self.action_dict = check_action_hand_action(self,self.current_player_index,is_get_gang_tile=True) # 允许岭上
+                        self.action_dict = check_action_hand_action(self,self.current_player_index,is_get_gang_tile=True)
+                        self.action_dict[self.current_player_index] = [
+                            action for action in self.action_dict.get(self.current_player_index, []) if action != "hu_self"
+                        ]
+                        full_hand_tiles = player.hand_tiles
+                        for candidate_deal_tile in deal_tiles:
+                            if candidate_deal_tile in pre_draw_waiting_tiles and "hu_self" not in self.action_dict.get(self.current_player_index, []):
+                                player.hand_tiles = pre_draw_hand_tiles + [candidate_deal_tile]
+                                check_hepai(self,self.action_dict,candidate_deal_tile,self.current_player_index,"handgot",False,True)
+                        player.hand_tiles = full_hand_tiles
                         if self.pending_gang_forced_discard:
                             self.forced_cut_tile = deal_tile
+                            self.forced_cut_tiles = list(deal_tiles)
                             actions = self.action_dict.get(self.current_player_index, [])
                             allowed_after_open_kong = {"hu_self", "buzhang", "angang", "jiagang", "cut"}
                             self.action_dict[self.current_player_index] = [
@@ -976,3 +1006,4 @@ ChangshaGameState.reconnected_send_pending_ask = reconnected_send_pending_ask
 ChangshaGameState.next_current_index = next_current_index
 ChangshaGameState.refresh_waiting_tiles = refresh_waiting_tiles
 ChangshaGameState.check_action_after_gang_forced_cut = check_action_after_gang_forced_cut
+ChangshaGameState.check_action_after_batch_gang_forced_cut = check_action_after_batch_gang_forced_cut
