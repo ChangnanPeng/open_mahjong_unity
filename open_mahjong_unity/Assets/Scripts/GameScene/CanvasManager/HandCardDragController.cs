@@ -189,6 +189,11 @@ public class HandCardDragController : MonoBehaviour {
         if (gameCanvas.IsHandRecordPlayback()) {
             return false;
         }
+        if (NormalGameStateManager.Instance != null
+            && NormalGameStateManager.Instance.IsSelfActionRequired
+            && !NormalGameStateManager.Instance.allowActionList.Contains("cut")) {
+            return false;
+        }
         return !gameCanvas.IsChangeHandCardProcessing;
     }
 

@@ -109,9 +109,40 @@ public partial class GameCanvas{
             }
         }
 
+        else if (ChangeType == "GetGangReplacementCardNoLayout"){
+            GameObject cardObj = Instantiate(tileCardPrefab, handCardsContainer);
+            TileCard tileCard = cardObj.GetComponent<TileCard>();
+            tileCard.SetTile(tileId, true);
+            int handCardCount = handCardsContainer.childCount - 1;
+            tileCard.handSortIndex = handCardCount;
+            cardObj.transform.SetSiblingIndex(handCardCount);
+            RectTransform cardRect = cardObj.GetComponent<RectTransform>();
+            float rightEdge = 0f;
+            bool hasCard = false;
+            for (int i = 0; i < handCardsContainer.childCount; i++){
+                Transform child = handCardsContainer.GetChild(i);
+                if (child == cardObj.transform) continue;
+                RectTransform childRect = child.GetComponent<RectTransform>();
+                if (childRect == null) continue;
+                rightEdge = hasCard ? Mathf.Max(rightEdge, childRect.anchoredPosition.x) : childRect.anchoredPosition.x;
+                hasCard = true;
+            }
+            cardRect.anchoredPosition = new Vector2(rightEdge + tileCardWidth, 0f);
+            GameRecordManager.Instance?.ReapplySelf2DHandChongOverlay();
+        }
+
         // 摸切 删除摸牌区手牌
         else if (ChangeType == "RemoveGetCard"){
             TryRemoveCutHandCard(tileId, isMoqie: true, cutTileIndex: null);
+        }
+
+        else if (ChangeType == "RemoveGetCards"){
+            if (TilesList == null){
+                yield break;
+            }
+            foreach (int tileToRemove in TilesList){
+                TryRemoveCutHandCard(tileToRemove, isMoqie: true, cutTileIndex: null);
+            }
         }
 
         // 四川血战自摸和牌：仅移除和牌张，不触发全手重排（避免 2D 手牌区闪烁）
@@ -201,7 +232,7 @@ public partial class GameCanvas{
 
         // 初始化卡牌、摸切、手切、单次补花、吃碰杠以后 进行卡牌排序 
         else if (ChangeType == "RemoveHandCard" || ChangeType == "RemoveHandCardRecord" || ChangeType == "RemoveCombinationCard" || ChangeType == "RemoveBuhuaCard" ||
-         ChangeType == "RemoveJiagangCard" || ChangeType == "InitHandCards" || ChangeType == "InitHandCardsFromRecord" || ChangeType == "ReSetHandCards" || ChangeType == "RemoveGetCard"){
+         ChangeType == "RemoveJiagangCard" || ChangeType == "InitHandCards" || ChangeType == "InitHandCardsFromRecord" || ChangeType == "ReSetHandCards" || ChangeType == "RemoveGetCard" || ChangeType == "RemoveGetCards"){
             isArranged = true;
             // 等待排序完成
             yield return StartCoroutine(RearrangeHandCardsWithAnimation());

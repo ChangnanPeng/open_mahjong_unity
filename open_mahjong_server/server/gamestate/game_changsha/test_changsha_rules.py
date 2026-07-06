@@ -25,6 +25,7 @@ from server.gamestate.public.next_game_round import next_game_round_random_switc
 from server.room.room_validators import ChangshaRoomValidator
 
 wait_action_module = importlib.import_module("server.gamestate.game_changsha.wait_action")
+changsha_state_module = importlib.import_module("server.gamestate.game_changsha.ChangshaGameState")
 
 
 class DummyPlayer:
@@ -746,6 +747,43 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(state.replacement_args, (2, True))
         self.assertEqual(payloads[0]["action_list"], ["angang"])
         self.assertEqual(payloads[0]["combination_mask"], [0, 11, 0, 11, 0, 11, 0, 11])
+
+    def test_open_kong_replacements_are_forced_cut_as_batch(self):
+        player = DummyPlayer(0, [11, 12, 41, 42])
+        player.discard_tiles = []
+        state = SimpleNamespace(
+            player_list=[player, DummyPlayer(1), DummyPlayer(2), DummyPlayer(3)],
+            current_player_index=0,
+            forced_cut_tile=42,
+            forced_cut_tiles=[41, 42],
+            pending_gang_forced_discard=True,
+            pending_gang_replacement_count=0,
+            current_claim_cut_tile=None,
+            action_dict={0: [], 1: [], 2: [], 3: []},
+            xunmu=0,
+            last_draw_was_gang=True,
+            calculation_service=FixedTingpai([]),
+        )
+        state.next_status_after_claim_window = lambda: ChangshaGameState.next_status_after_claim_window(state)
+        payloads = []
+
+        async def capture_broadcast(**kwargs):
+            payloads.append(kwargs)
+
+        state.broadcast_do_action = capture_broadcast
+
+        with patch.object(changsha_state_module, "player_action_record_cut", lambda *args, **kwargs: None), \
+            patch.object(changsha_state_module, "check_action_after_batch_gang_forced_cut", lambda *args, **kwargs: {0: [], 1: [], 2: [], 3: []}), \
+            patch.object(changsha_state_module, "begin_claim_protection_interval", lambda *args, **kwargs: None):
+            asyncio.run(ChangshaGameState.force_cut_gang_replacement_tiles(state))
+
+        self.assertEqual(player.hand_tiles, [11, 12])
+        self.assertEqual(player.discard_tiles, [41, 42])
+        self.assertEqual(state.forced_cut_tiles, [])
+        self.assertEqual(state.game_status, "deal_card")
+        self.assertEqual(payloads[0]["action_list"], ["cut"])
+        self.assertEqual(payloads[0]["cut_tile"], 42)
+        self.assertEqual(payloads[0]["cut_tiles"], [41, 42])
 
     def test_winner_becomes_next_round_dealer(self):
         players = [

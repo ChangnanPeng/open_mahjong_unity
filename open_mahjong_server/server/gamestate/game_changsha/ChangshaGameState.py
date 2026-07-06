@@ -18,7 +18,8 @@ from .boardcast import (
     reconnected_send_pending_ask,
 )
 from ..public.logic_common import get_index_relative_position, next_current_index, next_current_num, back_current_num, assign_strict_final_ranks
-from ..public.hand_slot_utils import normalize_tile
+from ..public.hand_slot_utils import clear_draw_slot, normalize_tile
+from ..public.claim_protection import begin_claim_protection_interval
 from .init_tiles import init_changsha_tiles
 from ..public.next_game_round import next_game_round_random_switchseat as next_game_round_changsha_switchseat
 from ..public.round_end_timing import hu_result_ready_wait_seconds, liuju_ready_wait_seconds
@@ -545,6 +546,55 @@ class ChangshaGameState:
         self.current_claim_cut_tile = None
         return "deal_card"
 
+    async def force_cut_gang_replacement_tiles(self) -> None:
+        forced_tiles = list(getattr(self, "forced_cut_tiles", []) or [])
+        forced_tile = getattr(self, "forced_cut_tile", None)
+        if not forced_tiles and forced_tile is not None:
+            forced_tiles = [forced_tile]
+        if not forced_tiles:
+            self.pending_gang_forced_discard = False
+            self.game_status = "deal_card"
+            return
+
+        player = self.player_list[self.current_player_index]
+        for tile in forced_tiles:
+            if tile in player.hand_tiles:
+                player.hand_tiles.remove(tile)
+            else:
+                logger.warning(
+                    "Missing forced gang replacement tile in hand: player=%s tile=%s hand=%s",
+                    self.current_player_index,
+                    tile,
+                    player.hand_tiles,
+                )
+        clear_draw_slot(player)
+        self.forced_cut_tile = None
+        self.forced_cut_tiles = []
+
+        for tile in forced_tiles:
+            player.discard_tiles.append(tile)
+            player_action_record_cut(self, cut_tile=tile, is_moqie=True)
+
+        if self.current_player_index == 0:
+            self.xunmu += 1
+        refresh_waiting_tiles(self, self.current_player_index)
+        pre_action_dict = check_action_after_batch_gang_forced_cut(self, forced_tiles)
+        self.last_draw_was_gang = False
+        begin_claim_protection_interval(self, pre_action_dict, self.current_player_index)
+        broadcast_cut_tile = getattr(self, "current_claim_cut_tile", None) or forced_tiles[-1]
+        await self.broadcast_do_action(
+            action_list=["cut"],
+            action_player=self.current_player_index,
+            cut_tile=broadcast_cut_tile,
+            cut_tiles=forced_tiles if len(forced_tiles) > 1 else None,
+            cut_class=True,
+        )
+        self.action_dict = pre_action_dict
+        if any(self.action_dict[i] for i in self.action_dict):
+            self.game_status = "waiting_action_after_cut"
+        else:
+            self.game_status = self.next_status_after_claim_window()
+
     def _score_changsha_win(self, winner: int, fan_list: List[str], is_zimo: bool, discarder: int = None):
         birds = self._draw_changsha_birds(self.bird_count)
         if not birds and self.bird_count > 0 and self._is_sea_bottom_win(fan_list):
@@ -738,12 +788,16 @@ class ChangshaGameState:
                             self.forced_cut_tile = deal_tile
                             self.forced_cut_tiles = list(deal_tiles)
                             actions = self.action_dict.get(self.current_player_index, [])
-                            allowed_after_open_kong = {"hu_self", "buzhang", "angang", "jiagang", "cut"}
+                            allowed_after_open_kong = {"hu_self", "buzhang", "angang", "jiagang"}
                             self.action_dict[self.current_player_index] = [
                                 action for action in actions if action in allowed_after_open_kong
                             ]
-                            if "cut" not in self.action_dict[self.current_player_index]:
-                                self.action_dict[self.current_player_index].append("cut")
+                            if self.action_dict[self.current_player_index]:
+                                self.action_dict[self.current_player_index].append("pass")
+                                self.game_status = "waiting_hand_action"
+                            else:
+                                await self.force_cut_gang_replacement_tiles()
+                            continue
                         self.game_status = "waiting_hand_action" # 切换到摸牌后状态
 
                     # 等待手牌操作：

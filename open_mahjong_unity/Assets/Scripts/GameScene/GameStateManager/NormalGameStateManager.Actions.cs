@@ -96,7 +96,10 @@ public partial class NormalGameStateManager {
                         for (int i = 0; i < resolvedDealTiles.Length; i++) {
                             int dealtTile = resolvedDealTiles[i];
                             selfHandTiles.Add(dealtTile);
-                            GameCanvas.Instance.ChangeHandCards(i == 0 ? "GetCard" : "GetCardNoAnimation", dealtTile, null, null);
+                            string handChangeType = i == 0
+                                ? "GetCard"
+                                : (action == "deal_gang_tile" ? "GetGangReplacementCardNoLayout" : "GetCardNoAnimation");
+                            GameCanvas.Instance.ChangeHandCards(handChangeType, dealtTile, null, null);
                             Game3DManager.Instance.Change3DTile("GetCard", dealtTile, 0, GetCardPlayer, false, null);
                         }
                     }
@@ -128,6 +131,15 @@ public partial class NormalGameStateManager {
                         player_to_info[GetCardPlayer].discard_riichi_flags.Add(isRiichiHorizontalCut);
                     }
                     if (GetCardPlayer == "self"){
+                        if (cut_class.Value && resolvedCutTiles.Length > 1){
+                            for (int i = 0; i < resolvedCutTiles.Length; i++) {
+                                int discardedTile = resolvedCutTiles[i];
+                                selfHandTiles.Remove(discardedTile);
+                                Game3DManager.Instance.Change3DTile("Discard",discardedTile,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent && i == 0);
+                            }
+                            GameCanvas.Instance.ChangeHandCards("RemoveGetCards", 0, resolvedCutTiles, null);
+                            break;
+                        }
                         for (int i = 0; i < resolvedCutTiles.Length; i++) {
                             int discardedTile = resolvedCutTiles[i];
                             selfHandTiles.Remove(discardedTile);
