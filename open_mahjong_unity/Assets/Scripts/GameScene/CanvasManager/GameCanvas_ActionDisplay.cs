@@ -170,6 +170,7 @@ public partial class GameCanvas{
             if (rule == "riichi" || (!string.IsNullOrEmpty(subRule) && subRule.StartsWith("riichi/"))) return "荣";
             return "和";
         } else if (actionType == "buhua"){
+            if (roomRule == "changsha") return string.Empty;
             return "补花";
         } else if (actionType == "riichi"){
             return "立直";
