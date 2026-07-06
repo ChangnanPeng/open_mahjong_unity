@@ -2,7 +2,7 @@
 import asyncio
 import time
 import logging
-from .action_check import check_action_after_cut, check_action_jiagang, refresh_waiting_tiles
+from .action_check import check_action_after_cut, check_action_after_gang_forced_cut, check_action_jiagang, refresh_waiting_tiles
 from .boardcast import broadcast_do_action, broadcast_ready_status, broadcast_ask_other_action
 from ..public.logic_common import get_index_relative_position, next_current_num
 from ..public.game_record_manager import (
@@ -53,6 +53,8 @@ async def _execute_angang_replacement(self, player_index: int, target_tile: int,
     removed = remove_angang_tiles(hand, normal_angang, draw_slot=draw_slot)
     clear_draw_slot(player)
     player.combination_tiles.append(f"G{normal_angang}")
+    if forced_discard:
+        player.open_kong_locked = True
     add_combination_mask = [0, removed[0], 0, removed[1], 0, removed[2], 0, removed[3]]
     player.combination_mask.append(add_combination_mask)
     player_action_record_angang(
@@ -96,6 +98,8 @@ async def _execute_jiagang_replacement(self, player_index: int, target_tile: int
             break
 
     player.combination_tiles[combination_index] = f"g{normal_jia}"
+    if forced_discard:
+        player.open_kong_locked = True
     player_action_record_jiagang(self, jiagang_tile=normal_jia, is_mo_gang=is_mo_gang)
 
     await broadcast_do_action(
@@ -284,7 +288,11 @@ async def wait_action(self):
                     if self.current_player_index == 0:
                         self.xunmu += 1
                     refresh_waiting_tiles(self,self.current_player_index) # 更新听牌
-                    pre_action_dict = check_action_after_cut(self,tile_id)
+                    pre_action_dict = (
+                        check_action_after_gang_forced_cut(self, tile_id)
+                        if forced_cut_was_pending
+                        else check_action_after_cut(self,tile_id)
+                    )
                     self.last_draw_was_gang = False
                     begin_claim_protection_interval(self, pre_action_dict, self.current_player_index)
                     await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = tile_id,cut_class = is_moqie,cut_tile_index = cut_tile_index) # 广播切牌动画 切牌玩家索引 手模切 切牌id 操作帧
@@ -324,6 +332,8 @@ async def wait_action(self):
                     removed = remove_angang_tiles(hand, normal_angang, draw_slot=draw_slot)
                     clear_draw_slot(player)
                     self.player_list[self.current_player_index].combination_tiles.append(f"G{normal_angang}")
+                    if is_open_kong:
+                        self.player_list[self.current_player_index].open_kong_locked = True
                     add_combination_mask = [0, removed[0], 0, removed[1], 0, removed[2], 0, removed[3]]
                     self.player_list[self.current_player_index].combination_mask.append(add_combination_mask)
                     player_action_record_angang(self, angang_tile=normal_angang, is_mo_gang=is_mo_gang,
@@ -370,6 +380,7 @@ async def wait_action(self):
                             break
 
                     self.player_list[self.current_player_index].combination_tiles[combination_index] = f"g{normal_jia}"
+                    self.player_list[self.current_player_index].open_kong_locked = True
 
                     # 牌谱记录加杠
                     player_action_record_jiagang(self, jiagang_tile=normal_jia, is_mo_gang=is_mo_gang)
@@ -417,7 +428,11 @@ async def wait_action(self):
                 if self.current_player_index == 0:
                     self.xunmu += 1
                 refresh_waiting_tiles(self,self.current_player_index) # 更新听牌
-                pre_action_dict = check_action_after_cut(self,tile_id)
+                pre_action_dict = (
+                    check_action_after_gang_forced_cut(self, tile_id)
+                    if forced_cut_was_pending
+                    else check_action_after_cut(self,tile_id)
+                )
                 self.last_draw_was_gang = False
                 begin_claim_protection_interval(self, pre_action_dict, self.current_player_index)
                 await broadcast_do_action(self,action_list = ["cut"],action_player = self.current_player_index,cut_tile = tile_id,cut_class = is_moqie)
@@ -530,6 +545,7 @@ async def wait_action(self):
                     self.player_list[player_index].hand_tiles.remove(tile_id)
                     self.player_list[player_index].hand_tiles.remove(tile_id)
                     self.player_list[player_index].combination_tiles.append(f"g{tile_id}")
+                    self.player_list[player_index].open_kong_locked = True
                     # 获取相对位置 (操作者, 出牌者)
                     relative_position = get_index_relative_position(player_index, self.current_player_index)
                     combination_target = f"g{tile_id}"

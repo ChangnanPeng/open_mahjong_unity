@@ -3,7 +3,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 import time
 import logging
-from .action_check import check_action_after_cut,check_action_jiagang,check_action_hand_action,check_only_cut,refresh_waiting_tiles
+from .action_check import check_action_after_cut,check_action_after_gang_forced_cut,check_action_jiagang,check_action_hand_action,check_only_cut,refresh_waiting_tiles
 from .wait_action import wait_action
 from .boardcast import (
     broadcast_game_start,
@@ -77,6 +77,7 @@ class ChangshaPlayer:
         self.character_used = 0 # 使用的角色ID
         self.voice_used = 0 # 使用的音色ID
         self.has_draw_slot = False
+        self.open_kong_locked = False
 
     def get_tile(self, tiles_list, *, mark_draw_slot: bool = True):
         element = tiles_list.pop(0) # 从牌堆中获取第一张牌
@@ -435,6 +436,8 @@ class ChangshaGameState:
         self.sea_bottom_player_index = None
         self.initial_hu_types = {}
         self.player_passed_hu_base = {}
+        for player in self.player_list:
+            player.open_kong_locked = False
 
     def _detect_initial_hu_types(self) -> None:
         self.initial_hu_types = {}
@@ -705,9 +708,12 @@ class ChangshaGameState:
                         if self.pending_gang_forced_discard:
                             self.forced_cut_tile = deal_tile
                             actions = self.action_dict.get(self.current_player_index, [])
-                            self.action_dict[self.current_player_index] = (
-                                ["hu_self", "cut"] if "hu_self" in actions else ["cut"]
-                            )
+                            allowed_after_open_kong = {"hu_self", "buzhang", "angang", "jiagang", "cut"}
+                            self.action_dict[self.current_player_index] = [
+                                action for action in actions if action in allowed_after_open_kong
+                            ]
+                            if "cut" not in self.action_dict[self.current_player_index]:
+                                self.action_dict[self.current_player_index].append("cut")
                         self.game_status = "waiting_hand_action" # 切换到摸牌后状态
 
                     # 等待手牌操作：
@@ -969,3 +975,4 @@ ChangshaGameState.reconnected_send_pending_ask = reconnected_send_pending_ask
 # 挂载功能函数于ChangshaGameState实例
 ChangshaGameState.next_current_index = next_current_index
 ChangshaGameState.refresh_waiting_tiles = refresh_waiting_tiles
+ChangshaGameState.check_action_after_gang_forced_cut = check_action_after_gang_forced_cut

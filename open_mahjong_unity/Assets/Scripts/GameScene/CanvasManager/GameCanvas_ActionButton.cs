@@ -50,7 +50,18 @@ public partial class GameCanvas : MonoBehaviour {
         if (button != null && preset != null) {
             button.colors = preset.ToColorBlock();
         }
+        ConfigureActionButtonText(actionButton.TextObject);
         return actionButton;
+    }
+
+    private static void ConfigureActionButtonText(TMP_Text text) {
+        if (text == null) return;
+        text.enableAutoSizing = true;
+        text.fontSizeMax = Mathf.Max(text.fontSize, 36f);
+        text.fontSizeMin = 18f;
+        text.enableWordWrapping = false;
+        text.overflowMode = TextOverflowModes.Truncate;
+        text.alignment = TextAlignmentOptions.Center;
     }
 
     private ActionButtonColorPreset GetActionButtonColorPreset(string action) {
