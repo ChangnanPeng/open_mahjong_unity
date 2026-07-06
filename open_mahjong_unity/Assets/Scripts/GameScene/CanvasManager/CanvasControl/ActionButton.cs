@@ -29,6 +29,9 @@ public class ActionButton : MonoBehaviour {
         {
             Debug.LogError("ActionButton: TMP_Text component is not assigned in Inspector!");
         }
+        else {
+            ConfigureButtonText(textObject);
+        }
 
         // 按钮点击事件
         Button button = GetComponent<Button>();
@@ -38,6 +41,15 @@ public class ActionButton : MonoBehaviour {
             return;
         }
         button.onClick.AddListener(OnClick);
+    }
+
+    private static void ConfigureButtonText(TMP_Text text) {
+        text.enableAutoSizing = true;
+        text.fontSizeMax = Mathf.Max(text.fontSize, 36f);
+        text.fontSizeMin = 18f;
+        text.enableWordWrapping = false;
+        text.overflowMode = TextOverflowModes.Truncate;
+        text.alignment = TextAlignmentOptions.Center;
     }
 
     // 判定当前按钮是否为吃牌按钮

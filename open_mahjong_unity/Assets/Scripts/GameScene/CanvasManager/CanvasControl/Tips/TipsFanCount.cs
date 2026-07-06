@@ -14,7 +14,12 @@ public class TipsFanCount : MonoBehaviour
     public Color wuyiColor = new Color(1f, 0.647f, 0f); // 无役颜色（橙色，未起和）
     public Color exhaustedColor = new Color(0.55f, 0.55f, 0.55f, 1f); // 听牌张已用尽（灰色）
 
+    private void Awake() {
+        ConfigureText();
+    }
+
     public void SetTipsFanCount(string fanCount, string colorType) {
+        ConfigureText();
         tipsFanCountText.text = fanCount;
         
         if (colorType == "exhausted")
@@ -33,5 +38,15 @@ public class TipsFanCount : MonoBehaviour
         {
             backgroundImage.color = wuyiColor;
         }
+    }
+
+    private void ConfigureText() {
+        if (tipsFanCountText == null) return;
+        tipsFanCountText.enableAutoSizing = true;
+        tipsFanCountText.fontSizeMax = Mathf.Max(tipsFanCountText.fontSize, 28f);
+        tipsFanCountText.fontSizeMin = 12f;
+        tipsFanCountText.enableWordWrapping = false;
+        tipsFanCountText.overflowMode = TextOverflowModes.Truncate;
+        tipsFanCountText.alignment = TextAlignmentOptions.Center;
     }
 }

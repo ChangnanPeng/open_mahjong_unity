@@ -13,6 +13,7 @@ from server.game_calculation.changsha.changsha_hepai_check import (
 from server.gamestate.game_changsha.ChangshaGameState import ChangshaGameState
 from server.gamestate.game_changsha.action_check import (
     check_action_after_cut,
+    check_action_after_gang_forced_cut,
     check_action_hand_action,
     check_hepai,
     refresh_waiting_tiles,
@@ -49,6 +50,18 @@ class FixedCalculation:
 
     def Changsha_hepai_check(self, hand_list, tiles_combination, way_to_hepai, get_tile):
         return self.result
+
+
+class FixedCalculationAndTingpai:
+    def __init__(self, result, waiting_tiles):
+        self.result = result
+        self.waiting_tiles = set(waiting_tiles)
+
+    def Changsha_hepai_check(self, hand_list, tiles_combination, way_to_hepai, get_tile):
+        return self.result
+
+    def Changsha_tingpai_check(self, hand_list, tiles_combination):
+        return set(self.waiting_tiles)
 
 
 class FixedTingpai:
@@ -169,6 +182,84 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertNotIn("chi_left", actions[0])
         self.assertNotIn("chi_mid", actions[0])
         self.assertNotIn("chi_right", actions[0])
+
+    def test_forced_gang_discard_only_allows_win_claims(self):
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [12, 13, 14]),
+                DummyPlayer(1, [11, 12, 13, 13]),
+                DummyPlayer(2, [13, 13, 13]),
+                DummyPlayer(3, [21, 22, 23]),
+            ],
+            current_player_index=0,
+            tiles_list=[21],
+            dihe_possible=False,
+            last_draw_was_gang=True,
+            calculation_service=FixedCalculationAndTingpai((1, ["小胡"]), [13]),
+            result_dict={},
+            player_passed_hu_base={},
+        )
+        actions = check_action_after_gang_forced_cut(state, 13)
+
+        for player_index in (1, 2, 3):
+            self.assertTrue(any(action.startswith("hu_") for action in actions[player_index]))
+            self.assertIn("pass", actions[player_index])
+            self.assertNotIn("chi_left", actions[player_index])
+            self.assertNotIn("chi_mid", actions[player_index])
+            self.assertNotIn("chi_right", actions[player_index])
+            self.assertNotIn("peng", actions[player_index])
+            self.assertNotIn("gang", actions[player_index])
+        self.assertEqual(actions[0], [])
+
+    def test_forced_gang_discard_does_not_offer_melds_without_hu(self):
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [12, 13, 14]),
+                DummyPlayer(1, [11, 12, 13, 13]),
+                DummyPlayer(2, [13, 13, 13]),
+                DummyPlayer(3, [21, 22, 23]),
+            ],
+            current_player_index=0,
+            tiles_list=[21],
+            dihe_possible=False,
+            last_draw_was_gang=True,
+            calculation_service=FixedTingpai([]),
+            result_dict={},
+            player_passed_hu_base={},
+        )
+
+        actions = check_action_after_gang_forced_cut(state, 13)
+
+        self.assertEqual(actions, {0: [], 1: [], 2: [], 3: []})
+
+    def test_open_kong_locked_player_can_win_but_not_meld(self):
+        locked_player = DummyPlayer(1, [11, 12, 13, 13, 13], waiting_tiles=[13])
+        locked_player.open_kong_locked = True
+        state = SimpleNamespace(
+            player_list=[
+                DummyPlayer(0, [21, 22, 23]),
+                locked_player,
+                DummyPlayer(2, [13, 13, 13]),
+                DummyPlayer(3, [21, 22, 23]),
+            ],
+            current_player_index=0,
+            tiles_list=[21],
+            dihe_possible=False,
+            last_draw_was_gang=False,
+            calculation_service=FixedCalculationAndTingpai((1, ["小胡"]), [13]),
+            result_dict={},
+            player_passed_hu_base={},
+        )
+
+        actions = check_action_after_cut(state, 13)
+
+        self.assertTrue(any(action.startswith("hu_") for action in actions[1]))
+        self.assertIn("pass", actions[1])
+        self.assertNotIn("chi_left", actions[1])
+        self.assertNotIn("chi_mid", actions[1])
+        self.assertNotIn("chi_right", actions[1])
+        self.assertNotIn("peng", actions[1])
+        self.assertNotIn("gang", actions[1])
 
     def test_discard_open_kong_requires_ready_hand(self):
         state = SimpleNamespace(

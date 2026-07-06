@@ -30,6 +30,8 @@ def _has_tiles(hand_tiles, needed_tiles) -> bool:
 def _append_chi_actions(self, temp_action_dict: Dict[int, list], cut_tile: int) -> None:
     chi_player_index = next_current_num(self.current_player_index)
     chi_player = self.player_list[chi_player_index]
+    if getattr(chi_player, "open_kong_locked", False):
+        return
     chi_shapes = (
         ("chi_left", (cut_tile - 2, cut_tile - 1, cut_tile), (cut_tile - 2, cut_tile - 1)),
         ("chi_mid", (cut_tile - 1, cut_tile, cut_tile + 1), (cut_tile - 1, cut_tile + 1)),
@@ -66,12 +68,20 @@ def check_action_after_cut(self,cut_tile):
 
         # 所有符合条件的玩家都要被询问，不能只取第一家。
         for item in self.player_list:
-            if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) >= 2:
+            if (
+                item.player_index != self.current_player_index
+                and not getattr(item, "open_kong_locked", False)
+                and item.hand_tiles.count(cut_tile) >= 2
+            ):
                 temp_action_dict[item.player_index].append("peng")
 
         # 检测杠牌：手牌中有3张相同的牌
         for item in self.player_list:
-            if item.player_index != self.current_player_index and item.hand_tiles.count(cut_tile) == 3:
+            if (
+                item.player_index != self.current_player_index
+                and not getattr(item, "open_kong_locked", False)
+                and item.hand_tiles.count(cut_tile) == 3
+            ):
                 if self.tiles_list != [] and _is_ready_for_open_kong_claim(self, item, cut_tile):
                         temp_action_dict[item.player_index].append("gang")
 
@@ -175,6 +185,29 @@ def check_only_cut(self, player_index):
 
     if "peida" in player_item.tag_list:
         temp_action_dict[player_index] = ["cut"]
+
+    return temp_action_dict
+
+def check_action_after_gang_forced_cut(self, cut_tile):
+    temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
+
+    for item in self.player_list:
+        if item.player_index != self.current_player_index:
+            refresh_waiting_tiles(self, item.player_index)
+        if cut_tile in item.waiting_tiles and item.player_index != self.current_player_index:
+            check_hepai(self,temp_action_dict,cut_tile,item.player_index,"dianhe")
+
+    for i in temp_action_dict:
+        if temp_action_dict[i] != []:
+            temp_action_dict[i].append("pass")
+
+    temp_action_dict[self.current_player_index] = []
+
+    for item in self.player_list:
+        if "peida" in item.tag_list:
+            temp_action_dict[item.player_index] = []
+
+    self.dihe_possible = False
 
     return temp_action_dict
 
