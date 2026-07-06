@@ -317,6 +317,17 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(score, 12)
         self.assertIn("将将胡", fan_list)
 
+    def test_jiangjianghu_only_requires_all_jiang_tiles(self):
+        score, fan_list = Changsha_Hepai_Check().hepai_check(
+            [12, 12, 15, 15, 18, 18, 22, 22, 25, 25, 28, 28, 32, 35],
+            [],
+            ["自摸"],
+            35,
+        )
+
+        self.assertEqual(score, 6)
+        self.assertEqual(fan_list, ["将将胡"])
+
 
     def test_changsha_room_validator_uses_four_eight_sixteen_hands(self):
         base = dict(
@@ -657,6 +668,43 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(state.current_player_index, 0)
         self.assertEqual(state.current_round, 2)
         self.assertEqual(state.player_list[0].hand_tiles, [])
+
+    def test_sea_bottom_taker_becomes_next_round_dealer_on_draw(self):
+        players = [
+            SimpleNamespace(
+                player_index=i,
+                original_player_index=i,
+                hand_tiles=[11 + i],
+                huapai_list=[i],
+                discard_tiles=[21 + i],
+                waiting_tiles={31 + i},
+                combination_tiles=[f"p{i}"],
+                combination_mask=[i],
+                remaining_time=99,
+                tag_list=[],
+            )
+            for i in range(4)
+        ]
+        state = SimpleNamespace(
+            player_list=players,
+            current_round=1,
+            round_index=1,
+            current_player_index=0,
+            xunmu=8,
+            round_time=20,
+            hu_class="liuju",
+            action_dict={0: ["ready"]},
+            backward_tiles_list_type="double",
+            sea_bottom_player_index=3,
+        )
+
+        ChangshaGameState._make_player_next_dealer(state, state.sea_bottom_player_index)
+        next_game_round_random_switchseat(state, keep_dealer_seat=True)
+
+        self.assertEqual(state.player_list[0].original_player_index, 3)
+        self.assertEqual(state.player_list[0].player_index, 0)
+        self.assertEqual(state.current_player_index, 0)
+        self.assertEqual(state.current_round, 2)
 
 
 if __name__ == "__main__":

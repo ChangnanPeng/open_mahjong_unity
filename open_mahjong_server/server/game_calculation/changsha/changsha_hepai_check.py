@@ -3,8 +3,9 @@
 Rules implemented for the first Salasasa integration:
 - 108 suited tiles only: wan 11-19, tong 21-29, tiao 31-39.
 - Small hu requires a normal 4 sets + pair shape whose pair is 2/5/8.
-- Big hu accepts any winning shape and detects pengpenghu, jiangjianghu,
+- Big hu accepts any winning shape and detects pengpenghu,
   qingyise, quanqiuren, seven pairs, luxury seven pairs, and context wins.
+- Jiangjianghu wins as long as every tile is 2/5/8.
 - Score base: small hu 1, big hu 6 per big pattern, dealer-related big hu 7.
   Birds and payer selection are handled by the gamestate layer.
 """
@@ -265,12 +266,13 @@ class Changsha_Hepai_Check:
             return 0, []
 
         small_hu = _is_standard_shape(concealed, melds, jiang_pair=True)
-        has_shape = _has_winning_shape(concealed, melds)
+        jiangjiang_hu = _all_jiang_tiles(all_tiles)
+        has_shape = _has_winning_shape(concealed, melds) or jiangjiang_hu
         big_names: List[str] = []
 
         if has_shape and _is_all_triplets(concealed, melds):
             big_names.append("碰碰胡")
-        if has_shape and _all_jiang_tiles(all_tiles):
+        if jiangjiang_hu:
             big_names.append("将将胡")
         if has_shape and _is_flush(all_tiles):
             big_names.append("清一色")
