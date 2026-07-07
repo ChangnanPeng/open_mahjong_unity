@@ -174,7 +174,7 @@ public partial class GameCanvas {
     [SerializeField] private GameObject selfShunheIndicator;
     [SerializeField] private TMP_Text selfShunheText;
 
-    /// <summary>根据自家 tag_list 中的 shunhe_N 显示顺和跳过番（不可点和≤N番，听牌出牌后生效，摸牌解除）。</summary>
+    /// <summary>根据自家 tag_list 中的 shunhe_N 显示顺和跳过番（不可点和≤N番，听牌跳过和牌后立即生效，摸牌解除）。</summary>
     public void RefreshSelfShunheIndicator() {
         if (selfShunheIndicator == null) return;
         var gm = NormalGameStateManager.Instance;

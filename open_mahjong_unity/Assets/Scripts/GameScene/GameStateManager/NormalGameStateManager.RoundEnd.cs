@@ -11,17 +11,23 @@ public partial class NormalGameStateManager {
         TipsBlock.Instance.HideTipsBlock();
         TipsContainer.Instance.HideTips();
         TipsContainer.Instance.HideRyuukyokuTenpaiChoice();
+
+        // 日麻
+        // 和牌时清理立直棒 刷新场况
         if (riichiExtras != null && IsHuClass(hu_class)) {
             OnRiichiSticksCollected(riichiExtras.RiichiSticksCollected);
+        // 流局时清理立直棒
         } else if (subRule != null && subRule.StartsWith("riichi/") && ShouldHideRiichiSticksOnLiuju(hu_class)) {
             OnRiichiSticksHideOnLiuju();
         }
 
+        // 川麻
         bool deferScore = defer_score_settlement == true;
         bool isMidGameSichuanHu = deferScore && IsSichuanRule() && IsHuClass(hu_class);
         bool isSichuanEndgameScoreStep = IsSichuanRule() && IsSichuanEndgameScoreStep(liuju_step);
         ApplySichuanGangRefundIfAny(gang_refund_changes, liuju_step);
         if (isSichuanEndgameScoreStep) {
+            // 
             if (liuju_step == "reveal_hu") {
                 BeginSichuanEndgameScoreAccum();
             } else if (liuju_step == "settle_hu") {

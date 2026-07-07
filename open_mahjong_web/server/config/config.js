@@ -100,14 +100,41 @@ function loadAdminConfig() {
 
 const adminConfig = loadAdminConfig();
 
-// ==================== 日志输出 ====================
-if (appConfig.isDebug) {
-  console.log('=== 开发环境配置 ===');
-} else {
-  console.log('=== 生产环境配置 ===');
+function loadBotApiConfig() {
+  const jwtSecret = process.env.BOT_API_JWT_SECRET;
+  if (!jwtSecret || !String(jwtSecret).trim()) {
+    throw new Error('缺少必需环境变量: BOT_API_JWT_SECRET');
+  }
+  return {
+    jwtSecret: String(jwtSecret).trim(),
+  };
 }
 
-console.log(`环境: ${appConfig.nodeEnv}`);
+const botApiConfig = loadBotApiConfig();
+
+const devFrontendUrl = 'http://localhost:5173';
+
+function printDebugConfig() {
+  if (!appConfig.isDebug) return;
+
+  const apiBase = `http://localhost:${appConfig.port}`;
+  const frontendUrl = isProduction ? productionFrontendUrl : devFrontendUrl;
+
+  console.log('');
+  console.log('=== 调试模式配置 ===');
+  console.log(`前端地址: ${frontendUrl}/`);
+  console.log(`API 地址: ${apiBase}/api`);
+  console.log(`管理后台: ${frontendUrl}/admin/login`);
+  console.log(`管理后台 API: ${apiBase}/api/admin`);
+  console.log(`计算服务器: ${calcServerConfig.baseUrl}`);
+  console.log(`管理员用户 ID: ${[...adminConfig.userIds].join(', ')}`);
+}
+
+// ==================== 日志输出 ====================
+console.log(isProduction ? '=== 生产环境配置 ===' : '=== 开发环境配置 ===');
+console.log(
+  `环境: ${appConfig.nodeEnv}${appConfig.isDebug ? ' · 调试模式: 开启' : ' · 调试模式: 关闭'}`
+);
 console.log(`端口: ${appConfig.port}`);
 console.log(`数据库: ${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 if (isProduction) {
@@ -134,9 +161,14 @@ module.exports = {
 
   // 管理后台
   admin: adminConfig,
+
+  // QQ 机器人等第三方 Bot API
+  botApi: botApiConfig,
   
   // 便捷访问
   isProduction: isProduction,
   isDebug: appConfig.isDebug,
-  frontendUrl: isProduction ? productionFrontendUrl : 'http://localhost:5173'
+  frontendUrl: isProduction ? productionFrontendUrl : devFrontendUrl,
+
+  printDebugConfig,
 };

@@ -183,6 +183,17 @@ async def get_action(game_state, player_id: str, action_type: str, cutClass: boo
             logger.warning(f"不是该玩家的合法行动, player_index={player_index}, action_type={action_type}, allowed_actions={game_state.action_dict.get(player_index, [])}")
             return
 
+        from ..tactical_claim import tactical_player_is_committed
+        if (
+            tactical_player_is_committed(game_state, player_index)
+            and action_type != "pass"
+            and game_state.game_status in ("waiting_action_after_cut", "waiting_action_qianggang")
+        ):
+            logger.info(
+                f"国标战术鸣牌：玩家已承诺鸣牌，拒绝改选 player_index={player_index}, action_type={action_type}"
+            )
+            return
+
         # 战术鸣牌防过期：在切牌后询问 / 抢杠询问阶段，客户端会回传本轮询问的 action_tick。
         # 若与当前询问帧不一致，说明这是上一轮询问的延迟到达提交（如战术鸣牌开启前点的取消/碰），予以丢弃，
         # 避免错误地消费掉本轮战术抢断（如战术碰断别人吃）的机会。

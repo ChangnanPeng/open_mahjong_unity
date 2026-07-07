@@ -9,7 +9,8 @@ public partial class NormalGameStateManager {
             // 仅行动者换人时收拢：首次 ask、同玩家连补花后的再次 ask 均不收拢，保留摸牌区以区分手切/摸切
             bool shouldConsolidateHands = lastAskHandPlayerIndex >= 0 && askHandPlayerIndex != lastAskHandPlayerIndex;
             if (shouldConsolidateHands) {
-                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards();
+                // 3D：跳过当前行动者，避免刚摸牌的家被收拢进主列（2D 侧轮到自己本就不 ReSetHandCards）
+                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards(GetCardPlayer);
             }
             // 如果行动者是自己
             if (GetCardPlayer == "self"){

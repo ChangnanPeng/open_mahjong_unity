@@ -1,0 +1,11 @@
+{
+  "method": "GET",
+  "url": "https://salasasa.cn/api/bot/player/rank/10000001",
+  "headers": {
+    "Authorization": "Bearer <JWT>"
+  },
+  "path_params": {
+    "key": "10000001"
+  },
+  "path_params_note": "key 可为 user_id（数字）或 username（用户名）；Bot API 独有接口，公开 /api/player 无对应路径"
+}

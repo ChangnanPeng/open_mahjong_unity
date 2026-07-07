@@ -332,7 +332,7 @@ async def wait_action(self):
                     self.player_list[player_index].hand_tiles.remove(r2)
                     self.player_list[player_index].combination_tiles.append(f"s{normal_tile - 1}")
                     combination_target = f"s{normal_tile - 1}"
-                    combination_mask = [1, tile_id, 0, r1, 0, r2]
+                    combination_mask = [1, tile_id, 0, r2, 0, r1]
                 elif action_type == "chi_mid":
                     r1, r2 = _pick_chi_pair(self.player_list[player_index], action_type,
                                             normal_tile - 1, normal_tile + 1,
@@ -415,7 +415,9 @@ async def wait_action(self):
                     if self.sync_furiten_tags():
                         await broadcast_refresh_player_tag_list(self)
                     await self._broadcast_langyong_tags_if_changed()
-                    # 吃/碰/明杠使所有家一发消失（含尚未提交 pending_riichi 的立直家）
+                    # 吃/碰/明杠：清除所有家一发；若被鸣的是尚未提交供托的立直家，提交时也不再补一发
+                    if getattr(discarder, "pending_riichi", False):
+                        discarder.skip_ippatsu = True
                     await _clear_ippatsu_and_notify(self)
                     # 食替：吃/碰后到本家切牌前不可丢回的牌（吃来源 + 两面搭子的筋）
                     # 浪涌麻将可食替：不设禁切牌，允许吃什么打什么。
@@ -655,26 +657,19 @@ def _commit_pending_riichi(self):
             p.pending_riichi = False
             p.score -= 1000
             self.riichi_sticks += 1
-            if not getattr(self, "ippatsu_voided", False) and "ippatsu" not in p.tag_list:
+            if not getattr(p, "skip_ippatsu", False) and "ippatsu" not in p.tag_list:
                 p.tag_list.append("ippatsu")
 
 
-def _clear_ippatsu(self, keep_player_index=None):
-    self.ippatsu_voided = True
+def _clear_ippatsu(self):
     for p in self.player_list:
-        if keep_player_index is not None and p.player_index == keep_player_index:
-            continue
         if "ippatsu" in p.tag_list:
             p.tag_list.remove("ippatsu")
 
 
-async def _clear_ippatsu_and_notify(self, keep_player_index=None):
-    had_ippatsu = any(
-        "ippatsu" in p.tag_list
-        for p in self.player_list
-        if keep_player_index is None or p.player_index != keep_player_index
-    )
-    _clear_ippatsu(self, keep_player_index=keep_player_index)
+async def _clear_ippatsu_and_notify(self):
+    had_ippatsu = any("ippatsu" in p.tag_list for p in self.player_list)
+    _clear_ippatsu(self)
     if had_ippatsu:
         await broadcast_refresh_player_tag_list(self)
 

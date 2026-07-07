@@ -43,6 +43,19 @@ public static class RecordHuHandBuilder {
     }
 
     /// <summary>
+    /// 从 hu_* / hu_riichi tick 与推演手牌构建和牌展示数组。
+    /// </summary>
+    public static int[] BuildDisplayHandFromTick(
+        List<string> tick,
+        string rule,
+        IReadOnlyList<int> closedHand,
+        string huClass,
+        int lastWinnableTileId) {
+        TryParseHepaiTile(tick, rule, out int hepaiTile);
+        return BuildDisplayHand(closedHand, huClass, hepaiTile, lastWinnableTileId);
+    }
+
+    /// <summary>
     /// 构建和牌面板用手牌：荣和时在末尾追加和牌张（状态推演已写入荣和张时不再重复追加）。
     /// </summary>
     public static int[] BuildDisplayHand(
