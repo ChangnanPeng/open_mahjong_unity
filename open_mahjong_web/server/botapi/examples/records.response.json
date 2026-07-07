@@ -1,0 +1,38 @@
+{
+  "success": true,
+  "data": {
+    "total": 128,
+    "items": [
+      {
+        "game_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "created_at": "2026-07-01T12:34:56.789Z",
+        "rule": "guobiao",
+        "sub_rule": "guobiao",
+        "match_type": "4/4_rank",
+        "room_type": "match",
+        "match_tier": "intermediate",
+        "event_id": null,
+        "players": [
+          {
+            "user_id": 10000001,
+            "username": "示例玩家",
+            "score": 35000,
+            "rank": 1,
+            "title_used": null,
+            "character_used": null,
+            "profile_used": null,
+            "voice_used": null
+          }
+        ]
+      }
+    ],
+    "filters": [
+      {
+        "room_type": "match",
+        "match_tier": "intermediate",
+        "event_id": null,
+        "rule": "guobiao"
+      }
+    ]
+  }
+}

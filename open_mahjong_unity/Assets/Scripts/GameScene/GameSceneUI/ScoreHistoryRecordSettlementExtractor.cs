@@ -177,7 +177,7 @@ public static class ScoreHistoryRecordSettlementExtractor {
                         output.Add(lastRow);
                         break;
                     }
-                    RoundSettlementSnapshot snap = BuildHuSnapshot(tick, action, subRule, round, actingPlayerIndex, players, lastWinnableTileId, action != "hu_self", gameTitle);
+                    RoundSettlementSnapshot snap = BuildHuSnapshot(tick, action, subRule, round, actingPlayerIndex, players, lastWinnableTileId, gameTitle);
                     lastRow = new RecordScoreRow {
                         snapshot = snap,
                         scoreChangesByOriginal = GameRecordJsonDecoder.ConvertPlayerIndexScoreChangesToOriginal(ParseScoreChanges(tick, 4), round.seats),
@@ -322,7 +322,6 @@ public static class ScoreHistoryRecordSettlementExtractor {
         int hepaiPlayerIndex,
         SimPlayer[] players,
         int lastDiscardTileId,
-        bool isRon,
         Dictionary<string, object> gameTitle) {
         string[] huFan = ParseFanList(tick, 3);
         int huScore = ParseInt(tick, 2);
@@ -334,11 +333,9 @@ public static class ScoreHistoryRecordSettlementExtractor {
         }
 
         SimPlayer huPlayer = players[hepaiPlayerIndex];
-        string rule = gameTitle != null && gameTitle.TryGetValue("rule", out object ruleObj) && ruleObj != null
-            ? ruleObj.ToString() : subRule;
-        RecordHuHandBuilder.TryParseHepaiTile(tick, rule, out int parsedHepaiTile);
-        int[] hand = RecordHuHandBuilder.BuildDisplayHand(
-            huPlayer.tileList, huClass, parsedHepaiTile, lastDiscardTileId);
+        string rule = ResolveRecordRule(gameTitle, subRule);
+        int[] hand = RecordHuHandBuilder.BuildDisplayHandFromTick(
+            tick, rule, huPlayer.tileList, huClass, lastDiscardTileId);
 
         int winnerDelta = 0;
         int[] scoreChanges = ParseScoreChanges(tick, 4);
@@ -379,9 +376,8 @@ public static class ScoreHistoryRecordSettlementExtractor {
         string[] yaku = tick.Count > 5 ? ParseFanList(tick, 5) : Array.Empty<string>();
 
         SimPlayer huPlayer = players[hepaiPlayerIndex];
-        RecordHuHandBuilder.TryParseHepaiTile(tick, subRule, out int parsedHepaiTile);
-        int[] hand = RecordHuHandBuilder.BuildDisplayHand(
-            huPlayer.tileList, huClass, parsedHepaiTile, lastDiscardTileId);
+        int[] hand = RecordHuHandBuilder.BuildDisplayHandFromTick(
+            tick, subRule, huPlayer.tileList, huClass, lastDiscardTileId);
 
         int winnerDelta = 0;
         int[] scoreChanges = tick.Count > 6 ? ParseScoreChanges(tick, 6) : null;
@@ -434,6 +430,7 @@ public static class ScoreHistoryRecordSettlementExtractor {
 
         SimPlayer huPlayer = players[hepaiIndex];
         string huClass = string.IsNullOrEmpty(target.huClass) ? "hu_self" : target.huClass;
+        // shuhewei tick 无 hu_* 和牌张字段，铳张回退 lastDiscardTileId
         target.hepaiPlayerHand = RecordHuHandBuilder.BuildDisplayHand(
             huPlayer.tileList, huClass, 0, lastDiscardTileId);
         target.combinationMask = CloneMasks(huPlayer.combinationMasks);
@@ -442,6 +439,13 @@ public static class ScoreHistoryRecordSettlementExtractor {
     /// <summary>与 GameRecordManager.NextAction 一致：摸切/补花/副露/和牌等 tick 自带行动者，其余沿用当前巡目玩家。</summary>
     private static int ResolveActingPlayerIndex(string action, List<string> tick, int currentPlayerIndex) {
         return GameRecordJsonDecoder.ResolveRecordActingPlayerIndex(tick, action, currentPlayerIndex);
+    }
+
+    private static string ResolveRecordRule(Dictionary<string, object> gameTitle, string subRule) {
+        if (gameTitle != null && gameTitle.TryGetValue("rule", out object ruleObj) && ruleObj != null) {
+            return ruleObj.ToString();
+        }
+        return subRule;
     }
 
     private static string ResolveUsernameForSeat(int seatIndex, Round round, Dictionary<string, object> gameTitle) {

@@ -9,7 +9,8 @@ public partial class NormalGameStateManager {
             // 仅行动者换人时收拢：首次 ask、同玩家连补花后的再次 ask 均不收拢，保留摸牌区以区分手切/摸切
             bool shouldConsolidateHands = lastAskHandPlayerIndex >= 0 && askHandPlayerIndex != lastAskHandPlayerIndex;
             if (shouldConsolidateHands) {
-                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards();
+                // 3D：跳过当前行动者，避免刚摸牌的家被收拢进主列（2D 侧轮到自己本就不 ReSetHandCards）
+                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards(GetCardPlayer);
             }
             // 如果行动者是自己
             if (GetCardPlayer == "self"){
@@ -54,8 +55,8 @@ public partial class NormalGameStateManager {
             GameCanvas.Instance.SetActionButton(allowActionList);
             // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
             GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
-            // 鸣牌询问：自动过牌 / 自动胡牌 / 牌张设置 / 任一鸣牌过滤项 开启则启动协程
-            if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
+            // 鸣牌询问：自动过牌 / 自动胡牌 / 不点和 / 牌张设置 / 任一鸣牌过滤项 开启则启动协程
+            if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.IsNoRon || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
                 StartWaitAutoAction("AutoMingPaiAction");
             }
             IsSelfActionRequired = true;

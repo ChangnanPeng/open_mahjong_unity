@@ -14,7 +14,9 @@ from .boardcast import broadcast_refresh_player_tag_list
 from .shunhe import (
     activate_shunhe_if_tenpai_discard,
     apply_passed_win_shunhe,
+    player_has_ron_hu_result,
     record_passed_self_draw_shunhe,
+    ron_hu_eligible_indexes,
 )
 from .boardcast import broadcast_do_action, broadcast_ready_status, broadcast_ask_other_action
 from ..public.game_record_manager import (
@@ -182,6 +184,7 @@ async def wait_action(self):
             if action_data:
                 if action_type == "cut":
                     player = self.player_list[player_index]
+                    refresh_waiting_tiles(self, player_index)
                     was_tenpai = bool(player.waiting_tiles)
                     if record_passed_self_draw_shunhe(self, player_index):
                         await broadcast_refresh_player_tag_list(self)
@@ -211,6 +214,7 @@ async def wait_action(self):
                         self.game_status = "deal_card"
 
                 elif action_type == "angang":
+                    refresh_waiting_tiles(self, self.current_player_index)
                     if record_passed_self_draw_shunhe(self, self.current_player_index):
                         await broadcast_refresh_player_tag_list(self)
                     angang_tile = normalize_tile(action_data.get("target_tile"))
@@ -240,6 +244,7 @@ async def wait_action(self):
                     self.game_status = "deal_card_after_gang"
 
                 elif action_type == "jiagang":
+                    refresh_waiting_tiles(self, self.current_player_index)
                     if record_passed_self_draw_shunhe(self, self.current_player_index):
                         await broadcast_refresh_player_tag_list(self)
                     jiagang_tile = action_data.get("target_tile")
@@ -299,6 +304,7 @@ async def wait_action(self):
             else:
                 # 超时自动出牌（强制定缺优先）
                 player = self.player_list[self.current_player_index]
+                refresh_waiting_tiles(self, self.current_player_index)
                 was_tenpai = bool(player.waiting_tiles)
                 if record_passed_self_draw_shunhe(self, self.current_player_index):
                     await broadcast_refresh_player_tag_list(self)
@@ -331,15 +337,12 @@ async def wait_action(self):
 
         case "waiting_action_after_cut":
             tile_id = self.player_list[self.current_player_index].discard_tiles[-1]
-            hu_eligible_indexes = [
-                pi for pi, acts in self.action_dict.items() if "hu" in acts
-            ]
             combination_mask = []
             combination_target = ""
             if action_data:
                 refresh_waiting_tiles(self, player_index)
                 if action_type in ("peng", "gang") and apply_passed_win_shunhe(
-                    self, [player_index] if player_index in hu_eligible_indexes else []
+                    self, [player_index] if player_has_ron_hu_result(self, player_index) else []
                 ):
                     await broadcast_refresh_player_tag_list(self)
                 if action_type == "peng":
@@ -430,7 +433,11 @@ async def wait_action(self):
                 if action_type == "pass":
                     flush_unexecuted_claim_applications(self, tile_id)
                     await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
-                    if apply_passed_win_shunhe(self, [player_index] if player_index in hu_eligible_indexes else []):
+                    if player_has_ron_hu_result(self, player_index):
+                        refresh_waiting_tiles(self, player_index)
+                    if apply_passed_win_shunhe(
+                        self, [player_index] if player_has_ron_hu_result(self, player_index) else []
+                    ):
                         await broadcast_refresh_player_tag_list(self)
                     self._clear_paofen_pending(self.current_player_index)
                     self.game_status = "deal_card"
@@ -438,7 +445,9 @@ async def wait_action(self):
             else:
                 flush_unexecuted_claim_applications(self, tile_id)
                 await finalize_claim_protection(self, _send_do_action_payload_to_viewer)
-                if apply_passed_win_shunhe(self, hu_eligible_indexes):
+                for pi in ron_hu_eligible_indexes(self):
+                    refresh_waiting_tiles(self, pi)
+                if apply_passed_win_shunhe(self, ron_hu_eligible_indexes(self)):
                     await broadcast_refresh_player_tag_list(self)
                 self._clear_paofen_pending(self.current_player_index)
                 self.game_status = "deal_card"
@@ -495,9 +504,6 @@ async def wait_action(self):
 
         case "waiting_action_qianggang":
             temp_jiagang_tile = self.jiagang_tile
-            hu_eligible_indexes = [
-                pi for pi, acts in self.action_dict.items() if "hu" in acts
-            ]
             self.jiagang_tile = None
             if action_data and action_type == "hu":
                 # 抢杠：加杠不成立 → 退回该加杠下雨分，杠回退为碰，并将牌判给抢杠者
@@ -523,7 +529,15 @@ async def wait_action(self):
                 self.game_status = "settle_win"
                 return
             else:
-                if apply_passed_win_shunhe(self, hu_eligible_indexes):
+                if action_data and action_type == "pass":
+                    passed_indexes = (
+                        [player_index] if player_has_ron_hu_result(self, player_index) else []
+                    )
+                else:
+                    passed_indexes = ron_hu_eligible_indexes(self)
+                for pi in passed_indexes:
+                    refresh_waiting_tiles(self, pi)
+                if apply_passed_win_shunhe(self, passed_indexes):
                     await broadcast_refresh_player_tag_list(self)
                 self.game_status = "deal_card_after_gang"
                 return

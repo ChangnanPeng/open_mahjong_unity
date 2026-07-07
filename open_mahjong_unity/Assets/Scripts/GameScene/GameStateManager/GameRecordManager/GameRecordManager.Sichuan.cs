@@ -97,8 +97,11 @@ public partial class GameRecordManager {
     }
 
     private string ResolveRecordRonDiscarderPosition(int? ronDiscarderIndex) {
-        if (ronDiscarderIndex.HasValue && indexToPosition.TryGetValue(ronDiscarderIndex.Value, out string pos)) {
-            return pos;
+        if (ronDiscarderIndex.HasValue && indexToPosition.TryGetValue(ronDiscarderIndex.Value, out string fromTick)) {
+            return fromTick;
+        }
+        if (lastJiagangPlayerIndex >= 0 && indexToPosition.TryGetValue(lastJiagangPlayerIndex, out string jgPos)) {
+            return jgPos;
         }
         if (lastDiscardPlayerIndex >= 0 && indexToPosition.TryGetValue(lastDiscardPlayerIndex, out string fallback)) {
             return fallback;
@@ -119,10 +122,19 @@ public partial class GameRecordManager {
     private IEnumerator CoPlaySichuanMidGameHuRecord(
         string action, int hepaiPlayerIndex, int hepaiTile, bool multiRon,
         int? ronDiscarderIndex, bool recycleDiscard, bool isQianggang) {
-        yield return HepaiRevealDirector.PlaySichuanMidGame(
-            hepaiPlayerIndex, action, hepaiTile, multiRon, ronDiscarderIndex, recycleDiscard, isQianggang);
+        string discardPos = ResolveRecordRonDiscarderPosition(ronDiscarderIndex);
+        if (action != "hu_self" && Game3DManager.Instance != null) {
+            int syncTile = hepaiTile >= 10 ? hepaiTile : lastWinnableTileId;
+            Game3DManager.Instance.SyncRecordLastDiscardForRon(discardPos, syncTile);
+        }
+        if (!indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) yield break;
+
+        HepaiPresentationRequest request = HepaiRevealDirector.BuildSichuanMidGameRequest(
+            winnerPos, action, hepaiTile, multiRon, ronDiscarderIndex, recycleDiscard, isQianggang);
+        request.DiscardPlayerPosition = discardPos;
+        yield return Game3DManager.Instance.PlaySichuanMidGameHu(request);
         if (action != "hu_self" && recycleDiscard) {
-            SyncRecordRonDiscardRemoved(ResolveRecordRonDiscarderPosition(ronDiscarderIndex), hepaiTile);
+            SyncRecordRonDiscardRemoved(discardPos, hepaiTile);
         }
         yield return new WaitForSeconds(1.5f);
     }

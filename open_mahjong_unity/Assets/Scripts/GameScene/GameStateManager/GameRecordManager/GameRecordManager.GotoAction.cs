@@ -24,6 +24,7 @@ public partial class GameRecordManager
         lastDiscardPlayerIndex = -1;
         lastDiscardTileId = -1;
         lastWinnableTileId = -1;
+        lastJiagangPlayerIndex = -1;
         waitingForDrawAfterCut = false;
         
         // 重置牌山列表到初始状态
@@ -76,10 +77,12 @@ public partial class GameRecordManager
     }
 
     private void SyncRecordRonDiscardObjectAfterRebuild() {
-        if (lastDiscardPlayerIndex < 0 || Game3DManager.Instance == null) return;
-        if (!indexToPosition.TryGetValue(lastDiscardPlayerIndex, out string discardPos)) return;
-        int riverTileId = lastWinnableTileId >= 10 ? lastWinnableTileId : lastDiscardTileId;
-        Game3DManager.Instance.SyncRecordLastDiscardForRon(discardPos, riverTileId);
+        if (Game3DManager.Instance == null) return;
+        int winTileId = lastWinnableTileId >= 10 ? lastWinnableTileId : lastDiscardTileId;
+        if (winTileId < 10) return;
+        string sourcePos = ResolveRecordRonDiscarderPosition(null);
+        if (string.IsNullOrEmpty(sourcePos)) return;
+        Game3DManager.Instance.SyncRecordLastDiscardForRon(sourcePos, winTileId);
     }
 
     // 推演行动节点
@@ -146,6 +149,7 @@ public partial class GameRecordManager
             lastDiscardPlayerIndex = actingPlayerIndex;
             lastDiscardTileId = cutTile;
             lastWinnableTileId = cutTile;
+            lastJiagangPlayerIndex = -1;
             waitingForDrawAfterCut = true;
             OnRecordPlayerCut(actingPlayer);
             nextPlayerIndex = (actingPlayerIndex + 1) % 4;
@@ -182,6 +186,7 @@ public partial class GameRecordManager
                 actingPlayer.tileList, jiagangTile, 1, preferDrawSlotFirst: isMoGang);
             int actualJia = removedTiles.Count > 0 ? removedTiles[0] : jiagangTile;
             lastWinnableTileId = actualJia;
+            lastJiagangPlayerIndex = actingPlayerIndex;
             BuildJiagangMask(actingPlayer, jiagangTile, actualJia);
             if (isMoGang) {
                 actingPlayer.showHandDrawSlotActive = false;
@@ -196,6 +201,7 @@ public partial class GameRecordManager
                 RemoveOneTile(actingPlayer.tileList, tileId);
             }
             lastWinnableTileId = -1;
+            lastJiagangPlayerIndex = -1;
 
             if (lastDiscardPlayerIndex >= 0 && indexToPosition.ContainsKey(lastDiscardPlayerIndex)) {
                 string discardPlayerPosition = indexToPosition[lastDiscardPlayerIndex];
@@ -304,14 +310,14 @@ public partial class GameRecordManager
                 }
 
                 if (combinationStr.Contains("k")) {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "peng", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "peng", combinationMask);
                 }
                 else if (jiagangCount > 0) {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "peng", combinationMask, false));
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "jiagang", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "peng", combinationMask);
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "jiagang", combinationMask);
                 }
                 else {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "None", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "None", combinationMask);
                 }
             }
         }

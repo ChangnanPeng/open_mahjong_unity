@@ -143,6 +143,8 @@ class RiichiPlayer:
         # 立直家本应横置的下一张弃牌待标记位：宣告立直时置 True；本次切完归 False；
         # 若立直宣告的横置弃牌被他家吃/碰则在 chi/peng/gang 处理处再次置 True，使下一张续横
         self.riichi_marker_pending: bool = False
+        # 立直宣告后供托尚未提交时若该张被鸣，提交时不再补一发
+        self.skip_ippatsu: bool = False
         self.has_draw_slot = False
 
     def get_tile(self, tiles_list, *, mark_draw_slot: bool = True):
@@ -281,8 +283,6 @@ class RiichiGameState:
         self._pending_four_kan_abort: bool = False
         # 错和：和牌番数低于 hepai_limit 时触发，向其余 3 家各赔 3000（合计 9000）并重打本局
         self._cuohe_triggered: bool = False
-        # 本局是否已因鸣牌（吃/碰/明杠/暗杠，不含加杠）作废一发；防止后续 _commit_pending_riichi 误补一发
-        self.ippatsu_voided: bool = False
 
         self.Debug = False
 
@@ -386,7 +386,6 @@ class RiichiGameState:
             self._last_kan_type = None
             self._pending_four_kan_abort = False
             self._cuohe_triggered = False
-            self.ippatsu_voided = False
 
             await self.broadcast_game_start()
             await self._broadcast_langyong_tags_if_changed()
@@ -618,6 +617,7 @@ class RiichiGameState:
                 p.chi_candidates = {}
                 p.kuikae_forbidden_tiles = []
                 p.riichi_marker_pending = False
+                p.skip_ippatsu = False
                 for tag in list(p.tag_list):
                     if tag in ("riichi", "daburu_riichi", "ippatsu", "furiten") or tag.startswith("langyong_"):
                         p.tag_list.remove(tag)
