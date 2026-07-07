@@ -41,12 +41,17 @@ public static class RoundTextDictionary {
 
     /// <summary>局数（当前第几局）显示名</summary>
     public static string GetRoundName(string rule, int currentRound) {
+        if (!string.IsNullOrEmpty(rule)) {
+            int slash = rule.IndexOf('/');
+            if (slash >= 0) rule = rule.Substring(0, slash);
+        }
         Dictionary<int, string> roundMap = null;
         if (rule == "guobiao") roundMap = CurrentRoundTextGB;
         else if (rule == "qingque") roundMap = CurrentRoundTextQingque;
         else if (rule == "riichi") roundMap = CurrentRoundTextRiichi;
         else if (rule == "classical") roundMap = CurrentRoundTextClassical;
         else if (rule == "sichuan") roundMap = CurrentRoundTextSichuan;
+        else if (rule == "new_rule") roundMap = CurrentRoundTextQingque;
         if (roundMap != null && roundMap.TryGetValue(currentRound, out string roundName)) {
             return roundName;
         }

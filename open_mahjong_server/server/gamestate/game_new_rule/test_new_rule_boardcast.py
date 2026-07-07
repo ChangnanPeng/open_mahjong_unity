@@ -11,9 +11,13 @@ from server.gamestate.game_new_rule import NewRuleGameState
 from server.gamestate.game_new_rule.boardcast import (
     ask_action_payload,
     final_settlement_payload,
+    final_settlement_payloads,
+    game_end_payload,
     game_start_payload,
     game_info_payload,
+    mid_hand_hu_result_payload,
     pending_action_payload,
+    ready_status_payload,
     visible_action_payload,
 )
 
@@ -22,14 +26,36 @@ def test_game_info_masks_concealed_kong_for_other_players() -> None:
     game = NewRuleGameState()
     game.player_list[0].hand_tiles = [11, 12, 13]
     game.player_list[0].combination_tiles = ["G15"]
+    game.player_list[0].combination_mask = [[2, 15, 2, 15, 2, 15, 2, 15]]
 
     owner_view = game_info_payload(game, 0)
     other_view = game_info_payload(game, 1)
 
     assert owner_view["players_info"][0]["combination_tiles"] == ["G15"]
+    assert owner_view["players_info"][0]["combination_mask"] == [[2, 15, 2, 15, 2, 15, 2, 15]]
     assert other_view["players_info"][0]["combination_tiles"] == ["G0"]
+    assert other_view["players_info"][0]["combination_mask"] == [[2, 0, 2, 0, 2, 0, 2, 0]]
     assert other_view["players_info"][0]["hand_tiles"] is None
     assert other_view["players_info"][0]["hand_tiles_count"] == 3
+
+
+def test_visible_concealed_kong_payload_masks_other_viewers_but_keeps_mask_shape() -> None:
+    game = NewRuleGameState()
+    action_info = {
+        "action": "angang",
+        "player": 0,
+        "tile": 15,
+        "meld_code": "G15",
+        "combination_mask": [2, 15, 2, 15, 2, 15, 2, 15],
+    }
+
+    owner_payload = visible_action_payload(game, 0, action_info)
+    other_payload = visible_action_payload(game, 1, action_info)
+
+    assert owner_payload["do_action_info"]["combination_target"] == "G15"
+    assert owner_payload["do_action_info"]["combination_mask"] == [2, 15, 2, 15, 2, 15, 2, 15]
+    assert other_payload["do_action_info"]["combination_target"] == "G0"
+    assert other_payload["do_action_info"]["combination_mask"] == [2, 0, 2, 0, 2, 0, 2, 0]
 
 
 def test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile() -> None:
@@ -52,6 +78,17 @@ def test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile() -> None:
     assert payload["fan_ids"] is None
     assert payload["fan_names"] is None
     assert payload["points"] is None
+
+    result_payload = mid_hand_hu_result_payload(
+        game,
+        1,
+        {
+            "source": "self_draw",
+            "winner": 0,
+            "tile": 41,
+        },
+    )
+    assert result_payload["show_result_info"]["hepai_tile"] == 0
 
 
 def test_mid_hand_discard_win_keeps_public_discard_tile_but_hides_scoring() -> None:
@@ -76,6 +113,29 @@ def test_mid_hand_discard_win_keeps_public_discard_tile_but_hides_scoring() -> N
     assert payload["points"] is None
 
 
+def test_mid_hand_result_carries_multi_ron_recycle_contract() -> None:
+    game = NewRuleGameState()
+    settlement = {
+        "source": "discard",
+        "winner": 1,
+        "discarder": 0,
+        "tile": 41,
+    }
+
+    payload = mid_hand_hu_result_payload(
+        game,
+        2,
+        settlement,
+        multi_ron=True,
+        recycle_discard=False,
+    )
+
+    info = payload["show_result_info"]
+    assert info["multi_ron"] is True
+    assert info["recycle_discard"] is False
+    assert info["ron_discarder_index"] == 0
+
+
 def test_deal_tile_payload_hides_drawn_tile_from_other_viewers() -> None:
     game = NewRuleGameState()
 
@@ -91,7 +151,14 @@ def test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results() -
     game = NewRuleGameState()
     game.player_list[0].hand_tiles = [11, 12, 13]
     game.player_list[0].combination_tiles = ["G15"]
-    game.deferred_hu_settlements = [{"winner": 0, "points": 8, "fan_ids": ["pinfu"]}]
+    game.deferred_hu_settlements = [
+        {
+            "winner": 0,
+            "points": 8,
+            "fan_ids": ["pinfu"],
+            "fan_names": ["平和"],
+        }
+    ]
     game.ended_by = "win"
 
     payload = final_settlement_payload(game, 1)
@@ -102,7 +169,7 @@ def test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results() -
     assert payload["show_result_info"]["hepai_player_index"] == 0
     assert payload["show_result_info"]["hu_score"] == 8
     assert payload["show_result_info"]["hu_fan"] == ["pinfu"]
-    assert payload["show_result_info"]["hu_class"] == "hu"
+    assert payload["show_result_info"]["hu_class"] == "hu_first"
     assert payload["show_result_info"]["player_to_score"] == {
         0: game.player_list[0].score,
         1: game.player_list[1].score,
@@ -200,7 +267,100 @@ def test_final_settlement_sums_multiple_score_changes_once() -> None:
     ]
     assert first_scores == [-58, 48, 30, -20]
     assert second_scores == [-58, 48, 30, -20]
-    assert first_payload["show_result_info"]["score_changes"] == {0: -58, 1: 48, 2: 30, 3: -20}
+    assert first_payload["show_result_info"]["score_changes"] == {0: -10, 1: 0, 2: 30, 3: -20}
+
+
+def test_final_settlement_payloads_emit_each_winner_in_order() -> None:
+    game = NewRuleGameState()
+    game.deferred_hu_settlements = [
+        {
+            "winner": 1,
+            "source": "discard",
+            "discarder": 0,
+            "points": 8,
+            "fan_ids": ["pinfu"],
+            "score_changes": [-48, 48, 0, 0],
+        },
+        {
+            "winner": 2,
+            "source": "self_draw",
+            "points": 5,
+            "fan_ids": ["haitei"],
+            "score_changes": [-10, 0, 30, -20],
+        },
+    ]
+    game.ended_by = "win"
+
+    payloads = final_settlement_payloads(game, 0)
+
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in payloads] == [1, 2]
+    assert [payload["show_result_info"]["hu_fan"] for payload in payloads] == [["pinfu"], ["haitei"]]
+    assert [payload["show_result_info"]["liuju_status_final"] for payload in payloads] == [False, True]
+    assert all(payload["show_result_info"]["liuju_step"] == "settle_hu" for payload in payloads)
+    assert [payload["show_result_info"]["score_changes"] for payload in payloads] == [
+        {0: -48, 1: 48, 2: 0, 3: 0},
+        {0: -10, 1: 0, 2: 30, 3: -20},
+    ]
+    assert [payload["show_result_info"]["player_to_score"] for payload in payloads] == [
+        {0: -48, 1: 48, 2: 0, 3: 0},
+        {0: -58, 1: 48, 2: 30, 3: -20},
+    ]
+    total_from_panels = {idx: 0 for idx in range(4)}
+    for payload in payloads:
+        for player_index, change in payload["show_result_info"]["score_changes"].items():
+            total_from_panels[player_index] += change
+    assert total_from_panels == {0: -58, 1: 48, 2: 30, 3: -20}
+    assert [player.score for player in game.player_list] == [-58, 48, 30, -20]
+
+
+def test_final_settlement_panel_scores_inherit_from_existing_scores() -> None:
+    game = NewRuleGameState()
+    game.player_list[0].score = 100
+    game.player_list[1].score = 200
+    game.player_list[2].score = 300
+    game.player_list[3].score = 400
+    game.deferred_hu_settlements = [
+        {
+            "winner": 1,
+            "source": "discard",
+            "discarder": 0,
+            "points": 8,
+            "score_changes": [-48, 48, 0, 0],
+        },
+        {
+            "winner": 2,
+            "source": "self_draw",
+            "points": 5,
+            "score_changes": [-10, 0, 30, -20],
+        },
+    ]
+    game.ended_by = "win"
+
+    payloads = final_settlement_payloads(game, 0)
+
+    assert [payload["show_result_info"]["player_to_score"] for payload in payloads] == [
+        {0: 52, 1: 248, 2: 300, 3: 400},
+        {0: 42, 1: 248, 2: 330, 3: 380},
+    ]
+    assert [player.score for player in game.player_list] == [42, 248, 330, 380]
+
+
+def test_final_settlement_maps_discard_win_to_unity_hu_classes() -> None:
+    game = NewRuleGameState()
+    game.deferred_hu_settlements = [
+        {"winner": 1, "source": "discard", "discarder": 0, "points": 1},
+        {"winner": 2, "source": "discard", "discarder": 0, "points": 1},
+        {"winner": 3, "source": "discard", "discarder": 0, "points": 1},
+    ]
+    game.ended_by = "win"
+
+    payloads = final_settlement_payloads(game, 0)
+
+    assert [payload["show_result_info"]["hu_class"] for payload in payloads] == [
+        "hu_first",
+        "hu_second",
+        "hu_third",
+    ]
 
 
 def test_final_settlement_without_winners_emits_unity_draw_result() -> None:
@@ -317,23 +477,63 @@ def test_game_start_payload_after_end_reveals_final_state_and_applies_scores_onc
     assert second_payload["game_info"]["players_info"][1]["score"] == 48
 
 
+def test_ready_status_payload_uses_existing_ready_shape() -> None:
+    game = NewRuleGameState()
+    game.action_dict = {0: ["ready"], 1: [], 2: [], 3: []}
+
+    payload = ready_status_payload(game, 0)
+
+    assert payload["type"] == "gamestate/new_rule/ready_status"
+    assert payload["player_index"] == 0
+    assert payload["ready_status_info"]["player_to_ready"] == {
+        0: False,
+        1: True,
+        2: True,
+        3: True,
+    }
+
+
+def test_game_end_payload_uses_existing_game_end_shape() -> None:
+    game = NewRuleGameState()
+    game.player_list[0].score = 30
+    game.player_list[1].score = -10
+    game.player_list[0].record_counter.rank_result = 1
+    game.player_list[1].record_counter.rank_result = 2
+
+    payload = game_end_payload(game, 0)
+
+    assert payload["type"] == "gamestate/new_rule/game_end"
+    assert payload["player_index"] == 0
+    assert payload["game_end_info"]["master_seed"] == str(game.master_seed)
+    assert payload["game_end_info"]["player_final_data"]["0"]["rank"] == 1
+    assert payload["game_end_info"]["player_final_data"]["0"]["score"] == 30
+    assert payload["game_end_info"]["player_final_data"]["1"]["rank"] == 2
+
+
 def run() -> None:
     tests = [
         test_game_info_masks_concealed_kong_for_other_players,
+        test_visible_concealed_kong_payload_masks_other_viewers_but_keeps_mask_shape,
         test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile,
         test_mid_hand_discard_win_keeps_public_discard_tile_but_hides_scoring,
+        test_mid_hand_result_carries_multi_ron_recycle_contract,
         test_deal_tile_payload_hides_drawn_tile_from_other_viewers,
         test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results,
         test_final_settlement_keeps_zero_point_empty_fan_result,
         test_final_settlement_preserves_zero_discarder_index,
         test_final_settlement_applies_score_changes_once,
         test_final_settlement_sums_multiple_score_changes_once,
+        test_final_settlement_payloads_emit_each_winner_in_order,
+        test_final_settlement_panel_scores_inherit_from_existing_scores,
+        test_final_settlement_maps_discard_win_to_unity_hu_classes,
         test_final_settlement_without_winners_emits_unity_draw_result,
         test_ask_action_payload_includes_action_tick_and_actions,
         test_ask_action_payload_includes_unity_bridge_fields,
         test_game_start_payload_uses_viewer_safe_state,
         test_pending_action_payload_replays_standard_action_ask,
         test_game_start_payload_after_end_reveals_final_state_and_applies_scores_once,
+        test_ready_status_payload_uses_existing_ready_shape,
+        test_game_end_payload_uses_existing_game_end_shape,
     ]
     for test in tests:
         test()

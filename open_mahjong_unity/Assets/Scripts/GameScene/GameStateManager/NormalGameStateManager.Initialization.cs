@@ -158,6 +158,20 @@ public partial class NormalGameStateManager {
     private void InitializeSetInfo(GameInfo gameInfo){
         // 清空操作列表
         allowActionList = new List<string>();
+        LastAskActionTick = 0;
+        lastCutCardID = 0;
+        currentAskCutTileId = 0;
+        lastDiscardPlayerPosition = null;
+        CurrentPlayer = null;
+        lastDealTileType = null;
+        selfRiichiCandidateCuts.Clear();
+        selfForbiddenCutTiles.Clear();
+        chiCandidates.Clear();
+        IsQiangGangAsk = false;
+        pendingAskFromJiagang = false;
+        if (RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive) {
+            RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+        }
         // 清空弃牌列表
         player_to_info["self"].discard_tiles = new List<int>();
         player_to_info["left"].discard_tiles = new List<int>();

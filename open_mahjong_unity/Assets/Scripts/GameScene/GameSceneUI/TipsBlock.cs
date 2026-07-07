@@ -45,6 +45,9 @@ public class TipsBlock : MonoBehaviour, IPointerEnterHandler, IPointerExitHandle
                     waitingTiles.RemoveWhere(w => (w / 10) == dingque);
                 }
             }
+            else if (NormalGameStateManager.Instance.roomRule == "new_rule"){
+                waitingTiles = new HashSet<int>();
+            }
             else{
                 Debug.LogWarning($"未知的规则类型: {NormalGameStateManager.Instance.roomRule}");
                 waitingTiles = new HashSet<int>();

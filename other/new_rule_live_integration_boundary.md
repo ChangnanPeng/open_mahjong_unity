@@ -91,7 +91,7 @@ Implemented and tested in isolation:
   - smoke-tested through connected manager-level reconnect-after-END flow:
     ended hand -> reconnect -> `gamestate/new_rule/reconnect` reveals final hands, concealed kong true tiles, deferred settlements, ended_by, and final scores without double-applying score changes
   - smoke-tested through connected multi-ron message flow:
-    discard -> two accepted `hu` responses -> two independent settlements -> next active non-winning player draws
+    discard -> two accepted `hu` responses -> two independent settlements -> next active player after the final accepted winner draws
   - smoke-tested through connected multi-ron hand-end flow:
     one existing winner -> discard -> two accepted `hu` responses as second and third winners -> `END` -> final settlement payloads with both discard-win score changes applied
   - smoke-tested through connected late-action-after-END flow:
@@ -100,10 +100,10 @@ Implemented and tested in isolation:
     discard win advances to the next player's hand-action window -> stale response from the old discard-response tick is ignored without mutating hand, lockout state, settlements, action tick, or payload count
   - smoke-tested through mixed `hu`/`pass` discard response semantics: only passing non-winners enter same-tile lockout
   - smoke-tested through connected mixed `hu`/`pass` response flow:
-    discard -> accepted `hu` plus eligible `pass` in the same window -> only the passing non-winner records same-tile lockout -> next active non-winning player draws
+    discard -> accepted `hu` plus eligible `pass` in the same window -> only the passing non-winner records same-tile lockout -> next active player after the final accepted winner draws
   - smoke-tested that chi/peng/gang claims are skipped when any discard winner accepts `hu`
   - smoke-tested through connected mixed hu-vs-claim response flow:
-    discard -> `peng` claim response plus accepted `hu` response in the same window -> hu settlement wins -> peng skipped -> next active non-winning player draws
+    discard -> `peng` claim response plus accepted `hu` response -> hu settlement wins -> peng skipped -> next active player after the final accepted winner draws
   - smoke-tested through a connected four-player scripted message flow:
     start hidden room -> discard -> `peng` -> forced discard -> discard win -> blood-battle continuation draw
   - smoke-tested through connected self-draw continuation:

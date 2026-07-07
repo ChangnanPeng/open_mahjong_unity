@@ -12,6 +12,7 @@ if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
 from server.gamestate.game_new_rule import NewRuleGameState
+from server.gamestate.game_new_rule.boardcast import final_settlement_payloads
 
 
 class FakeWebSocket:
@@ -166,6 +167,26 @@ def test_resolve_discard_win_responses_allows_independent_multi_ron() -> None:
     assert [record["winner"] for record in game.deferred_hu_settlements] == [1, 2]
     assert result["draw_player"] == 3
     assert result["drawn_tile"] == 33
+
+
+def test_discard_win_continues_from_winner_next_seat_not_discarder_next_seat() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[3].hand_tiles = [15]
+    game.player_list[2].waiting_tiles = {15}
+
+    tile = game.record_discard(3, 15)
+    result = game.resolve_discard_win_responses(3, tile, {2: "hu"}, {2: {"points": 8}})
+
+    assert result["winners"] == [2]
+    assert result["draw_player"] == 3
+    assert result["drawn_tile"] == 33
+    assert game.current_player_index == 3
+    assert game.player_list[3].hand_tiles == [33]
 
 
 def test_discard_win_with_pass_locks_only_passing_non_winner() -> None:
@@ -461,6 +482,8 @@ def test_calculated_self_draw_settlement_scores_remaining_non_winners() -> None:
     game.player_list[1].is_hu = True
     game.player_list[1].hu_order = 1
     game.hu_order_counter = 1
+    game.opening_action_taken = True
+    game.opening_flow_interrupted = True
     game.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 15, 15]
 
     game.record_self_draw_win(0, 15)
@@ -486,6 +509,8 @@ def test_declare_concealed_kong_draws_supplement_and_hides_public_tile() -> None
     assert result["drawn_tile"] == 33
     assert game.player_list[0].hand_tiles == [41, 33]
     assert game.player_list[0].combination_tiles == ["G15"]
+    assert game.player_list[0].combination_mask == [[2, 15, 2, 15, 2, 15, 2, 15]]
+    assert result["combination_mask"] == [2, 15, 2, 15, 2, 15, 2, 15]
     assert game.game_status == "waiting_hand_action"
 
 
@@ -499,6 +524,7 @@ def test_added_kong_without_robbery_upgrades_triplet_and_draws_supplement() -> N
     game.tiles_list = [33, 34]
     game.player_list[0].hand_tiles = [15, 41]
     game.player_list[0].combination_tiles = ["k15"]
+    game.player_list[0].combination_mask = [[1, 15, 0, 15, 0, 15]]
     game.player_list[2].waiting_tiles = {15}
 
     attempt = game.attempt_added_kong(0, 15)
@@ -508,9 +534,12 @@ def test_added_kong_without_robbery_upgrades_triplet_and_draws_supplement() -> N
     assert not result["robbed"]
     assert result["passed"] == [2]
     assert result["meld_code"] == "g15"
+    assert result["previous_meld_code"] == "k15"
+    assert result["combination_mask"] == [3, 15, 1, 15, 0, 15, 0, 15]
     assert result["drawn_tile"] == 33
     assert game.player_list[0].hand_tiles == [41, 33]
     assert game.player_list[0].combination_tiles == ["g15"]
+    assert game.player_list[0].combination_mask == [[3, 15, 1, 15, 0, 15, 0, 15]]
     assert not game.can_win_by_discard(2, 15)
     assert game.game_status == "waiting_hand_action"
 
@@ -536,10 +565,11 @@ def test_added_kong_robbed_does_not_upgrade_or_draw_supplement() -> None:
     assert game.deferred_hu_settlements == [
         {"source": "rob_kong", "kong_player": 0, "tile": 15, "points": 8, "winner": 2, "hu_order": 1}
     ]
-    assert game.player_list[0].hand_tiles == [15, 41]
+    assert game.player_list[0].hand_tiles == [41]
     assert game.player_list[0].combination_tiles == ["k15"]
-    assert result["draw_player"] == 1
+    assert result["draw_player"] == 3
     assert result["drawn_tile"] == 33
+    assert game.player_list[3].hand_tiles == [33]
 
 
 def test_added_kong_robbery_respects_same_tile_lockout() -> None:
@@ -614,6 +644,96 @@ def test_apply_turn_self_draw_win_continues_to_next_player_draw() -> None:
     assert window["status"] == "waiting_hand_action"
 
 
+def test_apply_action_results_self_draw_win_emits_deferred_show_result() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+
+    window = game.begin_hand_action(0)
+    game.apply_action_results(
+        window,
+        {0: {"action_type": "hu_self", "target_tile": 41, "TileId": None, "cutIndex": -1, "cutClass": False}},
+        settlements={0: {"points": 6}},
+    )
+
+    show_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+    ]
+    assert show_payloads
+    assert show_payloads[0]["show_result_info"]["hepai_player_index"] == 0
+    assert show_payloads[0]["show_result_info"]["hu_class"] == "hu_self"
+    assert show_payloads[0]["show_result_info"]["hu_fan"] == []
+    assert show_payloads[0]["show_result_info"]["suppress_hand_reveal"] is True
+    assert show_payloads[0]["show_result_info"]["defer_score_settlement"] is True
+    deal_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+        and payload.get("do_action_info", {}).get("action_list") == ["deal_tile"]
+        and payload.get("do_action_info", {}).get("action_player") == 1
+    ]
+    assert deal_payloads
+    assert any(payload["do_action_info"]["deal_tile"] == 33 for payload in deal_payloads)
+
+
+def test_apply_action_results_third_self_draw_win_with_zero_target_ends_hand() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[0].is_hu = True
+    game.player_list[1].is_hu = True
+    game.hu_order_counter = 2
+    game.deferred_hu_settlements = [
+        {"source": "discard", "tile": 11, "winner": 0, "points": 8, "hu_order": 1},
+        {"source": "discard", "tile": 12, "winner": 1, "points": 8, "hu_order": 2},
+    ]
+    game.player_list[2].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+
+    window = game.begin_hand_action(2)
+    next_window = game.apply_action_results(
+        window,
+        {2: {"action_type": "hu_self", "target_tile": 0, "TileId": None, "cutIndex": -1, "cutClass": False}},
+        settlements={2: {"points": 6}},
+    )
+
+    assert next_window["status"] == "END"
+    assert game.game_status == "END"
+    assert game.player_list[2].is_hu
+    assert game.deferred_hu_settlements[-1] == {
+        "source": "self_draw",
+        "tile": 41,
+        "points": 6,
+        "winner": 2,
+        "hu_order": 3,
+    }
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/do_action"
+        and payload.get("do_action_info", {}).get("action_list") == ["deal_tile"]
+        for payload in game.outbound_payloads
+    )
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        for payload in game.outbound_payloads
+    )
+    final_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("liuju_step") == "settle_hu"
+    ]
+    assert len(final_payloads) == 4 * 3
+
+
 def test_apply_turn_concealed_kong_returns_followup_hand_action_window() -> None:
     game = NewRuleGameState()
     game.initialize_round()
@@ -628,9 +748,159 @@ def test_apply_turn_concealed_kong_returns_followup_hand_action_window() -> None
 
     assert window["result"]["meld_code"] == "G15"
     assert window["result"]["public_meld_code"] == "G0"
+    assert window["result"]["combination_mask"] == [2, 15, 2, 15, 2, 15, 2, 15]
+    assert window["drawn_tile"] == 33
     assert game.player_list[0].hand_tiles == [41, 33]
     assert window["status"] == "waiting_hand_action"
     assert "cut" in window["actions"][0], window
+
+
+def test_apply_action_results_concealed_kong_emits_mask_and_supplement_draw() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+        player.combination_mask = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15, 15, 15, 15, 41]
+
+    window = game.begin_hand_action(0)
+    next_window = game.apply_action_results(
+        window,
+        {0: {"action_type": "angang", "target_tile": 15, "TileId": None, "cutIndex": -1, "cutClass": False}},
+    )
+
+    assert next_window["status"] == "waiting_hand_action"
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    angang_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 0 and payload["do_action_info"]["action_list"] == ["angang"]
+    )
+    hidden_angang_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 1 and payload["do_action_info"]["action_list"] == ["angang"]
+    )
+    gang_draw_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 0 and payload["do_action_info"]["action_list"] == ["deal_gang_tile"]
+    )
+
+    assert angang_payload["do_action_info"]["combination_target"] == "G15"
+    assert angang_payload["do_action_info"]["combination_mask"] == [2, 15, 2, 15, 2, 15, 2, 15]
+    assert hidden_angang_payload["do_action_info"]["combination_target"] == "G0"
+    assert hidden_angang_payload["do_action_info"]["combination_mask"] == [2, 0, 2, 0, 2, 0, 2, 0]
+    assert gang_draw_payload["do_action_info"]["deal_tile"] == 33
+
+
+def test_concealed_kong_supplement_self_draw_scores_rinshan() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+        player.combination_mask = []
+    game.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+
+    game.begin_hand_action(0, is_get_gang_tile=True)
+    game.record_self_draw_win(0, 41)
+
+    settlement = game.deferred_hu_settlements[-1]
+    assert "rinshan" in settlement["fan_ids"], settlement
+
+
+def test_opening_self_draw_context_scores_heavenly_and_earthly_win() -> None:
+    heavenly = NewRuleGameState()
+    heavenly.initialize_round()
+    for player in heavenly.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    heavenly.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+
+    heavenly.record_self_draw_win(0, 41)
+
+    assert "heavenly_win" in heavenly.deferred_hu_settlements[-1]["fan_ids"]
+
+    earthly = NewRuleGameState()
+    earthly.initialize_round()
+    for player in earthly.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    earthly.tiles_list = [41, 33]
+    earthly.player_list[0].hand_tiles = [19]
+    earthly.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41]
+    earthly.record_discard(0, 19)
+    drawn_tile = earthly.draw_after_discard_resolution(0)
+
+    earthly.record_self_draw_win(1, drawn_tile)
+
+    assert drawn_tile == 41
+    assert "earthly_win" in earthly.deferred_hu_settlements[-1]["fan_ids"]
+
+
+def test_last_tile_context_scores_haitei_and_houtei() -> None:
+    haitei = NewRuleGameState()
+    haitei.initialize_round()
+    for player in haitei.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    haitei.tiles_list = []
+    haitei.opening_action_taken = True
+    haitei.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+
+    haitei.record_self_draw_win(1, 41)
+
+    assert "haitei" in haitei.deferred_hu_settlements[-1]["fan_ids"]
+
+    houtei = NewRuleGameState()
+    houtei.initialize_round()
+    for player in houtei.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    houtei.tiles_list = []
+    houtei.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41]
+
+    houtei.record_discard_win(1, 0, 41)
+
+    assert "houtei" in houtei.deferred_hu_settlements[-1]["fan_ids"]
+
+
+def test_pre_win_context_scores_nine_gates_in_live_settlement() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    pre = [11, 11, 11, 12, 13, 14, 15, 16, 17, 18, 19, 19, 19]
+    game.player_list[1].hand_tiles = pre + [15]
+    game.opening_flow_interrupted = True
+
+    game.record_self_draw_win(1, 15)
+
+    assert "nine_gates" in game.deferred_hu_settlements[-1]["fan_ids"]
+
+
+def test_discard_win_pre_win_context_scores_nine_gates() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+
+    game.player_list[1].hand_tiles = [11, 11, 11, 12, 13, 14, 15, 16, 17, 18, 19, 19, 19]
+    game.player_list[1].waiting_tiles = {19}
+
+    game.record_discard_win(1, 0, 19)
+
+    settlement = game.deferred_hu_settlements[-1]
+    assert "nine_gates" in settlement["fan_ids"]
+    assert settlement["points"] == 20
 
 
 def test_apply_turn_added_kong_opens_rob_kong_window() -> None:
@@ -650,6 +920,49 @@ def test_apply_turn_added_kong_opens_rob_kong_window() -> None:
     assert "hu" in window["actions"][2], window
     assert game.player_list[0].combination_tiles == ["k15"]
     assert game.player_list[0].hand_tiles == [15, 41]
+
+
+def test_apply_action_results_added_kong_pass_emits_meld_update_and_supplement_draw() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+        player.combination_mask = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15, 41]
+    game.player_list[0].combination_tiles = ["k15"]
+    game.player_list[0].combination_mask = [[1, 15, 0, 15, 0, 15]]
+
+    kong_window = game.apply_turn_action(0, "jiagang", tile=15)
+    next_window = game.apply_action_results(
+        kong_window,
+        {
+            1: {"action_type": "pass"},
+            2: {"action_type": "pass"},
+            3: {"action_type": "pass"},
+        },
+    )
+
+    assert next_window["status"] == "waiting_hand_action"
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    jiagang_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 0 and payload["do_action_info"]["action_list"] == ["jiagang"]
+    )
+    gang_draw_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 0 and payload["do_action_info"]["action_list"] == ["deal_gang_tile"]
+    )
+
+    assert jiagang_payload["do_action_info"]["combination_target"] == "k15"
+    assert jiagang_payload["do_action_info"]["combination_mask"] == [3, 15, 1, 15, 0, 15, 0, 15]
+    assert gang_draw_payload["do_action_info"]["deal_tile"] == 33
 
 
 def test_continue_after_discard_responses_multi_ron_returns_next_hand_window() -> None:
@@ -676,6 +989,163 @@ def test_continue_after_discard_responses_multi_ron_returns_next_hand_window() -
     assert window["player"] == 3
     assert window["drawn_tile"] == 33
     assert window["win_result"]["winners"] == [1, 2]
+
+
+def test_apply_action_results_mid_multi_ron_marks_recycle_only_on_last_panel() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15]
+    game.player_list[1].waiting_tiles = {15}
+    game.player_list[2].waiting_tiles = {15}
+
+    tile = game.record_discard(0, 15)
+    window = {
+        "status": "waiting_action_after_cut",
+        "player": 0,
+        "tile": tile,
+        "actions": {1: ["hu", "pass"], 2: ["hu", "pass"]},
+    }
+
+    next_window = game.apply_action_results(
+        window,
+        {
+            1: {"action_type": "hu"},
+            2: {"action_type": "hu"},
+        },
+        settlements={1: {"points": 6, "score_changes": [-36, 36, 0, 0]}, 2: {"points": 8, "score_changes": [-48, 0, 48, 0]}},
+    )
+
+    assert next_window["status"] == "waiting_hand_action"
+    panels = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in panels] == [1, 2]
+    assert [payload["show_result_info"]["multi_ron"] for payload in panels] == [True, True]
+    assert [payload["show_result_info"]["recycle_discard"] for payload in panels] == [False, True]
+    viewer0_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("player_index") == 0
+        or payload.get("type") == "gamestate/new_rule/_internal_mid_hand_hu_delay"
+    ]
+    delay_indexes = [
+        i for i, payload in enumerate(viewer0_payloads)
+        if payload.get("type") == "gamestate/new_rule/_internal_mid_hand_hu_delay"
+    ]
+    panel_indexes = [
+        i for i, payload in enumerate(viewer0_payloads)
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert len(delay_indexes) == 2
+    assert panel_indexes[0] < delay_indexes[0] < panel_indexes[1] < delay_indexes[1]
+    assert viewer0_payloads[delay_indexes[0]]["delay_seconds"] == 0.5
+
+
+def test_apply_action_results_terminal_discard_win_emits_only_final_settlement() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[0].is_hu = True
+    game.player_list[1].is_hu = True
+    game.hu_order_counter = 2
+    game.deferred_hu_settlements = [
+        {"source": "self_draw", "tile": 11, "winner": 0, "points": 8, "hu_order": 1},
+        {"source": "self_draw", "tile": 12, "winner": 1, "points": 8, "hu_order": 2},
+    ]
+    game.player_list[2].hand_tiles = [41]
+    game.player_list[3].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41]
+    game.player_list[3].waiting_tiles = {41}
+
+    cut_tile = game.record_discard(2, 41)
+    window = {
+        "status": "waiting_action_after_cut",
+        "player": 2,
+        "tile": cut_tile,
+        "actions": {3: ["hu", "pass"]},
+    }
+    next_window = game.apply_action_results(window, {3: {"action_type": "hu"}})
+
+    assert next_window["status"] == "END"
+    assert game.game_status == "END"
+    assert game.player_list[3].is_hu
+    assert game.deferred_hu_settlements[-1]["winner"] == 3
+    assert game.deferred_hu_settlements[-1]["source"] == "discard"
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        for payload in game.outbound_payloads
+    )
+    final_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("liuju_step") == "settle_hu"
+    ]
+    assert len(final_payloads) == 4 * 3
+
+
+def test_apply_action_results_terminal_multi_ron_emits_each_final_settlement() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = [33, 34]
+    game.player_list[0].is_hu = True
+    game.hu_order_counter = 1
+    game.deferred_hu_settlements = [
+        {"source": "self_draw", "tile": 11, "winner": 0, "points": 8, "hu_order": 1},
+    ]
+    game.player_list[1].hand_tiles = [41]
+    game.player_list[2].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41]
+    game.player_list[2].waiting_tiles = {41}
+    game.player_list[3].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 46, 46, 46, 41]
+    game.player_list[3].waiting_tiles = {41}
+
+    cut_tile = game.record_discard(1, 41)
+    window = {
+        "status": "waiting_action_after_cut",
+        "player": 1,
+        "tile": cut_tile,
+        "actions": {2: ["hu", "pass"], 3: ["hu", "pass"]},
+    }
+    next_window = game.apply_action_results(
+        window,
+        {
+            2: {"action_type": "hu"},
+            3: {"action_type": "hu"},
+        },
+    )
+
+    assert next_window["status"] == "END"
+    assert [settlement["winner"] for settlement in game.deferred_hu_settlements] == [0, 2, 3]
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        for payload in game.outbound_payloads
+    )
+    final_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("liuju_step") == "settle_hu"
+    ]
+    assert len(final_payloads) == 4 * 3
+    viewer_zero_panels = [payload for payload in final_payloads if payload.get("player_index") == 0]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in viewer_zero_panels] == [0, 2, 3]
+    assert viewer_zero_panels[-1]["show_result_info"]["liuju_status_final"] is True
 
 
 def test_continue_after_discard_responses_skips_claims_when_anyone_wins() -> None:
@@ -725,6 +1195,48 @@ def test_continue_after_discard_responses_claim_returns_only_cut_window() -> Non
     assert window["player"] == 2
     assert window["claim_result"]["meld_code"] == "k15"
     assert window["actions"][2] == ["cut"]
+
+
+def test_apply_action_results_discard_claim_gang_emits_supplement_draw() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+        player.combination_mask = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15]
+    game.player_list[3].hand_tiles = [15, 15, 15, 41]
+
+    cut_tile = game.record_discard(0, 15)
+    window = {
+        "status": "waiting_action_after_cut",
+        "player": 0,
+        "tile": cut_tile,
+        "actions": {3: ["gang", "pass"]},
+    }
+
+    next_window = game.apply_action_results(window, {3: {"action_type": "gang"}})
+
+    assert next_window["status"] == "waiting_hand_action"
+    assert next_window["reason"] == "discard_gang"
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    claim_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 0 and payload["do_action_info"]["action_list"] == ["gang"]
+    )
+    gang_draw_payload = next(
+        payload for payload in action_payloads
+        if payload["player_index"] == 3 and payload["do_action_info"]["action_list"] == ["deal_gang_tile"]
+    )
+
+    assert claim_payload["do_action_info"]["combination_target"] == "g15"
+    assert gang_draw_payload["do_action_info"]["deal_tile"] == 33
 
 
 def test_continue_after_discard_responses_no_claim_returns_next_draw_window() -> None:
@@ -809,10 +1321,298 @@ def test_continue_after_rob_kong_responses_robbed_returns_next_draw_window() -> 
 
     assert window["status"] == "waiting_hand_action"
     assert window["reason"] == "rob_kong"
-    assert window["player"] == 1
+    assert window["player"] == 3
     assert window["drawn_tile"] == 33
     assert window["rob_kong_result"]["winners"] == [2]
+    assert game.current_player_index == 3
+    assert game.player_list[3].hand_tiles == [33]
     assert game.player_list[0].combination_tiles == ["k15"]
+
+
+def test_rob_kong_continues_from_winner_next_seat_not_kong_player_next_seat() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+    game.tiles_list = [33, 34]
+    game.player_list[3].hand_tiles = [15, 41]
+    game.player_list[3].combination_tiles = ["k15"]
+    game.player_list[2].waiting_tiles = {15}
+    game.attempt_added_kong(3, 15)
+
+    window = game.continue_after_rob_kong_responses(3, 15, {2: "hu"}, {2: {"points": 8}})
+
+    assert window["status"] == "waiting_hand_action"
+    assert window["reason"] == "rob_kong"
+    assert window["player"] == 3
+    assert window["drawn_tile"] == 33
+    assert game.current_player_index == 3
+    assert game.player_list[3].hand_tiles == [41, 33]
+
+
+def test_apply_action_results_robbed_kong_emits_hu_result_and_normal_draw() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15, 41]
+    game.player_list[0].combination_tiles = ["k15"]
+    game.player_list[2].waiting_tiles = {15}
+    game.attempt_added_kong(0, 15)
+    window = {
+        "status": "waiting_action_qianggang",
+        "player": 0,
+        "tile": 15,
+        "actions": {2: ["hu", "pass"]},
+    }
+
+    next_window = game.apply_action_results(
+        window,
+        {2: {"action_type": "hu"}},
+        settlements={2: {"points": 8}},
+    )
+
+    assert next_window["status"] == "waiting_hand_action"
+    assert next_window["player"] == 3
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    assert any(
+        payload["do_action_info"]["action_list"] == ["hu_second"]
+        and payload["do_action_info"]["action_player"] == 2
+        for payload in action_payloads
+    )
+    assert any(
+        payload["do_action_info"]["action_list"] == ["deal_tile"]
+        and payload["do_action_info"]["action_player"] == 3
+        and payload["do_action_info"]["deal_tile"] == 33
+        for payload in action_payloads
+    )
+    assert not any(
+        payload["do_action_info"]["action_list"] == ["deal_gang_tile"]
+        for payload in action_payloads
+    )
+    mid_hand_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert mid_hand_payloads
+    assert mid_hand_payloads[0]["show_result_info"]["hepai_player_index"] == 2
+    assert mid_hand_payloads[0]["show_result_info"]["is_qianggang"] is True
+
+
+def test_apply_action_results_robbed_kong_as_third_win_ends_hand_with_final_panels() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].is_hu = True
+    game.player_list[1].is_hu = True
+    game.hu_order_counter = 2
+    game.deferred_hu_settlements = [
+        {"source": "self_draw", "tile": 11, "winner": 0, "points": 8, "hu_order": 1},
+        {"source": "discard", "discarder": 3, "tile": 12, "winner": 1, "points": 8, "hu_order": 2},
+    ]
+    game.player_list[3].hand_tiles = [15, 41]
+    game.player_list[3].combination_tiles = ["k15"]
+    game.player_list[2].waiting_tiles = {15}
+    game.attempt_added_kong(3, 15)
+    window = {
+        "status": "waiting_action_qianggang",
+        "player": 3,
+        "tile": 15,
+        "actions": {2: ["hu", "pass"]},
+    }
+
+    next_window = game.apply_action_results(
+        window,
+        {2: {"action_type": "hu"}},
+        settlements={2: {"points": 8}},
+    )
+
+    assert next_window["status"] == "END"
+    assert game.game_status == "END"
+    assert [settlement["winner"] for settlement in game.deferred_hu_settlements] == [0, 1, 2]
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    assert any(
+        payload["do_action_info"]["action_list"] == ["hu_third"]
+        and payload["do_action_info"]["action_player"] == 2
+        for payload in action_payloads
+    )
+    assert not any(
+        payload["do_action_info"]["action_list"] in (["deal_tile"], ["deal_gang_tile"])
+        for payload in action_payloads
+    )
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        for payload in game.outbound_payloads
+    )
+    final_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("liuju_step") == "settle_hu"
+    ]
+    assert len(final_payloads) == 4 * 3
+    viewer_zero_panels = [payload for payload in final_payloads if payload.get("player_index") == 0]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in viewer_zero_panels] == [0, 1, 2]
+    assert viewer_zero_panels[-1]["show_result_info"]["is_qianggang"] is True
+    assert viewer_zero_panels[-1]["show_result_info"]["liuju_status_final"] is True
+
+
+def test_apply_action_results_multi_robbed_kong_ends_hand_and_scores_chankan() -> None:
+    game = NewRuleGameState()
+    game.initialize_round()
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+    game.tiles_list = [33, 34]
+    game.player_list[0].hand_tiles = [15, 41]
+    game.player_list[0].combination_tiles = ["k15"]
+    for winner_index in (1, 2, 3):
+        game.player_list[winner_index].hand_tiles = [
+            11, 12, 13,
+            21, 22, 23,
+            31, 32, 33,
+            45, 45, 45,
+            15,
+        ]
+        game.player_list[winner_index].waiting_tiles = {15}
+    game.attempt_added_kong(0, 15)
+    window = {
+        "status": "waiting_action_qianggang",
+        "player": 0,
+        "tile": 15,
+        "actions": {
+            1: ["hu", "pass"],
+            2: ["hu", "pass"],
+            3: ["hu", "pass"],
+        },
+    }
+
+    next_window = game.apply_action_results(
+        window,
+        {
+            1: {"action_type": "hu"},
+            2: {"action_type": "hu"},
+            3: {"action_type": "hu"},
+        },
+    )
+
+    assert next_window["status"] == "END"
+    assert next_window["rob_kong_result"]["winners"] == [1, 2, 3]
+    assert game.game_status == "END"
+    assert [settlement["winner"] for settlement in game.deferred_hu_settlements] == [1, 2, 3]
+    assert all(settlement["source"] == "rob_kong" for settlement in game.deferred_hu_settlements)
+    assert all("chankan" in settlement["fan_ids"] for settlement in game.deferred_hu_settlements)
+    assert all(settlement["score_changes"][0] < 0 for settlement in game.deferred_hu_settlements)
+    action_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/do_action"
+    ]
+    hu_actions = [
+        payload["do_action_info"]["action_list"][0]
+        for payload in action_payloads
+        if payload.get("player_index") == 0
+        and payload["do_action_info"]["action_list"][0].startswith("hu_")
+    ]
+    assert hu_actions == ["hu_first", "hu_second", "hu_third"]
+    assert not any(
+        payload["do_action_info"]["action_list"] in (["deal_tile"], ["deal_gang_tile"])
+        for payload in action_payloads
+    )
+    assert not any(
+        payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        for payload in game.outbound_payloads
+    )
+    final_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("show_result_info", {}).get("liuju_step") == "settle_hu"
+    ]
+    assert len(final_payloads) == 4 * 3
+    viewer_zero_panels = [payload for payload in final_payloads if payload.get("player_index") == 0]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in viewer_zero_panels] == [1, 2, 3]
+    assert all(payload["show_result_info"]["is_qianggang"] is True for payload in viewer_zero_panels)
+    assert all("chankan" in payload["show_result_info"]["hu_fan"] for payload in viewer_zero_panels)
+    assert viewer_zero_panels[-1]["show_result_info"]["liuju_status_final"] is True
+
+
+def test_context_fans_are_carried_into_final_settlement_payloads() -> None:
+    for fan_id, setup in [
+        ("rinshan", lambda game: _setup_context_fan_self_draw(game, is_gang_draw=True)),
+        ("heavenly_win", lambda game: _setup_context_fan_self_draw(game, heavenly=True)),
+        ("haitei", lambda game: _setup_context_fan_self_draw(game, wall_empty=True)),
+        ("houtei", _setup_context_fan_houtei),
+        ("chankan", _setup_context_fan_chankan),
+    ]:
+        game = NewRuleGameState()
+        game.initialize_round()
+        setup(game)
+        payload = final_settlement_payloads(game, 0)[-1]
+
+        assert fan_id in game.deferred_hu_settlements[-1]["fan_ids"]
+        assert fan_id in payload["show_result_info"]["hu_fan"]
+
+
+def _setup_context_fan_self_draw(
+    game: NewRuleGameState,
+    *,
+    is_gang_draw: bool = False,
+    heavenly: bool = False,
+    wall_empty: bool = False,
+) -> None:
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41, 41]
+    game.hand_action_is_gang_draw[0] = is_gang_draw
+    game.opening_action_taken = not heavenly
+    if wall_empty:
+        game.tiles_list = []
+    game.record_self_draw_win(0, 41)
+
+
+def _setup_context_fan_houtei(game: NewRuleGameState) -> None:
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+    game.tiles_list = []
+    game.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 41]
+    game.record_discard_win(1, 0, 41)
+
+
+def _setup_context_fan_chankan(game: NewRuleGameState) -> None:
+    for player in game.player_list:
+        player.hand_tiles = []
+        player.waiting_tiles = set()
+        player.combination_tiles = []
+    game.player_list[0].hand_tiles = [15]
+    game.player_list[0].combination_tiles = ["k15"]
+    game.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 15]
+    game.player_list[1].waiting_tiles = {15}
+    game.resolve_added_kong_responses(0, 15, {1: "hu"})
 
 
 def test_scripted_flow_discard_claim_forced_cut_discard_win_next_draw() -> None:
@@ -909,6 +1709,58 @@ def test_wait_action_defaults_pending_pass_on_timeout() -> None:
         assert result[1]["action_type"] == "pass"
         assert game.waiting_players_list == []
         assert game.action_dict[1] == []
+
+    asyncio.run(scenario())
+
+
+def test_wait_action_defaults_pending_ready_on_timeout() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        game.action_dict = {0: ["ready"], 1: [], 2: [], 3: []}
+
+        result = await game.wait_action(timeout=0.001)
+
+        assert result[0]["action_type"] == "ready"
+        assert game.waiting_players_list == []
+        assert game.action_dict[0] == []
+
+    asyncio.run(scenario())
+
+
+def test_wait_action_defaults_pending_cut_on_timeout_with_draw_slot() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        game.player_list[0].hand_tiles = [11, 12, 13]
+        game.player_list[0].has_draw_slot = True
+        game.action_dict = {0: ["cut"], 1: [], 2: [], 3: []}
+
+        result = await game.wait_action(timeout=0.001)
+
+        assert result[0]["action_type"] == "cut"
+        assert result[0]["TileId"] == 13
+        assert result[0]["cutIndex"] == 2
+        assert result[0]["cutClass"] is True
+        assert game.waiting_players_list == []
+        assert game.action_dict[0] == []
+
+    asyncio.run(scenario())
+
+
+def test_wait_action_defaults_pending_cut_on_timeout_without_draw_slot() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        game.player_list[0].hand_tiles = [11, 12, 13]
+        game.player_list[0].has_draw_slot = False
+        game.action_dict = {0: ["cut"], 1: [], 2: [], 3: []}
+
+        result = await game.wait_action(timeout=0.001)
+
+        assert result[0]["action_type"] == "cut"
+        assert result[0]["TileId"] == 13
+        assert result[0]["cutIndex"] == 2
+        assert result[0]["cutClass"] is False
+        assert game.waiting_players_list == []
+        assert game.action_dict[0] == []
 
     asyncio.run(scenario())
 
@@ -1033,6 +1885,119 @@ def test_run_game_loop_starts_draft_loop_and_can_be_cancelled() -> None:
     asyncio.run(scenario())
 
 
+def test_run_game_loop_sends_game_start_before_first_hand_action() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        game.game_task = asyncio.create_task(game.run_game_loop())
+        await asyncio.sleep(0.1)
+
+        payload_types = [payload["type"] for payload in game.outbound_payloads]
+        assert payload_types[:4] == ["gamestate/new_rule/game_start"] * 4
+        assert "gamestate/new_rule/broadcast_hand_action" in payload_types[4:]
+
+        await game.cleanup_game_state()
+        assert game.game_task.cancelled()
+
+    asyncio.run(scenario())
+
+
+def test_round_ready_phase_waits_for_human_and_marks_bots_ready() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        for idx, player in enumerate(game.player_list):
+            if idx > 0:
+                player.user_id = idx
+        ready_task = asyncio.create_task(game.run_round_ready_phase(timeout=1.0))
+        await asyncio.sleep(0.1)
+
+        assert game.game_status == "waiting_ready"
+        assert game.action_dict[0] == ["ready"]
+        assert game.action_dict[1] == []
+        ready_payload = next(
+            payload
+            for payload in reversed(game.outbound_payloads)
+            if payload["type"] == "gamestate/new_rule/ready_status"
+        )
+        assert ready_payload["ready_status_info"]["player_to_ready"][0] is False
+        assert ready_payload["ready_status_info"]["player_to_ready"][1] is True
+
+        await game.submit_action(0, "ready")
+        results = await ready_task
+
+        assert results[0]["action_type"] == "ready"
+        assert game.waiting_players_list == []
+        final_ready_payload = next(
+            payload
+            for payload in reversed(game.outbound_payloads)
+            if payload["type"] == "gamestate/new_rule/ready_status"
+        )
+        assert all(final_ready_payload["ready_status_info"]["player_to_ready"].values())
+
+    asyncio.run(scenario())
+
+
+def test_result_ready_timeout_matches_draw_panel_duration_without_winners() -> None:
+    game = NewRuleGameState()
+    game.deferred_hu_settlements = []
+
+    assert game.estimated_round_result_ready_timeout() == 2.35
+
+
+def test_result_ready_timeout_keeps_multi_winner_panel_window() -> None:
+    game = NewRuleGameState()
+    game.deferred_hu_settlements = [{"winner": 0}, {"winner": 1}, {"winner": 2}]
+
+    assert game.estimated_round_result_ready_timeout() == 26.0
+
+
+def test_final_round_waits_for_ready_before_game_end() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        game.current_round = game.max_round * 4
+
+        async def end_immediately(timeout=None) -> dict:
+            game.game_status = "END"
+            return {"status": "END"}
+
+        game.resolve_action_window = end_immediately
+        game.game_task = asyncio.create_task(game.run_game_loop())
+        for _ in range(100):
+            payload_types = [payload["type"] for payload in game.outbound_payloads]
+            if "gamestate/new_rule/ready_status" in payload_types:
+                break
+            await asyncio.sleep(0.01)
+
+        payload_types = [payload["type"] for payload in game.outbound_payloads]
+        assert "gamestate/new_rule/ready_status" in payload_types
+        assert "gamestate/new_rule/game_end" not in payload_types
+
+        for idx in range(4):
+            await game.submit_action(idx, "ready")
+        await asyncio.wait_for(game.game_task, timeout=1.0)
+
+        payload_types = [payload["type"] for payload in game.outbound_payloads]
+        assert payload_types[-4:] == ["gamestate/new_rule/game_end"] * 4
+
+    asyncio.run(scenario())
+
+
+def test_advance_round_after_ready_rotates_dealer_and_preserves_scores() -> None:
+    game = NewRuleGameState()
+    game.player_list[0].score = 48
+    game.initialize_round()
+    game.game_status = "END"
+
+    game.advance_round_after_ready()
+
+    assert game.current_round == 2
+    assert game.round_index == 2
+    assert game.dealer_index == 1
+    assert game.current_player_index == 1
+    assert game.player_list[0].score == 48
+    assert game.action_dict == {0: [], 1: [], 2: [], 3: []}
+    assert game.waiting_players_list == []
+
+
 def test_recording_initializes_standard_game_record_round() -> None:
     game = NewRuleGameState()
     game.start_game_recording()
@@ -1099,7 +2064,7 @@ def test_recording_finalizes_deferred_hu_at_round_end() -> None:
 
     ticks = game.game_record["game_round"]["round_index_1"]["action_ticks"]
     assert ticks[-2:] == [
-        ["hu", 2, 8, ["duiduihu"], [-48, 0, 48, 0], 41, 0],
+        ["hu_second", 2, 8, ["duiduihu"], [-48, 0, 48, 0], 41, 0],
         ["end"],
     ]
     assert game.player_list[2].record_counter.dianhe_times == 1
@@ -1182,9 +2147,10 @@ def test_resolve_action_window_applies_discard_win_and_opens_next_draw() -> None
         assert discard_window["status"] == "waiting_action_after_cut"
         assert next_window["status"] == "waiting_hand_action"
         assert next_window["reason"] == "discard_win"
-        assert next_window["player"] == 1
+        assert next_window["player"] == 3
         assert next_window["drawn_tile"] == 33
         assert game.player_list[2].is_hu
+        assert game.player_list[3].hand_tiles == [33]
         assert game.deferred_hu_settlements == [
             {"source": "discard", "discarder": 0, "tile": 41, "points": 8, "winner": 2, "hu_order": 1}
         ]
@@ -1301,6 +2267,40 @@ def test_player_reconnect_sends_game_start_then_pending_action_payload() -> None
     asyncio.run(scenario())
 
 
+def test_complete_game_lifecycle_sends_ready_game_end_and_finishes_room() -> None:
+    async def scenario() -> None:
+        cleanup_calls = []
+        finish_calls = []
+
+        class FakeManager:
+            async def cleanup_game_state_complete(self, gamestate_id: str = None, room_id: str = None) -> None:
+                cleanup_calls.append((gamestate_id, room_id))
+
+        class FakeRoomManager:
+            async def finish_custom_game_room(self, room_id: str) -> None:
+                finish_calls.append(room_id)
+
+        game = NewRuleGameState()
+        game.game_server = SimpleNamespace(
+            user_id_to_connection={},
+            gamestate_manager=FakeManager(),
+            room_manager=FakeRoomManager(),
+        )
+        game.game_status = "END"
+        game.player_list[0].score = 20
+
+        await game.complete_game_lifecycle()
+
+        payload_types = [payload["type"] for payload in game.outbound_payloads]
+        assert payload_types[-8:-4] == ["gamestate/new_rule/ready_status"] * 4
+        assert payload_types[-4:] == ["gamestate/new_rule/game_end"] * 4
+        assert game.player_list[0].record_counter.rank_result == 1
+        assert cleanup_calls == [(game.gamestate_id, None)]
+        assert finish_calls == [game.room_id]
+
+    asyncio.run(scenario())
+
+
 def run() -> None:
     tests = [
         test_wall_is_136_no_flowers_and_deal_shape,
@@ -1313,6 +2313,7 @@ def run() -> None:
         test_discard_win_defers_settlement_and_next_draw_skips_winner,
         test_draw_after_discard_resolution_ends_on_empty_wall,
         test_resolve_discard_win_responses_allows_independent_multi_ron,
+        test_discard_win_continues_from_winner_next_seat_not_discarder_next_seat,
         test_discard_win_with_pass_locks_only_passing_non_winner,
         test_resolve_discard_win_responses_ends_after_third_winner_without_draw,
         test_resolve_discard_win_responses_no_winner_only_records_passes,
@@ -1334,25 +2335,52 @@ def run() -> None:
         test_begin_hand_action_refreshes_waiting_from_pre_draw_tiles,
         test_apply_turn_cut_refreshes_waits_and_opens_discard_response_window,
         test_apply_turn_self_draw_win_continues_to_next_player_draw,
+        test_apply_action_results_self_draw_win_emits_deferred_show_result,
+        test_apply_action_results_third_self_draw_win_with_zero_target_ends_hand,
         test_apply_turn_concealed_kong_returns_followup_hand_action_window,
+        test_apply_action_results_concealed_kong_emits_mask_and_supplement_draw,
+        test_concealed_kong_supplement_self_draw_scores_rinshan,
+        test_opening_self_draw_context_scores_heavenly_and_earthly_win,
+        test_last_tile_context_scores_haitei_and_houtei,
+        test_pre_win_context_scores_nine_gates_in_live_settlement,
+        test_discard_win_pre_win_context_scores_nine_gates,
         test_apply_turn_added_kong_opens_rob_kong_window,
+        test_apply_action_results_added_kong_pass_emits_meld_update_and_supplement_draw,
         test_continue_after_discard_responses_multi_ron_returns_next_hand_window,
+        test_apply_action_results_mid_multi_ron_marks_recycle_only_on_last_panel,
+        test_apply_action_results_terminal_discard_win_emits_only_final_settlement,
+        test_apply_action_results_terminal_multi_ron_emits_each_final_settlement,
         test_continue_after_discard_responses_skips_claims_when_anyone_wins,
         test_continue_after_discard_responses_claim_returns_only_cut_window,
+        test_apply_action_results_discard_claim_gang_emits_supplement_draw,
         test_continue_after_discard_responses_no_claim_returns_next_draw_window,
         test_continue_after_final_discard_no_win_ends_by_wall,
         test_continue_after_rob_kong_responses_unrobbed_returns_hand_window,
         test_continue_after_rob_kong_responses_robbed_returns_next_draw_window,
+        test_rob_kong_continues_from_winner_next_seat_not_kong_player_next_seat,
+        test_apply_action_results_robbed_kong_emits_hu_result_and_normal_draw,
+        test_apply_action_results_robbed_kong_as_third_win_ends_hand_with_final_panels,
+        test_apply_action_results_multi_robbed_kong_ends_hand_and_scores_chankan,
+        test_context_fans_are_carried_into_final_settlement_payloads,
         test_scripted_flow_discard_claim_forced_cut_discard_win_next_draw,
         test_wait_action_collects_submitted_action,
         test_visible_action_payloads_are_addressed_to_each_viewer,
         test_wait_action_defaults_pending_pass_on_timeout,
+        test_wait_action_defaults_pending_ready_on_timeout,
+        test_wait_action_defaults_pending_cut_on_timeout_with_draw_slot,
+        test_wait_action_defaults_pending_cut_on_timeout_without_draw_slot,
         test_auto_bot_cuts_last_tile_after_delay,
         test_cleanup_cancels_pending_bot_tasks,
         test_submit_action_rejects_non_waiting_or_illegal_action,
         test_disconnect_reconnect_tags_are_local_shell_behavior,
         test_cleanup_cancels_attached_game_task,
         test_run_game_loop_starts_draft_loop_and_can_be_cancelled,
+        test_run_game_loop_sends_game_start_before_first_hand_action,
+        test_round_ready_phase_waits_for_human_and_marks_bots_ready,
+        test_result_ready_timeout_matches_draw_panel_duration_without_winners,
+        test_result_ready_timeout_keeps_multi_winner_panel_window,
+        test_final_round_waits_for_ready_before_game_end,
+        test_advance_round_after_ready_rotates_dealer_and_preserves_scores,
         test_recording_initializes_standard_game_record_round,
         test_recording_tracks_visible_cut_claim_and_draw_ticks,
         test_recording_finalizes_deferred_hu_at_round_end,
@@ -1364,6 +2392,7 @@ def run() -> None:
         test_flush_outbound_payloads_sends_to_connected_player,
         test_send_payload_to_player_without_connection_keeps_outbox_fallback,
         test_player_reconnect_sends_game_start_then_pending_action_payload,
+        test_complete_game_lifecycle_sends_ready_game_end_and_finishes_room,
     ]
     for test in tests:
         test()

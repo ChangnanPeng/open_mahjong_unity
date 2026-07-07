@@ -491,14 +491,16 @@ public partial class GameRecordManager : MonoBehaviour {
             // 初始化中心操作盘Controlpanel
             int startRemainTiles = 0;
             int displayRound = currentRoundIndex;
+            int? dealerIndex = null;
             if (gameRecord.gameRound.rounds.TryGetValue(currentRoundIndex, out Round currentRoundData)) {
                 startRemainTiles = currentRoundData.tilesList != null ? currentRoundData.tilesList.Count : 0;
+                dealerIndex = currentRoundData.dealerIndex;
                 if (currentRoundData.currentRound > 0) {
                     displayRound = currentRoundData.currentRound;
                 }
             }
             string roomRule = ReadGameTitleString(gameRecord.gameTitle, "rule", "").ToLowerInvariant();
-            BoardCanvas.Instance.InitializeBoardInfoFromRecord(recordPlayerList, indexToPosition, userIdToScore, roomRule, displayRound, startRemainTiles);
+            BoardCanvas.Instance.InitializeBoardInfoFromRecord(recordPlayerList, indexToPosition, userIdToScore, roomRule, displayRound, startRemainTiles, dealerIndex);
 
             // 初始化左上局数面板RoundPanel
             GameCanvas.Instance.UpdateRoomInfoFromRecord(gameRecord, currentRoundIndex);

@@ -159,6 +159,7 @@ public partial class GameCanvas : MonoBehaviour {
     public void InitializeUIInfo(GameInfo gameInfo,Dictionary<int, string> indexToPosition){
         gameObject.SetActive(true);
         StopAndClearChangeHandCardQueue();
+        StopTimeRunning();
         ClearActionDisplay();
         ClearActionButton();
         SetActionButtonContainerVisible(true);
@@ -223,6 +224,7 @@ public partial class GameCanvas : MonoBehaviour {
     public void InitializeUIInfoFromRecord(List<GameRecordManager.RecordPlayer> recordPlayerList, Dictionary<int, string> indexToPosition, Dictionary<int, string> userIdToUsername) {
         gameObject.SetActive(true);
         StopAndClearChangeHandCardQueue();
+        StopTimeRunning();
         ClearActionDisplay();
         ClearActionButton();
         SetActionButtonContainerVisible(true);

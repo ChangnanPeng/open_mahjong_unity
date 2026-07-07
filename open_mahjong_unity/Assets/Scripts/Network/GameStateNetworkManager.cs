@@ -76,6 +76,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_end":
             case "gamestate/riichi/game_end":
             case "gamestate/sichuan/game_end":
+            case "gamestate/new_rule/game_end":
                 HandleGameEnd(response);
                 break;
             case "gamestate/sichuan/ask_dingque":
@@ -104,6 +105,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ready_status":
             case "gamestate/riichi/ready_status":
             case "gamestate/sichuan/ready_status":
+            case "gamestate/new_rule/ready_status":
                 HandleReadyStatus(response);
                 break;
             case "gamestate/classical/show_shuhewei":
@@ -262,7 +264,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             showresponse.liuju_refund
         );
         // 四川·血战到底：本盘未结束（仍有玩家继续行牌）→ 挂起结算层，待下次询问时关闭并续打
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsSichuanRule()) {
+        if (NormalGameStateManager.Instance != null
+            && (NormalGameStateManager.Instance.IsSichuanRule() || NormalGameStateManager.Instance.IsNewRule())) {
             if (showresponse.round_continues == true) {
                 NormalGameStateManager.Instance.MarkPendingSichuanContinue();
             } else {
@@ -352,13 +355,25 @@ public class GameStateNetworkManager : MonoBehaviour {
     public async void SendChineseGameTile(bool cutClass, int tileId, int cutIndex) {
         if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
-            var request = new SendChineseGameTileRequest {
-                type = IsNewRuleActive() ? "gamestate/new_rule/cut_tile" : "gamestate/GB/cut_tile",
-                cutClass = cutClass,
-                TileId = tileId,
-                cutIndex = cutIndex,
-                gamestate_id = UserDataManager.Instance.GamestateId
-            };
+            bool isNewRule = IsNewRuleActive();
+            object request = isNewRule
+                ? new {
+                    type = "gamestate/new_rule/cut_tile",
+                    cutClass = cutClass,
+                    TileId = tileId,
+                    cutIndex = cutIndex,
+                    gamestate_id = UserDataManager.Instance.GamestateId,
+                    action_tick = NormalGameStateManager.Instance != null
+                        ? NormalGameStateManager.Instance.LastAskActionTick
+                        : (int?)null
+                }
+                : new SendChineseGameTileRequest {
+                    type = "gamestate/GB/cut_tile",
+                    cutClass = cutClass,
+                    TileId = tileId,
+                    cutIndex = cutIndex,
+                    gamestate_id = UserDataManager.Instance.GamestateId
+                };
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
             Debug.LogError($"发送切牌消息失败: {e.Message}");
@@ -384,6 +399,21 @@ public class GameStateNetworkManager : MonoBehaviour {
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
             Debug.LogError($"发送操作消息失败: {e.Message}");
+        }
+    }
+
+    public async void SendNewRuleDebugScenario(string scenario) {
+        if (!IsNewRuleActive()) return;
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new {
+                type = "gamestate/new_rule/debug_scenario",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+                scenario = scenario
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            Debug.LogError($"发送新规则测试场景消息失败: {e.Message}");
         }
     }
 

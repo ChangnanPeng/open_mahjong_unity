@@ -189,6 +189,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessRiichiTile(hepaiTile, handList, combinationList);
             } else if (gameManager.roomRule == "sichuan") {
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
+            } else if (gameManager.roomRule == "new_rule") {
+                // New-rule client-side tips are not implemented yet.
             } else {
                 Debug.LogWarning($"未知的规则类型: {gameManager.roomRule}");
             }
@@ -246,6 +248,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessRiichiTile(hepaiTile, handList, combinationList);
             } else if (ctx.RoomRule == "sichuan") {
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
+            } else if (ctx.RoomRule == "new_rule") {
+                // New-rule record tips are not implemented yet.
             } else {
                 Debug.LogWarning($"未知的规则类型: {ctx.RoomRule}");
             }

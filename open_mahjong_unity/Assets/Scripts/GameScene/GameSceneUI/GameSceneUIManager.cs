@@ -61,6 +61,7 @@ public class GameSceneUIManager : MonoBehaviour
         RecordSetting.Instance.gameObject.SetActive(false); // 隐藏牌谱设置组件
         RoundEndPresentation.Instance.StopActiveSequence();
         RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
+        NewRuleDebugScenarioPanel.Hide();
     }
 
     /// <summary>
@@ -177,7 +178,9 @@ public class GameSceneUIManager : MonoBehaviour
         RecordSetting.Instance.gameObject.SetActive(false);
         if (ExitButtonManager.Instance != null) ExitButtonManager.Instance.HideAll(); // 正常对局隐藏退出牌谱/退出观战按钮
         if (realtimeSpectatorIndicator != null) realtimeSpectatorIndicator.ResetForNewGame(); // 重置被实时观战指示器，主动询问一次
+        RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
+        NewRuleDebugScenarioPanel.EnsureForCurrentGame();
     }
 
     /// <summary>实时观战进入对局：清空临时面板，仅显示自动排列手牌。</summary>
@@ -196,7 +199,9 @@ public class GameSceneUIManager : MonoBehaviour
         AutoAction.Instance.InitializeForSpectator();
         RecordSetting.Instance.gameObject.SetActive(false);
         if (ExitButtonManager.Instance != null) ExitButtonManager.Instance.ShowForRealtimeSpectator();
+        RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
+        NewRuleDebugScenarioPanel.Hide();
     }
 
     public void InitGameRecord() {
@@ -216,5 +221,6 @@ public class GameSceneUIManager : MonoBehaviour
         RecordSetting.Instance.Initialize();
         GameRecordManager.Instance.gameObject.SetActive(true); // 显示牌谱组件
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
+        NewRuleDebugScenarioPanel.Hide();
     }
 }

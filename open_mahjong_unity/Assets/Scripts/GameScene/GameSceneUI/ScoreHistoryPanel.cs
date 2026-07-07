@@ -32,6 +32,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         { "riichi", RoundTextDictionary.CurrentRoundTextRiichi },
         { "classical", RoundTextDictionary.CurrentRoundTextClassical },
         { "sichuan", RoundTextDictionary.CurrentRoundTextSichuan },
+        { "new_rule", RoundTextDictionary.CurrentRoundTextQingque },
     };
 
     private void Awake()

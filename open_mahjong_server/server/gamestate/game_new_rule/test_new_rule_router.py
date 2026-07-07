@@ -41,6 +41,7 @@ def test_new_rule_cut_tile_route_queues_cut_action() -> None:
         game = NewRuleGameState()
         server = _server_with_game(game)
         game.player_list[0].hand_tiles = [11, 12, 13]
+        game.server_action_tick = 2
         game.waiting_players_list = [0]
         game.action_dict = {0: ["cut"], 1: [], 2: [], 3: []}
 
@@ -53,6 +54,7 @@ def test_new_rule_cut_tile_route_queues_cut_action() -> None:
                 "TileId": 12,
                 "cutIndex": 1,
                 "cutClass": False,
+                "action_tick": 2,
             },
             FakeWebSocket(),
         )
@@ -62,6 +64,35 @@ def test_new_rule_cut_tile_route_queues_cut_action() -> None:
         assert queued["TileId"] == 12
         assert queued["cutIndex"] == 1
         assert queued["cutClass"] is False
+
+    asyncio.run(scenario())
+
+
+def test_new_rule_cut_tile_route_ignores_stale_action_tick() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        server = _server_with_game(game)
+        game.player_list[0].hand_tiles = [11, 12, 13]
+        game.server_action_tick = 3
+        game.waiting_players_list = [0]
+        game.action_dict = {0: ["cut"], 1: [], 2: [], 3: []}
+
+        await handle_gamestate_message(
+            server,
+            "conn-101",
+            {
+                "type": "gamestate/new_rule/cut_tile",
+                "gamestate_id": game.gamestate_id,
+                "TileId": 12,
+                "cutIndex": 1,
+                "cutClass": False,
+                "action_tick": 2,
+            },
+            FakeWebSocket(),
+        )
+
+        assert game.action_queues[0].empty()
+        assert not game.action_events[0].is_set()
 
     asyncio.run(scenario())
 
@@ -119,11 +150,61 @@ def test_new_rule_route_rejects_non_new_rule_state() -> None:
     asyncio.run(scenario())
 
 
+def test_new_rule_debug_scenario_route_opens_host_scenario() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        server = _server_with_game(game)
+
+        await handle_gamestate_message(
+            server,
+            "conn-101",
+            {
+                "type": "gamestate/new_rule/debug_scenario",
+                "gamestate_id": game.gamestate_id,
+                "scenario": "multi_ron_2",
+            },
+            FakeWebSocket(),
+        )
+
+        assert game.live_pending_window["status"] == "waiting_hand_action"
+        assert game.live_pending_window["player"] == 0
+        assert game.action_dict[0] == ["cut"]
+        assert any(payload["type"] == "gamestate/new_rule/game_start" for payload in game.outbound_payloads)
+        assert any(payload["type"] == "gamestate/new_rule/broadcast_hand_action" for payload in game.outbound_payloads)
+
+    asyncio.run(scenario())
+
+
+def test_new_rule_debug_scenario_route_rejects_non_host() -> None:
+    async def scenario() -> None:
+        game = NewRuleGameState()
+        server = _server_with_game(game)
+
+        await handle_gamestate_message(
+            server,
+            "conn-102",
+            {
+                "type": "gamestate/new_rule/debug_scenario",
+                "gamestate_id": game.gamestate_id,
+                "scenario": "multi_ron_2",
+            },
+            FakeWebSocket(),
+        )
+
+        assert game.live_pending_window is None
+        assert game.action_dict == {0: [], 1: [], 2: [], 3: []}
+
+    asyncio.run(scenario())
+
+
 def run() -> None:
     tests = [
         test_new_rule_cut_tile_route_queues_cut_action,
+        test_new_rule_cut_tile_route_ignores_stale_action_tick,
         test_new_rule_send_action_route_queues_response_action,
         test_new_rule_route_rejects_non_new_rule_state,
+        test_new_rule_debug_scenario_route_opens_host_scenario,
+        test_new_rule_debug_scenario_route_rejects_non_host,
     ]
     for test in tests:
         test()

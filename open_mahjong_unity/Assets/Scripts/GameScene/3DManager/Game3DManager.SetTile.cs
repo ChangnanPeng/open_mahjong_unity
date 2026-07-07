@@ -126,9 +126,13 @@ public partial class Game3DManager : MonoBehaviour {
         }
 
         if (SetType == "Discard") {
+            _currentDiscardMoveObject = cardObj;
+            _currentDiscardMoveTargetPosition = currentPosition;
+            _currentDiscardMoveTargetRotation = rotation;
             _currentDiscardMoveCoroutine = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
             yield return _currentDiscardMoveCoroutine;
             _currentDiscardMoveCoroutine = null;
+            _currentDiscardMoveObject = null;
         }
         else {
             yield return StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));

@@ -147,6 +147,11 @@ public static class ScoreHistorySettlementHelper {
         bool isClassical = subRule == "classical/standard";
         bool isRiichi = subRule != null && subRule.StartsWith("riichi");
         bool isSichuan = subRule != null && subRule.StartsWith("sichuan");
+        bool isNewRule = subRule != null && subRule.StartsWith("new_rule");
+
+        if (isNewRule) {
+            return $"{snapshot.huScore}\u756a {snapshot.huScore * 6}\u70b9";
+        }
 
         string fanPart;
         if (isRiichi && snapshot.han.HasValue) {

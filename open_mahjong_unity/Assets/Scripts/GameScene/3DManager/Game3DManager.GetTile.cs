@@ -46,6 +46,10 @@ public partial class Game3DManager : MonoBehaviour {
         // 等待一帧，避免与其他操作在同一帧执行
         yield return null;
 
+        if (actionType == "get" && ConsumeSuppressedDrawForPlayer(playerIndex)) {
+            yield break;
+        }
+
         // 自家手牌显示空白牌面，但保留真实牌值用于 3D 删除和收拢。
         GameObject cardObj;
         if (playerIndex == "self" && spawnTileId >= 10) {
@@ -103,6 +107,10 @@ public partial class Game3DManager : MonoBehaviour {
         // 摸牌生成位置 = 玩家手牌起始点 + (3D卡牌数量+1)*宽度间距*方向
         else if (actionType == "get") {
             spawnPosition = cardsPosition.position + (cardsPosition.childCount + 1) * cardWidth * direction;
+        }
+
+        if (actionType == "get" && ConsumeSuppressedDrawForPlayer(playerIndex)) {
+            return;
         }
 
         GameObject cardObj;

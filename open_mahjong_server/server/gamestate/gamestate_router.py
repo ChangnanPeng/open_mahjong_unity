@@ -4,6 +4,7 @@ import re
 import time
 from .public.ai.get_action import get_action
 from .game_new_rule.get_action import get_action as new_rule_get_action
+from .game_new_rule.debug_scenarios import DebugScenarioError, start_debug_scenario
 from .public.sticker import broadcast_sticker
 from ..response import Response, SpectatorInfo
 
@@ -39,6 +40,8 @@ async def handle_gamestate_message(game_server, Connect_id: str, message: dict, 
         await handle_new_rule_cut_tile(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/new_rule/send_action":
         await handle_new_rule_send_action(game_server, Connect_id, message, websocket)
+    elif message_type == "gamestate/new_rule/debug_scenario":
+        await handle_new_rule_debug_scenario(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/riichi/set_ryuukyoku_tenpai":
         await handle_set_ryuukyoku_tenpai(game_server, Connect_id, message, websocket)
     elif message_type == "gamestate/GB/add_spectator":
@@ -182,6 +185,42 @@ async def handle_new_rule_send_action(game_server, Connect_id: str, message: dic
         )
     except Exception as e:
         logger.error(f"handle new_rule send_action failed: {e}", exc_info=True)
+
+
+async def handle_new_rule_debug_scenario(game_server, Connect_id: str, message: dict, websocket):
+    """Dev-only new-rule rare-event scenario injection."""
+    try:
+        gamestate_id = message.get("gamestate_id")
+        scenario_name = message.get("scenario")
+        if not gamestate_id or not scenario_name:
+            logger.warning(f"new_rule debug_scenario missing parameters: {message}")
+            return
+
+        game_state = game_server.gamestate_manager.get_game_state_by_gamestate_id(gamestate_id)
+        if not game_state:
+            logger.warning(f"new_rule gamestate_id not found: {gamestate_id}")
+            return
+        if getattr(game_state, "room_rule", None) != "new_rule":
+            logger.warning(f"new_rule debug_scenario routed to non-new-rule state: {gamestate_id}")
+            return
+
+        player_connection = game_server.players.get(Connect_id)
+        user_id = getattr(player_connection, "user_id", None)
+        host_user_id = getattr(game_state.player_list[0], "user_id", None)
+        if user_id is None or user_id != host_user_id:
+            logger.warning(
+                "new_rule debug_scenario rejected for non-host: connect=%s user_id=%s host=%s",
+                Connect_id,
+                user_id,
+                host_user_id,
+            )
+            return
+
+        await start_debug_scenario(game_state, scenario_name)
+    except DebugScenarioError as e:
+        logger.warning(f"new_rule debug_scenario rejected: {e}")
+    except Exception as e:
+        logger.error(f"handle new_rule debug_scenario failed: {e}", exc_info=True)
 
 
 async def handle_send_sticker(game_server, Connect_id: str, message: dict, websocket):

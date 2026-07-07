@@ -21,6 +21,9 @@ public partial class Game3DManager : MonoBehaviour {
     private GameObject lastCutJiagang3DObject; // 最后一张切牌或加杠牌的3D对象（荣和/抢杠倒牌演出用）
 
     private Coroutine _currentDiscardMoveCoroutine; // 当前出牌飞行动画协程，鸣牌时需终止
+    private GameObject _currentDiscardMoveObject;
+    private Vector3 _currentDiscardMoveTargetPosition;
+    private Quaternion _currentDiscardMoveTargetRotation;
     private Vector3 lastRemove3DPosition; // 最后一张删除的3D对象
     private Dictionary<int,Vector3> pengToJiagangPosDict = new Dictionary<int,Vector3>(); // 碰牌的加杠预留指针
 
@@ -637,6 +640,7 @@ public partial class Game3DManager : MonoBehaviour {
             StopCoroutine(_currentDiscardMoveCoroutine);
             _currentDiscardMoveCoroutine = null;
         }
+        _currentDiscardMoveObject = null;
         lastCutJiagang3DObject = null;
         StopAllHandAnimationQueues();
         StopAllCoroutines();

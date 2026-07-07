@@ -245,6 +245,11 @@ async def _wait_for_condition(condition, detail) -> None:
     raise AssertionError(detail())
 
 
+def _force_final_configured_round(game_state: NewRuleGameState) -> None:
+    game_state.current_round = game_state.max_round * 4
+    game_state.round_index = game_state.current_round
+
+
 def test_room_manager_creates_hidden_new_rule_room() -> None:
     async def scenario() -> None:
         server, websocket, player = _server()
@@ -1280,7 +1285,7 @@ def test_hidden_new_rule_room_accepts_robbing_kong_win_response_message() -> Non
 
         assert game_state.player_list[1].is_hu
         assert game_state.player_list[0].combination_tiles == ["k15"]
-        assert game_state.player_list[0].hand_tiles == [15, 41]
+        assert game_state.player_list[0].hand_tiles == [41]
         settlement = game_state.deferred_hu_settlements[0]
         assert settlement["source"] == "rob_kong"
         assert settlement["kong_player"] == 0
@@ -1323,6 +1328,7 @@ def test_hidden_new_rule_room_emits_final_settlement_reveal_payloads() -> None:
             payload
             for payload in game_state.outbound_payloads
             if payload.get("type") == "gamestate/new_rule/show_result"
+            and payload.get("show_result_info", {}).get("defer_score_settlement") is not True
         ]
         assert len(final_payloads) == 4
         viewer_one_payload = next(payload for payload in final_payloads if payload["player_index"] == 1)
@@ -1638,6 +1644,7 @@ def test_hidden_new_rule_room_multi_ron_as_second_and_third_winners_ends_by_mess
                 "score_changes": [0, 0, 0, 0],
             }
         ]
+        _force_final_configured_round(game_state)
 
         game_state.player_list[0].hand_tiles = [45]
         game_state.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41, 45, 45]
@@ -1674,11 +1681,12 @@ def test_hidden_new_rule_room_multi_ron_as_second_and_third_winners_ends_by_mess
             websockets[103],
         )
 
-        await _wait_for_status(game_state, "END")
+        await _wait_for_status(game_state, "waiting_ready")
         final_payloads = [
             payload
             for payload in game_state.outbound_payloads
             if payload.get("type") == "gamestate/new_rule/show_result"
+            and payload.get("show_result_info", {}).get("defer_score_settlement") is not True
         ]
         assert game_state.ended_by == "win"
         assert game_state.current_player_index == 0
@@ -1688,7 +1696,15 @@ def test_hidden_new_rule_room_multi_ron_as_second_and_third_winners_ends_by_mess
             [-48, 48, 0, 0],
             [-48, 0, 48, 0],
         ]
-        assert len(final_payloads) == 4
+        assert len(final_payloads) == 12
+        assert [
+            payload["show_result_info"]["hepai_player_index"]
+            for payload in final_payloads
+        ] == [3, 1, 2] * 4
+        assert [
+            payload["show_result_info"]["liuju_status_final"]
+            for payload in final_payloads[:3]
+        ] == [False, False, True]
         for payload in final_payloads:
             scores = [
                 player_info["score"]
@@ -1727,6 +1743,7 @@ def test_hidden_new_rule_room_late_action_after_end_does_not_mutate_by_messages(
                 "score_changes": [0, 0, 0, 0],
             }
         ]
+        _force_final_configured_round(game_state)
 
         game_state.player_list[0].hand_tiles = [45]
         game_state.player_list[1].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41, 45, 45]
@@ -1760,7 +1777,7 @@ def test_hidden_new_rule_room_late_action_after_end_does_not_mutate_by_messages(
             websockets[103],
         )
 
-        await _wait_for_status(game_state, "END")
+        await _wait_for_status(game_state, "waiting_ready")
         settlements_before = list(game_state.deferred_hu_settlements)
         scores_before = [player.score for player in game_state.player_list]
         payload_count_before = len(game_state.outbound_payloads)
@@ -1778,7 +1795,7 @@ def test_hidden_new_rule_room_late_action_after_end_does_not_mutate_by_messages(
             websockets[104],
         )
 
-        assert game_state.game_status == "END"
+        assert game_state.game_status == "waiting_ready"
         assert game_state.ended_by == "win"
         assert game_state.server_action_tick == tick_before
         assert game_state.deferred_hu_settlements == settlements_before
@@ -2064,6 +2081,9 @@ def test_hidden_new_rule_room_third_self_draw_win_ends_hand_by_messages() -> Non
             {"source": "discard", "discarder": 0, "tile": 41, "winner": 1, "hu_order": 1},
             {"source": "discard", "discarder": 0, "tile": 42, "winner": 2, "hu_order": 2},
         ]
+        game_state.opening_action_taken = True
+        game_state.opening_flow_interrupted = True
+        _force_final_configured_round(game_state)
 
         game_state.player_list[0].hand_tiles = [11, 12, 13, 21, 22, 23, 31, 32, 33, 45, 45, 45, 15, 15]
         game_state.open_action_window(game_state.begin_hand_action(0))
@@ -2082,11 +2102,12 @@ def test_hidden_new_rule_room_third_self_draw_win_ends_hand_by_messages() -> Non
             websockets[101],
         )
 
-        await _wait_for_status(game_state, "END")
+        await _wait_for_status(game_state, "waiting_ready")
         final_payloads = [
             payload
             for payload in game_state.outbound_payloads
             if payload.get("type") == "gamestate/new_rule/show_result"
+            and payload.get("show_result_info", {}).get("defer_score_settlement") is not True
         ]
         assert game_state.ended_by == "win"
         assert game_state.player_list[0].is_hu
@@ -2098,9 +2119,13 @@ def test_hidden_new_rule_room_third_self_draw_win_ends_hand_by_messages() -> Non
         assert settlement["is_win"] is True
         assert settlement["points"] == 5
         assert settlement["score_changes"] == [30, 0, 0, -30]
-        assert len(final_payloads) == 4
-        assert final_payloads[0]["show_result_info"]["hepai_player_index"] == settlement["winner"]
-        assert final_payloads[0]["show_result_info"]["score_changes"] == {0: 30, 1: 0, 2: 0, 3: -30}
+        winner_order = [item["winner"] for item in game_state.deferred_hu_settlements]
+        assert len(final_payloads) == 4 * len(winner_order)
+        assert [
+            payload["show_result_info"]["hepai_player_index"]
+            for payload in final_payloads[:len(winner_order)]
+        ] == winner_order
+        assert final_payloads[-1]["show_result_info"]["score_changes"] == {0: 30, 1: 0, 2: 0, 3: -30}
         for payload in final_payloads:
             scores = [
                 player_info["score"]
@@ -2130,12 +2155,13 @@ def test_hidden_new_rule_room_final_discard_no_win_ends_by_wall_by_messages() ->
         game_state.hu_order_counter = 0
         game_state.deferred_hu_settlements = []
         game_state.ended_by = None
+        _force_final_configured_round(game_state)
 
         game_state.player_list[0].hand_tiles = [15]
         game_state.open_action_window(game_state.begin_hand_action(0))
 
         await _send_host_cut(server, websockets[101], game_state, 15)
-        await _wait_for_status(game_state, "END")
+        await _wait_for_status(game_state, "waiting_ready")
 
         assert game_state.ended_by == "wall"
         assert game_state.deferred_hu_settlements == []
@@ -2387,7 +2413,7 @@ def test_hidden_new_rule_room_scripted_added_kong_robbed_by_messages() -> None:
         await _wait_for_status(game_state, "waiting_hand_action", 2)
         assert game_state.player_list[1].is_hu
         assert game_state.player_list[0].combination_tiles == ["k15"]
-        assert game_state.player_list[0].hand_tiles == [15, 41]
+        assert game_state.player_list[0].hand_tiles == [41]
         settlement = game_state.deferred_hu_settlements[0]
         assert settlement["source"] == "rob_kong"
         assert settlement["kong_player"] == 0

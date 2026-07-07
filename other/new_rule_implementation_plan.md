@@ -282,7 +282,7 @@ Current status:
   - a skipped discard win creating same-tile lockout
   - the player's next discard clearing the old lockout while immediately starting the new discarded-tile lockout
   - discard-win settlement being stored for deferred final reveal
-  - blood-battle continuation drawing from the next active player after the discarder
+  - blood-battle continuation drawing from the next active player after the final accepted discard winner
   - wall exhaustion ending the hand
   - independent multi-ron choices on the same discard
   - a mixed `hu`/`pass` discard response locking only the passing non-winner
@@ -468,7 +468,7 @@ cd C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_server
   - connected manager-level reconnect-after-END flow:
     ended hand -> player reconnect -> `gamestate/new_rule/reconnect` payload reveals final hands, concealed kong true tiles, deferred settlements, ended_by, and final scores without double-applying score changes
   - connected multi-ron message flow:
-    start hidden room -> host discard -> two players accept `hu` on the same discard -> two independent settlements -> next active non-winning player draws
+    start hidden room -> host discard -> two players accept `hu` on the same discard -> two independent settlements -> next active player after the final accepted winner draws
   - connected multi-ron hand-end message flow:
     one existing winner -> host discard -> two players accept `hu` on the same discard as second and third winners -> `END` -> final settlement payloads with both discard-win score changes applied
   - connected late-action-after-END flow:
@@ -476,9 +476,9 @@ cd C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_server
   - connected stale-action-after-window-change flow:
     discard win advances the game into the next player's hand-action window -> stale response from the previous discard-response tick is ignored -> hand, lockout state, settlements, action tick, and payload count do not mutate
   - connected mixed `hu`/`pass` discard-response flow:
-    start hidden room -> host discard -> one player accepts `hu` and another eligible player passes in the same response window -> only the passing non-winner records same-tile lockout -> next active non-winning player draws
+    start hidden room -> host discard -> one player accepts `hu` and another eligible player passes in the same response window -> only the passing non-winner records same-tile lockout -> next active player after the final accepted winner draws
   - connected mixed hu-vs-claim response flow:
-    start hidden room -> host discard -> one player submits `peng` and another accepts `hu` in the same response window -> hu settlement wins -> peng is skipped -> next active non-winning player draws
+    start hidden room -> host discard -> one player submits `peng` and another accepts `hu` in the same response window -> hu settlement wins -> peng is skipped -> next active player after the final accepted winner draws
   - a connected four-player scripted message flow:
     start hidden room -> host discard -> third-seat `peng` -> forced discard -> fourth-seat discard win -> blood-battle continuation draw
   - a connected four-player self-draw message flow:

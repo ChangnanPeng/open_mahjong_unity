@@ -41,6 +41,11 @@ public partial class BoardCanvas {
             targetImage = player_right_current_image;
         }
 
+        if (targetImage == null) {
+            remiansTilesText.text = $"浣?{remainTiles}";
+            return;
+        }
+
         Color color = targetImage.color;
         color.a = 1f;
         targetImage.color = color;

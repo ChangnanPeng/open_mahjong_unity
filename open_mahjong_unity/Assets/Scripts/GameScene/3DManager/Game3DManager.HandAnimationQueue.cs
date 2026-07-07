@@ -41,6 +41,13 @@ public partial class Game3DManager {
         { "right", false },
     };
 
+    private readonly Dictionary<string, bool> _suppressNextDrawByPlayer = new Dictionary<string, bool> {
+        { "self", false },
+        { "left", false },
+        { "top", false },
+        { "right", false },
+    };
+
     /// <summary>他家出牌后，手牌收拢动画开始前的停顿。</summary>
     private const float DiscardSettlePauseSec = 0.2f;
 
@@ -56,7 +63,28 @@ public partial class Game3DManager {
     private void ClearAnkanPendingDrawFlags() {
         foreach (string pos in HandAnimPlayerPositions) {
             _ankanPendingDrawByPlayer[pos] = false;
+            _suppressNextDrawByPlayer[pos] = false;
         }
+    }
+
+    private void SuppressNextDrawForPlayer(string playerPosition) {
+        if (_suppressNextDrawByPlayer.ContainsKey(playerPosition)) {
+            _suppressNextDrawByPlayer[playerPosition] = true;
+        }
+    }
+
+    private void ClearSuppressedDrawForPlayer(string playerPosition) {
+        if (_suppressNextDrawByPlayer.ContainsKey(playerPosition)) {
+            _suppressNextDrawByPlayer[playerPosition] = false;
+        }
+    }
+
+    private bool ConsumeSuppressedDrawForPlayer(string playerPosition) {
+        if (!_suppressNextDrawByPlayer.TryGetValue(playerPosition, out bool suppressed) || !suppressed) {
+            return false;
+        }
+        _suppressNextDrawByPlayer[playerPosition] = false;
+        return true;
     }
 
     private void StopAllHandAnimationQueues() {

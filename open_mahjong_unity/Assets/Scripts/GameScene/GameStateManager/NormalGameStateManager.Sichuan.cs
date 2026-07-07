@@ -102,6 +102,11 @@ public partial class NormalGameStateManager {
         return !string.IsNullOrEmpty(subRule) && subRule.StartsWith("sichuan");
     }
 
+    public bool IsNewRule() {
+        if (roomRule == "new_rule") return true;
+        return !string.IsNullOrEmpty(subRule) && subRule.StartsWith("new_rule");
+    }
+
     /// <summary>自家手牌是否仍含定缺花色（与服务端 has_dingque_in_hand 一致）。</summary>
     public bool SelfHasDingqueTileInHand() {
         if (selfDingqueSuit < 1 || selfDingqueSuit > 3 || selfHandTiles == null) return false;
@@ -126,7 +131,7 @@ public partial class NormalGameStateManager {
 
     /// <summary>血战到底：标记本盘和牌后继续，等待服务端下一次行牌询问。</summary>
     public void MarkPendingSichuanContinue() {
-        if (!IsSichuanRule()) return;
+        if (!IsSichuanRule() && !IsNewRule()) return;
         pendingSichuanContinueAfterResult = true;
     }
 
@@ -176,6 +181,16 @@ public partial class NormalGameStateManager {
             return;
         }
         pendingSichuanContinueAfterResult = false;
+
+        // New rule mid-hand hu uses RoundEndPresentation only as the coroutine host
+        // for the short 3D win-tile animation. The next ask can arrive before that
+        // animation finishes; stopping the active sequence here cuts the tile flight.
+        if (IsNewRule()) {
+            if (EndResultPanel.Instance != null) {
+                EndResultPanel.Instance.ClearEndResultPanel();
+            }
+            return;
+        }
 
         if (RoundEndPresentation.Instance != null) {
             RoundEndPresentation.Instance.StopActiveSequence();

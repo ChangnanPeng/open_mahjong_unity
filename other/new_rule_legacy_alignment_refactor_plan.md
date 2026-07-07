@@ -97,7 +97,8 @@ Action fields:
 
 Broadcast/Unity:
 
-- New rule currently relies on `unity_game_info` bridge payloads.
+- Historical start-of-refactor state: new rule relied on `unity_game_info` bridge payloads.
+- Current state after Phase 4b: `unity_game_info` has been removed and normal `game_info` is canonical for new-rule Unity messages.
 - Unity has explicit `gamestate/new_rule/...` cases.
 - Some bridge code was added because payloads were not originally shaped like old `GameInfo`, `AskHandActionGBInfo`, `AskOtherActionGBInfo`, `DoActionInfo`, and `ShowResultInfo`.
 
@@ -414,7 +415,7 @@ Phase 5a status:
 - Minimal standard `game_record` scaffolding is now present in `NewRuleGameState`.
 - The live loop initializes `game_title` and `round_index_1`, records visible cut/deal/chi/peng/gang/angang ticks, and writes final hu/liuju + `end`.
 - `RecordCounter` exists for new-rule players and is updated for zimo/dianhe/fangchong/win score on final settlements.
-- Storage, record list/replay validation, spectator incremental record updates, multi-round lifecycle, final ranks, and clean jiagang record timing are still pending.
+- Storage, record list/replay validation, spectator incremental record updates, Unity multi-round manual verification, final ranks, and clean jiagang record timing are still pending.
 
 Phase 5a verification:
 
@@ -491,14 +492,92 @@ Phase 6a verification:
 
 Goal: line up room lifecycle with existing rules.
 
+Guiding rule for this phase:
+
+- Before changing `game_new_rule`, inspect the matching path in existing rules first.
+- Use Qingque/Guobiao for standard Chinese-style round lifecycle, ready phase, game-end payload, record storage, and custom-room cleanup.
+- Use Sichuan for blood-battle style "winner exits, remaining players continue" flow and visible tag/settlement timing.
+- Do not invent a new public Unity protocol if an old-rule message shape can work.
+
+Old-rule reuse review checklist:
+
+- Reuse old-rule message shapes and UI paths where possible, but do not blindly inherit old-rule semantics.
+- `action_tick`: keep stale-action protection for live hand actions (`cut`, `hu`, `pass`, `chi`, `peng`, `gang`), but do not reject result-panel `ready` just because Unity carries the previous ask tick.
+- `ready` phase: only whole-hand endings enter ready/next-hand flow. Mid-hand blood-battle wins are not ready phases.
+- `show_result`: use for whole-hand settlement. Mid-hand wins should remain weak notifications and must not reveal fan lists or score changes.
+- `game_end`: reserve for the configured match ending after all `max_round * 4` hands, not for a single hand ending.
+- Winner information visibility: do not reveal a mid-hand winner's full hand, concealed kong true tiles, fan list, or score changes before final settlement.
+- Concealed kong: keep true concealed-kong tile hidden from non-owner viewers until final reveal, even if an old payload shape would make sending the real tile easy.
+- Chi eligibility: use physical next seat after the discarder, not next active player. If that seat has already won and exited, no one may chi.
+- Bot reuse: reuse old bot scheduling/delay and safe decision helpers, but submit through `game_new_rule.get_action`; do not route new-rule actions directly into old-rule action handlers.
+- Record/replay: reuse record shapes, but review mid-hand winner exits, deferred final reveal, concealed-kong reveal timing, and score-change timing explicitly.
+- Spectator: before enabling spectators, audit for information leaks from mid-hand fan lists, concealed kong true tiles, hidden hands, and deferred score changes.
+- Score updates: internal deferred settlement is fine, but Unity/spectator/replay/public records should not present mid-hand score deltas as final public information.
+- Room options: verify every option across Unity send, backend storage, and actual gameplay effect. Do not expose old-rule toggles as if functional when new rule ignores them.
+
+Current confirmed mismatch:
+
+- Existing rules send `game_start` before any first action prompt:
+  - Guobiao: `init_guobiao_tiles()` -> `broadcast_game_start()` -> buhua/first `broadcast_ask_hand_action()`.
+  - Qingque: `init_qingque_tiles()` -> `broadcast_game_start()` -> dealer `do_action/deal_tile` -> `broadcast_ask_hand_action()`.
+  - Sichuan: `init_sichuan_tiles()` -> `broadcast_game_start()` -> dingque -> `broadcast_ask_hand_action()`.
+- New rule has been fixed to emit `gamestate/new_rule/game_start` before the first `gamestate/new_rule/broadcast_hand_action`.
+- Existing rules then continue through round result, ready phase, next-round `game_start`, final `game_end`, record storage, gamestate cleanup, and room finish/destroy.
+- New rule now has a multi-round closeout after hand settlement: `show_result`, `ready_status`, next-round `game_start`, and final `game_end` after all configured hands, followed by gamestate cleanup and custom-room finish.
+- New rule is still incomplete for final storage, replay validation, spectator incremental updates, and full Unity manual parity.
+
+Current room-option wiring notes:
+
+- Keep `game_round = 3` / west-round option supported. The new-rule room validator accepts 1 through 4, and the new-rule loop naturally runs `max_round * 4` hands.
+- Unity new-rule create-room path currently sends real values for:
+  - `game_round`
+  - `password`
+  - `random_seed` / "复式"
+  - `tourist_limit`
+- Backend new-rule room creation currently uses:
+  - `password` via common `has_password` / `room_passwords` join validation.
+  - `random_seed` via the shared random-seed system and records `is_player_set_random_seed`.
+  - `tourist_limit` via common room-join rejection for tourist accounts.
+  - `game_round` as `NewRuleGameState.max_round`.
+- Unity currently forces new-rule `tips = false`, and new-rule gameplay has not wired the shared hand/tile tip system yet.
+- Unity currently forces new-rule `allow_spectator = false`, and backend new-rule room creation also stores `allow_spectator: False`.
+- Future room/UI work should either wire `tips` and `allow_spectator` properly for new rule, or hide/disable those toggles while new rule is selected so the create-room UI does not imply inactive features are available.
+
 Tasks:
 
 - [ ] Audit room creation route `room/create_NewRule_room`.
 - [ ] Decide hidden/dev-only vs public UI state.
+- [ ] Preserve and manually verify `game_round = 3` west-round rooms.
+- [ ] Document or test create-room option behavior for password, random seed, tourist limit, tips, and spectator.
+- [ ] Decide whether to implement new-rule tips or hide the tips toggle for new-rule rooms.
+- [ ] Decide whether to implement delayed/realtime spectator support or hide the spectator toggle for new-rule rooms.
 - [ ] Ensure host-only add-bot/start checks match existing rules.
-- [ ] Ensure `waiting_ready` behavior uses existing ready phase conventions.
+- [x] Ensure `waiting_ready` behavior uses existing ready phase conventions.
+  - Reference Guobiao/Qingque `run_hu_result_ready_phase`, `hu_result_ready_wait_seconds`, and `broadcast_ready_status`.
+  - Reference Sichuan `_ready_phase` for blood-battle result timing.
+  - Humans should receive `ready`; bots should be treated as already ready or auto-ready, matching old rules.
+  - Unity should receive `gamestate/new_rule/ready_status` with `Ready_status_info`.
 - [ ] Ensure fixed dealer rotation is implemented intentionally, not accidentally inherited from random seat switching.
-- [ ] Confirm all-round `game_end` behavior after configured hand count.
+- [x] Add multi-round loop behavior.
+  - Compare with Guobiao/Qingque `while current_round <= max_round * 4`.
+  - New rule should use fixed dealer rotation, not dealer repeat/renchan.
+  - Each next round should reset round-only state, initialize tiles, send a new `game_start`, then start the first hand action.
+- [x] Confirm all-round `game_end` behavior after configured hand count in backend tests.
+  - Reference `broadcast_game_end` in Guobiao/Qingque/Sichuan.
+  - New rule should emit `gamestate/new_rule/game_end` with `Game_end_info`/`player_final_data`.
+  - Unity `NetworkManager.cs` already routes `gamestate/new_rule/game_end`, but `GameStateNetworkManager.cs` still needs the new-rule case in the `HandleGameEnd` branch.
+- [x] Add `gamestate/new_rule/ready_status` Unity handling.
+  - Unity `NetworkManager.cs` already routes it.
+  - `GameStateNetworkManager.cs` now routes the new-rule case to `HandleReadyStatus`.
+- [x] Add `gamestate/new_rule/game_end` Unity handling.
+  - Unity `NetworkManager.cs` already routes it.
+  - `GameStateNetworkManager.cs` now routes the new-rule case to `HandleGameEnd`.
+- [x] Add multi-round `ready_status`, repeated `game_start`, final `game_end`, and cleanup path.
+- [ ] After final `game_end`, validate existing cleanup paths in Unity manual playtest.
+  - Reference Guobiao/Qingque/Sichuan tail flow:
+    - `await self.game_server.gamestate_manager.cleanup_game_state_complete(gamestate_id=self.gamestate_id)`
+    - match rooms: `destroy_room`
+    - custom rooms: `finish_custom_game_room`
 - [ ] Confirm disconnect/reconnect during:
   - self turn;
   - discard response;
@@ -506,6 +585,24 @@ Tasks:
   - robbed-kong ask;
   - final settlement;
   - waiting ready.
+
+Recommended implementation order for Phase 7:
+
+1. [x] Add backend payload builders for `ready_status` and `game_end`, copying existing response shapes rather than creating new dictionaries from scratch.
+2. [x] Add Unity `GameStateNetworkManager.cs` switch cases for `gamestate/new_rule/ready_status` and `gamestate/new_rule/game_end`.
+3. [x] Add a minimal result-ready phase after new-rule final settlement.
+4. [x] Add final `game_end` emission and cleanup for one configured game.
+5. [x] Expand into multi-round loop with fixed dealer rotation and repeated `game_start`.
+6. Add room-creation/integration tests proving message order:
+   - first `game_start` before first `broadcast_hand_action`;
+   - final `show_result` before `ready_status`;
+   - final configured round sends `game_end`;
+   - cleanup removes gamestate mappings and finishes/destroys the room.
+7. Unity manual test:
+   - create new-rule room;
+   - start game;
+   - play to wall exhaustion and to 3 winners;
+   - confirm result panel, ready/continue behavior, next-round start, final game-end panel, and room return state.
 
 ## Phase 8: Test Strategy
 
@@ -571,7 +668,7 @@ Do not commit:
 ## Open Questions
 
 - Should new rule continue using `gamestate/new_rule/...` message paths even if payloads match old Guobiao payloads?
-- Should `unity_game_info` be removed once normal `game_info` is canonical for new rule?
+- Resolved: `unity_game_info` has been removed; normal `game_info` is canonical for new rule.
 - Should new-rule storage reuse an existing store function pattern or define `store_new_rule_game_record`?
 - Should fan stats be stored immediately, or delayed until fan localization/replay is stable?
 - For bot testing, should smart bots be allowed to hu aggressively, or should a passive/dev bot mode remain default for manual UI testing?
@@ -590,7 +687,25 @@ Completed:
 
 Next:
 
-1. Run Unity manual parity check for new-rule bot pacing, action prompts, and end-of-hand result display.
+1. Run Unity manual parity check for new-rule multi-round play: result ready, next-hand `game_start`, fixed dealer rotation, and final `game_end`.
 2. Continue Phase 5b: database storage, replay validation, spectator updates, and multi-round record lifecycle.
 3. Continue Phase 6b: finer smart-bot/pass/hu tests and manual Unity checks with both bot buttons.
 4. After record/bot parity, run Unity compile and a fresh manual new-rule playtest.
+
+## 2026-07-05 Update: Unity Smoke Issues 2
+
+Completed:
+
+- Discard-claim ming-gang now carries the supplement draw through the returned window and broadcasts it as `deal_gang_tile`, matching existing Chinese-rule paths.
+- Result-panel ready now follows old-rule timeout semantics: pending `ready` defaults to ready on timeout, and stale `action_tick` rejection still does not apply to `ready`.
+- Final settlement now supports sequential multi-winner display by emitting one `show_result` / `settle_hu` step per deferred winner. Unity new rule reuses the existing Sichuan settle-hu queue for those steps.
+- Unity `FanTextDictionary` now has `new_rule/standard` fan-id display names and point text, so final fan rows should no longer show `0` merely because the client lacks a mapping.
+- Backend verification passed with `.\.venv\Scripts\python.exe run_new_rule_tests.py` (10 scripts).
+
+Still needs manual Unity verification:
+
+- Unity batchmode compile check passed after the Editor was closed.
+- Verify discard-claim ming-gang, added kong, and concealed kong visually: meld area update, supplement tile, remaining tile count.
+- Verify continue-button timeout starts the next hand.
+- Verify final settlement fan values and three-winner sequential panels.
+- Verify the Unity changes did not regress Qingque/Guobiao/Sichuan result handling, since new rule now reuses the Sichuan endgame queue branch.

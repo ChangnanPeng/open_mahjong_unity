@@ -261,6 +261,11 @@ Run after protocol and bot changes:
 - A broad status rename can break many tests at once; do canonical action-field rewrite first.
 - Unity may still need some `gamestate/new_rule/...` routing because room rules are separated by path, even if payloads are old-style.
 - The smart bot may make manual testing harder if it wins too aggressively; keep a passive/dev bot path.
+- New rule intentionally added stricter `action_tick` stale-action protection than the older `get_action.py` paths. This is useful for live hand actions such as `cut`, `hu`, `pass`, `chi`, `peng`, and `gang`, because delayed Unity button clicks should not be consumed after the server has advanced to a new ask window.
+- Do not apply the stale `action_tick` rejection blindly to `ready`. Unity's result-panel continue button sends `SendAction("ready", 0)` with `LastAskActionTick`, which belongs to the previous hand-action/response ask. Existing rules accept `ready` based on `waiting_ready`, `waiting_players_list`, and `action_dict`; new rule should match that behavior and accept `ready` even when the carried `action_tick` is stale.
+- For timeout behavior, old rules treat result-panel ready as confirmed after the display/ready deadline. New rule should likewise synthesize `ready` for pending ready players on timeout rather than leaving the next hand blocked.
+- For discard-claim ming-gang, keep both layers aligned with old rules: the claim action must emit the meld update, and the supplement draw must be visible as `deal_gang_tile`. Do not expose it as ordinary `deal_tile`; Unity uses the action kind to choose the correct hand/animation path.
+- For blood-battle final settlement, use the Sichuan-style sequential `show_result` steps when multiple deferred winners exist. Each deferred settlement gets one `liuju_step = "settle_hu"` payload, with `liuju_status_final` only on the last one.
 - Do not leave prototype aliases in review-quality code.
 
 ## Immediate Next Steps

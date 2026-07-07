@@ -93,6 +93,7 @@ public class EndResultPanel : MonoBehaviour {
     private CanvasGroup panelContentCanvasGroup;
     private bool isPanelContentVisible = true;
     private bool endButtonConfirmed = false;
+    private bool suppressNextGameConfirmNetworkSend = false;
     private const string HidePanelButtonText = "隐藏面板";
     private const string ShowPanelButtonText = "显示面板";
 
@@ -218,6 +219,40 @@ public class EndResultPanel : MonoBehaviour {
             skipConfirmCountdown: !isFinalPanel));
         yield return showResultCoroutine;
         showResultCoroutine = null;
+    }
+
+    public IEnumerator CoPlayNewRuleSettleHuRoutine(int huScore, string[] huFan, bool isFinalPanel) {
+        if (showResultCoroutine != null) {
+            StopCoroutine(showResultCoroutine);
+            showResultCoroutine = null;
+        }
+        showResultCoroutine = StartCoroutine(PlayNewRuleSettleHuRoutine(huScore, huFan, isFinalPanel));
+        yield return showResultCoroutine;
+        showResultCoroutine = null;
+    }
+
+    private IEnumerator PlayNewRuleSettleHuRoutine(int huScore, string[] huFan, bool isFinalPanel) {
+        huFan ??= System.Array.Empty<string>();
+        suppressNextGameConfirmNetworkSend = !isFinalPanel;
+        int fanCount = huFan.Length;
+        float countdownSeconds = Mathf.Max(
+            1f,
+            RoundEndTiming.HuConfirmCountdownSeconds
+                - fanCount * RoundEndTiming.HuFanRevealIntervalSeconds
+                - RoundEndTiming.HuBeforeTotalPanelSeconds);
+        yield return PlayShowResultRoutine(
+            huScore, huFan, null, null, null,
+            countdownSeconds,
+            resumeSichuanContinueAfterClose: false,
+            allowConfirmClick: true,
+            skipConfirmCountdown: false,
+            hideAfterCountdown: false,
+            breakCountdownOnConfirm: true);
+        if (isFinalPanel && !endButtonConfirmed && currentState == StateGame) {
+            endButtonConfirmed = true;
+            GameStateNetworkManager.Instance.SendAction("ready", 0);
+        }
+        suppressNextGameConfirmNetworkSend = false;
     }
 
     /// <summary>四川查叫：准备面板（手牌+副露，无和牌张）。</summary>
@@ -384,7 +419,10 @@ public class EndResultPanel : MonoBehaviour {
 
     private IEnumerator PlayShowResultRoutine(int hu_score, string[] hu_fan, int? base_fu = null, string[] fu_fan_list = null,
         RiichiEndResultExtras riichiExtras = null, float confirmCountdownSeconds = -1f, bool resumeSichuanContinueAfterClose = false,
-        bool allowConfirmClick = true, bool skipConfirmCountdown = false) {
+        bool allowConfirmClick = true, bool skipConfirmCountdown = false, bool hideAfterCountdown = true,
+        bool breakCountdownOnConfirm = false) {
+        hu_fan ??= System.Array.Empty<string>();
+        fu_fan_list ??= System.Array.Empty<string>();
         if (confirmCountdownSeconds < 0f) {
             confirmCountdownSeconds = RoundEndTiming.HuConfirmCountdownSeconds;
         }
@@ -393,7 +431,7 @@ public class EndResultPanel : MonoBehaviour {
         bool isClassical = roomRuleForFan == "classical/standard";
         bool isRiichi = roomRuleForFan != null && roomRuleForFan.StartsWith("riichi");
 
-        if (isClassical && fu_fan_list != null) {
+        if (isClassical) {
             // 古典麻将：先显示副番列表
             for (int i = 0; i < fu_fan_list.Length; i++) {
                 yield return new WaitForSeconds(RoundEndTiming.HuFanRevealIntervalSeconds);
@@ -432,14 +470,14 @@ public class EndResultPanel : MonoBehaviour {
             yield break;
         }
 
-        yield return CoPlayEndButtonCountdown(confirmCountdownSeconds, allowConfirmClick);
+        yield return CoPlayEndButtonCountdown(confirmCountdownSeconds, allowConfirmClick, hideAfterCountdown, breakCountdownOnConfirm);
         if (resumeSichuanContinueAfterClose && currentState == StateGame && NormalGameStateManager.Instance != null) {
             NormalGameStateManager.Instance.TryResumeAfterSichuanContinue();
         }
     }
 
     /// <summary>确定按钮倒计时：始终显示数字；仅 allowConfirmClick 时可点击。</summary>
-    private IEnumerator CoPlayEndButtonCountdown(float confirmCountdownSeconds, bool allowConfirmClick) {
+    private IEnumerator CoPlayEndButtonCountdown(float confirmCountdownSeconds, bool allowConfirmClick, bool hideAfterCountdown = true, bool breakOnConfirm = false) {
         endButtonConfirmed = false;
         EndButton.gameObject.SetActive(true);
         EndButton.interactable = allowConfirmClick;
@@ -447,13 +485,16 @@ public class EndResultPanel : MonoBehaviour {
         for (int i = countdown; i > 0; i--) {
             EndButtonText.text = $"确定({i})";
             yield return new WaitForSeconds(1f);
+            if (breakOnConfirm && endButtonConfirmed) {
+                yield break;
+            }
         }
         if (!endButtonConfirmed) {
             EndButtonText.text = "确定(0)";
             EndButton.interactable = false;
         }
         // 可点击确认的对局结算：面板保留至下一局 game_start 由 InitGameStart 清理
-        if (!allowConfirmClick) {
+        if (hideAfterCountdown && !allowConfirmClick) {
             gameObject.SetActive(false);
         }
     }
@@ -821,6 +862,10 @@ public class EndResultPanel : MonoBehaviour {
     }
 
     private void HandleGameStateConfirm() {
+        if (suppressNextGameConfirmNetworkSend) {
+            suppressNextGameConfirmNetworkSend = false;
+            return;
+        }
         GameStateNetworkManager.Instance.SendAction("ready", 0);
     }
 
@@ -907,6 +952,7 @@ public class EndResultPanel : MonoBehaviour {
         bool isClassical = rule == "classical/standard";
         bool isRiichi = rule != null && rule.StartsWith("riichi");
         bool isSichuan = rule != null && rule.StartsWith("sichuan");
+        bool isNewRule = rule != null && rule.StartsWith("new_rule");
 
         if (isRiichi && riichiExtras != null) {
             TotalFu.gameObject.SetActive(true);
@@ -930,11 +976,13 @@ public class EndResultPanel : MonoBehaviour {
             TotalFan.text = fanTotal >= 0 ? $"{fanTotal}番" : "满贯";
         } else if (isSichuan) {
             TotalFan.text = $"{ScoreHistorySettlementHelper.CalculateSichuanFanTotal(rule, huFan)}番";
+        } else if (isNewRule) {
+            TotalFan.text = $"{huScore}番";
         } else {
             TotalFan.text = $"{huScore}番";
         }
 
-        TotalScore.text = $"{huScore}点";
+        TotalScore.text = $"{(isNewRule ? huScore * 6 : huScore)}点";
 
         bool showLimit = isClassical && huScore >= 300;
         TotalLimitDisplay.gameObject.SetActive(showLimit);

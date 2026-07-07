@@ -1,6 +1,6 @@
 # Local Unity Playtest Plan
 
-Last updated: 2026-07-05.
+Last updated: 2026-07-06.
 
 This document records the local playtest path for `open_mahjong_unity`, from the original project baseline to the new-rule Unity smoke test.
 
@@ -29,6 +29,76 @@ Current Unity project:
 - Installed editor used for playtest: Unity `6000.5.2f1`
 - Unity Personal license is active.
 - Unity Editor local URLs are forced to localhost by `Assets/Scripts/Config/ConfigManager.cs`.
+
+## Local Ops Quick Reference
+
+Use these commands when resuming Unity playtests after context compression. Keep shared behavior aligned with existing rules: the backend owns timeout/default action behavior; Unity timeout handling should stay UI/input cleanup unless old rules do the same thing.
+
+### Identify Python servers
+
+Prefer checking command lines before stopping anything. Multiple Python processes may exist; the local game server is the one whose command line contains both `open_mahjong_server` and `main.py`.
+
+```powershell
+Get-CimInstance Win32_Process -Filter "name = 'python.exe'" | Where-Object { $_.CommandLine -match 'open_mahjong_server' } | Select-Object ProcessId,CommandLine
+```
+
+If `py.exe` was used:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "name = 'py.exe'" | Where-Object { $_.CommandLine -match 'open_mahjong_server' } | Select-Object ProcessId,CommandLine
+```
+
+### Restart Python server
+
+Stop only the confirmed local server PID:
+
+```powershell
+Stop-Process -Id <pid> -Force
+```
+
+Start it in the foreground for readable logs:
+
+```powershell
+cd C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_server
+.\.venv\Scripts\python.exe main.py
+```
+
+Or start it hidden for Unity playtesting:
+
+```powershell
+Start-Process -WindowStyle Hidden -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "main.py" -WorkingDirectory "C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_server"
+```
+
+If backend tests print `logs/app.log` rollover errors while the server is running, treat that as log-file contention noise unless the test exit code fails.
+
+### Unity batchmode compile
+
+Use the installed editor path:
+
+```powershell
+& 'C:\Program Files\Unity\Hub\Editor\6000.5.2f1\Editor\Unity.exe' -batchmode -quit -projectPath 'C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_unity' -logFile 'C:\Users\changnan\Documents\open_mahjong_unity\unity_batchmode_check_current.log'
+```
+
+Check compile status:
+
+```powershell
+Select-String -Path C:\Users\changnan\Documents\open_mahjong_unity\unity_batchmode_check_current.log -Pattern "Tundra build success|error CS|Compilation failed|Tundra build failed|Scripts have compiler errors|Exiting batchmode"
+Get-Content C:\Users\changnan\Documents\open_mahjong_unity\unity_batchmode_check_current.log -Tail 80
+```
+
+### Unity Editor state
+
+List Unity processes and distinguish the user's Editor from Codex batchmode by command line. A process with `-batchmode` / `-batchMode` is a compile/import worker; a normal Editor usually has no batchmode flag.
+
+```powershell
+Get-CimInstance Win32_Process -Filter "name = 'Unity.exe'" | Select-Object ProcessId,CommandLine
+```
+
+If batchmode has already logged `Tundra build success` but does not exit, stop only the confirmed batchmode PIDs, not a normal interactive Editor PID:
+
+```powershell
+Stop-Process -Id <batchmode-pid> -Force
+```
 
 ## Phase 1: Original Unity Baseline
 
@@ -154,10 +224,21 @@ Reference docs:
 - `other/new_rule_live_integration_boundary.md`
 - `other/new_rule_unity_parity_checklist.md`
 - `other/new_rule_protocol_alignment_plan.md`
+- `other/new_rule_debug_scenario_plan.md`
 
 ## Phase 3: New-Rule Unity Bridge
 
 Status: implemented for first playable smoke; still under active playtest.
+
+Rare-event debug status:
+
+- Backend dev scenario injection has been added for `multi_ron_2`, `multi_ron_3`, `rob_kong`, `rob_kong_multi_ron_2`, `haitei`, `houtei`, `rinshan`, `heavenly_win`, `earthly_win`, and `nine_gates`.
+- Route: `gamestate/new_rule/debug_scenario`, host-only, new-rule-only.
+- Tests are covered by `server/gamestate/game_new_rule/test_new_rule_debug_scenarios.py`, router tests, and `run_new_rule_tests.py`.
+- Unity table UI now shows a small runtime-created `NR Debug` floating button for all implemented debug scenarios.
+- The backend route now cancels the active live loop before injection and starts a dev-only scenario loop, so scenario injection does not race an already-waiting live action window.
+- Next manual step: start a new-rule room, use the in-game `NR Debug` floating button, trigger each scenario, and verify the real Unity flow.
+- Detailed plan and cleanup steps are in `other/new_rule_debug_scenario_plan.md`.
 
 Design choice:
 
@@ -260,6 +341,118 @@ Issue 4: after a new-rule hand ended, Unity did not show round settlement; remai
   - if the hand ends by wall exhaustion without wins, the result payload uses `hu_class = "liuju"`.
   - Unity now syncs `remainTiles` from `unity_game_info.tile_count` for new-rule bridge messages, and corrects the count after `do_action`.
 - Status: fixed in code; needs Unity re-test.
+
+Issue 5: other players' mid-hand self-draw win tile could fail to move into the exposed/win area, sometimes leaving a blank face-up hidden tile in the draw slot.
+
+- Symptom:
+  - In blood-battle continuation, when another player self-drew and won mid-hand, Unity sometimes showed no flying win tile.
+  - In the bad visual state, the hidden drawn tile could remain near that player's draw slot and appear as a blank face-up tile instead of moving face-down into the win/exposed area.
+- Cause:
+  - New-rule mid-hand self-draw hides the real winning tile from non-winners, so Unity receives `hu_self` with the real tile omitted for other viewers (`tile = null`, `hepai_tile = 0`).
+  - The backend can immediately continue the hand by sending the next player's draw/ask messages after the mid-hand `show_result`.
+  - Unity was using `RoundEndPresentation` as the coroutine host for the short mid-hand win-tile animation. The next ask/resume path could call `StopActiveSequence()` before `CoAnimateTileToBuhua` finished, cutting off the tile flight.
+  - The other-player draw animation can also materialize one frame later than the `hu_self`/`show_result` pair, so taking "last hand child" was not always the same as taking the draw-slot tile.
+- Fix:
+  - For `new_rule`, `TryResumeAfterSichuanContinue()` no longer stops the active `RoundEndPresentation` sequence during mid-hand continuation; it only clears the temporary result panel state and lets the 3D win-tile animation finish.
+  - Other-player new-rule self-draw presentation suppresses the next draw-slot spawn while the hidden win tile is being moved.
+  - The 3D presentation selects the draw-slot tile by seat direction, not by blindly taking the last hand child.
+  - If no draw-slot object exists yet, it spawns a hidden fallback tile at the expected draw-slot pose and still animates it into the win/exposed area.
+- Review notes:
+  - Do not reveal other players' real self-draw tile for new-rule mid-hand wins; the fix is Unity-side presentation of a hidden tile, not backend disclosure.
+  - The `StopActiveSequence()` exception is new-rule-specific because old Sichuan mid-hand/result flow uses that presentation runner differently.
+  - Be careful when reusing result/round-end coroutine hosts for short in-hand animations; later table messages may arrive while the animation is still running.
+- Verification:
+  - Temporary logs with tag `[TEMP NewRuleZimoDebug]` showed the failing path previously stopped after `CoAnimateTileToBuhua lerp`.
+  - After the fix, the same flow reached `CoAnimateTileToBuhua complete` and `zimo animate done` even when a later `broadcast_hand_action` had already arrived.
+  - The temporary logs were removed after verification.
+- Status: fixed and Unity-playtested; batchmode compile passed after cleanup.
+
+Issue 6: robbing-kong double-win and other multi-win presentation copies could show a blank or wrong tile face.
+
+- Symptom:
+  - In the new-rule robbing-kong double-win debug scenario, the first winner's flying win tile could appear as a blank tile.
+  - An earlier attempted fix cloned `lastCutJiagang3DObject`, but that could show the wrong tile face, apparently carrying stale material/logical state from an unrelated hand tile.
+- Cause:
+  - Multi-win presentation sometimes needs an extra visible copy of the same winning tile.
+  - This is expected for ordinary multi-ron too: the first displayed winner cannot consume the real river discard, because later winners still need the same source tile.
+  - It is especially easy to hit in robbing-kong double wins, where all four physical copies may already be represented by the hand/meld/added-kong attempt.
+  - `MahjongObjectPool.Spawn(hepai_tile, ...)` only has four real objects per standard tile. If all are in use, it returns null.
+  - The old fallback used `SpawnBlankTile(..., logicalTileId)`, which preserves the logical id for bookkeeping but intentionally keeps the blank face, so the flying presentation tile was blank.
+  - Cloning the visible added-kong object was also wrong, because it bypassed `ApplyCardTexture(...)` and could carry stale rendered face state.
+- Fix:
+  - Added `MahjongObjectPool.SpawnVisibleTileFromBlankFallback(...)`.
+  - This uses a blank-pool object as the carrier, applies the requested `hepai_tile` texture, sets the logical tile id to the winning tile, and sets the pool-return id to the blank pool.
+  - Updated the Sichuan/new-rule multi-ron presentation fallback path (`SpawnSichuanRonPresentTile`) to use this visible-blank fallback when the real tile pool is exhausted.
+  - Kept the actual final-source handling unchanged: the last multi-ron panel still consumes/recycles the real discard or added-kong source where appropriate.
+- Review notes:
+  - Do not use this fallback for ordinary chi/peng/kong meld construction by default. Melds are real physical tile groups; if they need a fifth real tile object, that usually indicates a return-order or state-sync bug that should be exposed and fixed.
+  - This fallback is appropriate for presentation-only duplicate win tiles, because the UI is intentionally showing an extra copy of one source tile.
+  - Do not clone the source tile to solve this; material/logical state can be stale unless the texture is explicitly reapplied.
+- Verification:
+  - Robbing-kong double-win Unity playtest passed after this change.
+  - Unity batchmode script compilation passed after adding the fallback method; only existing warnings were present.
+- Status: fixed and Unity-playtested for robbing-kong double-win. Ordinary multi-ron should be covered by the same shared presentation path but should still be checked when a natural/manual repro is available.
+
+Issue 7: mid-hand multi-win presentation needed pacing between result panels.
+
+- Symptom:
+  - In new-rule blood-battle continuation, multiple mid-hand win presentations could arrive back-to-back.
+  - Earlier playtests showed the first flying win tile/panel could be interrupted or visually incomplete before the next winner panel or continuation draw arrived.
+  - A conservative delay of `1.5s` worked, but felt too slow during repeated debug-scenario testing.
+- Cause:
+  - The Unity presentation path is Sichuan-style: one short active win presentation coroutine handles the flying tile and temporary panel state.
+  - If the backend immediately sends the next `show_result`, `deal_tile`, or ask-action message, Unity may advance/resume the table state while the previous presentation is still running.
+  - Sichuan avoids this by waiting after each mid-hand win presentation before sending the next continuation message.
+- Fix:
+  - New-rule backend now mirrors the Sichuan timing shape by inserting an internal outbound marker after each deferred mid-hand `show_result`.
+  - `NewRuleGameState.flush_outbound_payloads()` consumes the marker locally and sleeps; the marker is never sent to Unity.
+  - The current delay is `NEW_RULE_MID_HU_ANIM_SECONDS = 0.5`.
+  - This keeps the protocol clean: Unity still receives normal `show_result` / `do_action` / `deal_tile` messages, while the backend controls pacing like the existing Sichuan flow.
+- Why `0.5s` is acceptable for now:
+  - The win-tile travel animation currently uses about `0.2s`, so `0.5s` leaves a small buffer for coroutine scheduling and table UI updates.
+  - Manual Unity playtest with robbing-kong double-win passed at `0.5s`.
+  - The shorter delay makes multi-panel debug testing less sluggish than the earlier `1.5s` value.
+- Risk / rollback:
+  - `0.5s` is intentionally less conservative than Sichuan's `1.5s`.
+  - If low-frame-rate playtests, heavier scenes, or slower machines again show interrupted flying tiles/panels, raise the value to `0.75s`, `1.0s`, or ultimately the Sichuan-style `1.5s`.
+  - Do not solve this by sending custom Unity messages or adding frontend-only timeouts; the cleaner alignment is backend pacing between ordinary protocol messages.
+- Verification:
+  - Backend tests cover the internal delay marker ordering: first mid-hand panel, then delay marker, then next panel/continuation.
+  - Focused and full new-rule backend test suites passed after changing the delay to `0.5s`.
+  - Unity playtest confirmed `0.5s` works for the robbing-kong double-win scenario.
+- Status: fixed and Unity-playtested at `0.5s`; keep an eye on slower-machine or heavier-scene regressions.
+
+Issue 8: same-tile discard-win lockout needed deterministic rare-event coverage.
+
+- Requirement:
+  - Passing a discard win locks that same tile until the player next discards.
+  - Self-draw ignores the lock.
+  - The next discard clears the old lock and starts the new lock on the discarded tile.
+  - The lock must persist through intervening claims by other players.
+  - Robbing an added kong is discard-win-like and is also blocked by the same-tile lock.
+- Implemented coverage:
+  - Unity-visible `same_tile_lockout` debug scenario covers pass -> self-draw still offered -> cutting the same tile keeps the next same-tile ron blocked.
+  - The same scenario also covers pass -> cutting a different tile -> next same-tile discard can be won.
+  - Backend deterministic tests cover immediate next-bot same-tile discard, pong-then-later-same-tile discard, and pong-chain-then-added-kong where robbing kong is blocked.
+- Verification:
+  - Manual Unity playtest passed for both visible `same_tile_lockout` branches.
+  - `server/gamestate/game_new_rule/test_new_rule_debug_scenarios.py` passed with 17 tests.
+  - `run_new_rule_tests.py` passed with 11 scripts.
+- Review notes:
+  - Robbing-kong lockout is a real reachable sequence: another player may pong the tile that player 0 passed on, then later draw the fourth copy and attempt added kong.
+  - Ordinary bots are not deterministic enough to manually reproduce the pong-chain branches. Add separate scripted Unity debug buttons only if visual coverage for those chains becomes necessary.
+- Status: fixed and Unity-playtested for the visible branches; deeper chain branches are backend-tested.
+
+Protocol note: `hu_first` / `hu_second` / `hu_third` can appear on single discard wins.
+
+- These names follow the existing Guobiao/Qingque/Classical/Riichi-style Unity protocol.
+- They are relative-seat ron classes from the discarder/kong player, not ordinal winner numbers in one multi-ron event.
+- From the discarder/kong player:
+  - next seat -> `hu_first`
+  - opposite seat -> `hu_second`
+  - previous seat -> `hu_third`
+- Therefore a single winner can correctly be reported as `hu_third` if that winner is in the previous-seat slot relative to the discarder.
+- New-rule backend should keep this mapping for Unity compatibility, while still using explicit `hepai_player_index` for the actual winner identity.
 
 ## Current Immediate Test Flow
 

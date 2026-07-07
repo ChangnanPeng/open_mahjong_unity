@@ -12,11 +12,13 @@ This differs from the current Sichuan flow, where all eligible winners are cache
 
 - A discard may make multiple players eligible to win.
 - Every eligible player should receive their own `hu` / `pass` choice.
-- Each eligible player decides independently.
+- Each eligible player decides independently during the same response window; do not prompt players sequentially.
+- Client click timing must not affect winner order. Accepted winners are resolved after the window closes, then sorted by fixed seat order from the discarder: next seat, opposite seat, previous seat.
 - Choosing `hu` means the player joins the accepted winner list and exits the hand after settlement.
 - Choosing `pass` means the player gives up this discard and continues playing.
 - Timing out should be treated as `pass`.
 - If at least one eligible player chooses `hu`, settle only those accepted winners.
+- If the hand continues after the accepted winners are marked, the next draw starts from the seat after the last accepted winner in that fixed seat-sorted list, skipping players who have already won.
 - If no eligible player chooses `hu`, continue resolving lower-priority actions such as peng/gang/chi, then continue play if none apply.
 - Exception: if the wall is empty after the discard, do not resolve lower-priority chi/peng/gang. The final discard can only be won; if nobody wins, the hand ends by exhausted wall.
 
@@ -130,6 +132,8 @@ else:
     discarder = pending_win["discarder"]
     winners = sorted(accepted_hu_results.keys(), key=lambda x: distance_from(discarder, x))
 ```
+
+The `sorted(...)` step is seat-order sorting, not response-arrival sorting. It should be stable even if the previous-seat player clicked `hu` before the next-seat player.
 
 Then reuse the Sichuan-style multi-winner settlement loop, including:
 

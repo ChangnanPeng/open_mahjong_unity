@@ -57,11 +57,13 @@ def test_single_dragon_triplets() -> None:
     red = score_hand(HandContext([45, 45, 45, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41]))
     assert_has(red, "red_dragon")
 
-    green = score_hand(HandContext([46, 46, 46, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41]))
-    assert_has(green, "green_dragon")
-
-    white = score_hand(HandContext([47, 47, 47, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41]))
+    white = score_hand(HandContext([46, 46, 46, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41]))
     assert_has(white, "white_dragon")
+    assert_not_has(white, "green_dragon")
+
+    green = score_hand(HandContext([47, 47, 47, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 41]))
+    assert_has(green, "green_dragon")
+    assert_not_has(green, "white_dragon")
 
 
 def test_two_two_suit_triplets_can_repeat() -> None:

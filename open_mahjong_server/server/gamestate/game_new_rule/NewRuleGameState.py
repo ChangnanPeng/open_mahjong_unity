@@ -6,9 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .init_tiles import init_new_rule_tiles
+from ..public.hand_slot_utils import has_draw_slot, pick_timeout_discard_tile
 from ..public.random_seed_manager import setup_random_seed_system
+from ..public.round_end_timing import liuju_ready_wait_seconds
 
 logger = logging.getLogger(__name__)
+
+NEW_RULE_MID_HU_ANIM_SECONDS = 0.5
 
 
 class RecordCounter:
@@ -135,6 +139,7 @@ class NewRuleGameState:
         self.dead_wall_count = 0
         self.server_action_tick = 0
         self.game_task: Optional[asyncio.Task] = None
+        self.lifecycle_completed = False
         self.game_record: dict = {}
         self.player_action_tick = 0
         self.round_record_finalized = False
@@ -144,6 +149,10 @@ class NewRuleGameState:
         self.action_queues: Dict[int, asyncio.Queue] = {i: asyncio.Queue() for i in range(4)}
         self.waiting_players_list: list[int] = []
         self.action_dict: Dict[int, list[str]] = {i: [] for i in range(4)}
+        self.hand_action_is_gang_draw: Dict[int, bool] = {i: False for i in range(4)}
+        self.natural_draw_count: Dict[int, int] = {i: 0 for i in range(4)}
+        self.opening_action_taken = False
+        self.opening_flow_interrupted = False
         self.live_pending_window: Optional[dict] = None
         self.outbound_payloads: list[dict] = []
         self.outbound_send_cursor = 0
@@ -171,15 +180,24 @@ class NewRuleGameState:
         """
         try:
             self.start_game_recording()
-            self.initialize_round()
-            self.start_round_recording()
-            self.open_action_window(self.begin_hand_action(self.current_player_index))
-            await self.flush_outbound_payloads()
-            while self.game_status != "END":
-                await self.resolve_action_window()
+            while self.current_round <= self.max_round * 4:
+                self.initialize_round()
+                self.start_round_recording()
+                self.emit_game_start_payloads()
                 await self.flush_outbound_payloads()
-            self.finalize_round_recording()
+                self.open_action_window(self.begin_hand_action(self.current_player_index))
+                await self.flush_outbound_payloads()
+                while self.game_status != "END":
+                    await self.resolve_action_window(timeout=self.estimated_action_window_timeout())
+                    await self.flush_outbound_payloads()
+                self.finalize_round_recording()
+                await self.run_round_ready_phase(timeout=self.estimated_round_result_ready_timeout())
+                if self.current_round >= self.max_round * 4:
+                    break
+                self.advance_round_after_ready()
+                await self.flush_outbound_payloads()
             self.finalize_game_recording()
+            await self.complete_game_lifecycle()
         except asyncio.CancelledError:
             logger.info("New rule draft game loop cancelled, room_id=%s", self.room_id)
             raise
@@ -189,7 +207,8 @@ class NewRuleGameState:
 
     async def cleanup_game_state(self) -> None:
         """Cancel the live loop task if one was attached by a future manager."""
-        if self.game_task and not self.game_task.done():
+        current_task = asyncio.current_task()
+        if self.game_task and not self.game_task.done() and self.game_task is not current_task:
             self.game_task.cancel()
             try:
                 await self.game_task
@@ -300,6 +319,7 @@ class NewRuleGameState:
 
         for idx in list(self.waiting_players_list):
             if "pass" in self.action_dict.get(idx, []):
+                self.player_list[idx].remaining_time = 0
                 results[idx] = {
                     "player_index": idx,
                     "action_type": "pass",
@@ -310,7 +330,76 @@ class NewRuleGameState:
                 }
                 self.action_dict[idx] = []
                 self.waiting_players_list.remove(idx)
+            elif "cut" in self.action_dict.get(idx, []):
+                player = self.player_list[idx]
+                player.remaining_time = 0
+                tile = pick_timeout_discard_tile(player.hand_tiles) if player.hand_tiles else None
+                cut_index = len(player.hand_tiles) - 1
+                if tile is not None:
+                    for hand_index in range(len(player.hand_tiles) - 1, -1, -1):
+                        if player.hand_tiles[hand_index] == tile:
+                            cut_index = hand_index
+                            break
+                results[idx] = {
+                    "player_index": idx,
+                    "action_type": "cut",
+                    "target_tile": None,
+                    "TileId": tile,
+                    "cutIndex": cut_index if player.hand_tiles else -1,
+                    "cutClass": bool(has_draw_slot(player)),
+                }
+                self.action_dict[idx] = []
+                self.waiting_players_list.remove(idx)
+            elif "ready" in self.action_dict.get(idx, []):
+                self.player_list[idx].remaining_time = 0
+                results[idx] = {
+                    "player_index": idx,
+                    "action_type": "ready",
+                    "target_tile": None,
+                    "TileId": None,
+                    "cutIndex": -1,
+                    "cutClass": False,
+                }
+                self.action_dict[idx] = []
+                self.waiting_players_list.remove(idx)
         return results
+
+    async def run_round_ready_phase(self, timeout: Optional[float] = None) -> Dict[int, dict]:
+        """Wait for non-bot players to acknowledge the round result before the next hand."""
+        self.game_status = "waiting_ready"
+        self.action_dict = {}
+        for player in self.player_list:
+            if player.is_bot:
+                self.action_dict[player.player_index] = []
+            else:
+                self.action_dict[player.player_index] = ["ready"]
+        self.waiting_players_list = [idx for idx, actions in self.action_dict.items() if actions]
+        self.server_action_tick += 1
+        self.emit_ready_status_payloads()
+        await self.flush_outbound_payloads()
+        if timeout is None:
+            timeout = 8.0
+        results = await self.wait_action(timeout=timeout)
+        self.emit_ready_status_payloads()
+        await self.flush_outbound_payloads()
+        return results
+
+    def estimated_action_window_timeout(self) -> Optional[float]:
+        """Match legacy rules: wait through step time plus the actor's remaining round time."""
+        if not self.waiting_players_list:
+            return None
+        max_wait = 0
+        for idx in self.waiting_players_list:
+            player = self.player_list[idx]
+            max_wait = max(max_wait, int(getattr(player, "remaining_time", 0)) + int(self.step_time or 0))
+        return float(max_wait) if max_wait > 0 else None
+
+    def estimated_round_result_ready_timeout(self) -> float:
+        """Keep ready open while Unity displays all final winner panels."""
+        settlements = list(getattr(self, "deferred_hu_settlements", []))
+        if not settlements:
+            return liuju_ready_wait_seconds()
+        return max(12.0, min(len(settlements) * 8.0 + 2.0, 30.0))
 
     def schedule_bot_actions(self) -> None:
         from .bot import new_rule_bot_action
@@ -350,11 +439,12 @@ class NewRuleGameState:
 
     def emit_window_payloads(self, window: dict) -> list[dict]:
         """Record payloads that a future WebSocket layer would send."""
-        from .boardcast import ask_action_payload, final_settlement_payload
+        from .boardcast import ask_action_payload, final_settlement_payloads
 
         payloads: list[dict] = []
         if window.get("status") == "END":
-            payloads = [final_settlement_payload(self, idx) for idx in range(4)]
+            for idx in range(4):
+                payloads.extend(final_settlement_payloads(self, idx))
         else:
             cut_tile = window.get("tile") if window.get("status") == "waiting_action_after_cut" else None
             rob_kong_tile = window.get("tile") if window.get("status") == "waiting_action_qianggang" else None
@@ -385,6 +475,41 @@ class NewRuleGameState:
         ]
         self.outbound_payloads.extend(payloads)
         return payloads
+
+    def emit_mid_hand_hu_payloads(
+        self,
+        settlement: dict,
+        *,
+        multi_ron: bool = False,
+        recycle_discard: Optional[bool] = None,
+    ) -> list[dict]:
+        from .boardcast import mid_hand_hu_result_payload
+
+        payloads = [
+            {
+                **mid_hand_hu_result_payload(
+                    self,
+                    idx,
+                    settlement,
+                    multi_ron=multi_ron,
+                    recycle_discard=recycle_discard,
+                ),
+                "player_index": idx,
+            }
+            for idx in range(4)
+        ]
+        self.outbound_payloads.extend(payloads)
+        self.outbound_payloads.append({
+            "type": "gamestate/new_rule/_internal_mid_hand_hu_delay",
+            "delay_seconds": NEW_RULE_MID_HU_ANIM_SECONDS,
+        })
+        return payloads
+
+    def _latest_hu_settlement_for(self, winner_index: int) -> Optional[dict]:
+        for settlement in reversed(self.deferred_hu_settlements):
+            if settlement.get("winner") == winner_index:
+                return settlement
+        return None
 
     def start_game_recording(self) -> None:
         from ..public.game_record_manager import init_game_record
@@ -426,7 +551,12 @@ class NewRuleGameState:
         elif action == "deal_gang_tile":
             player_action_record_deal(self, deal_tile=tile, deal_type="gd")
         elif action == "angang":
-            player_action_record_angang(self, angang_tile=tile, is_mo_gang=False)
+            player_action_record_angang(
+                self,
+                angang_tile=tile,
+                is_mo_gang=bool(action_info.get("is_mo_gang", False)),
+                combination_mask=action_info.get("combination_mask"),
+            )
         elif action in {"chi_left", "chi_mid", "chi_right", "peng", "gang"}:
             player_action_record_chipenggang(
                 self,
@@ -445,13 +575,13 @@ class NewRuleGameState:
             player_action_record_liuju,
             player_action_record_round_end,
         )
+        from .boardcast import _settlement_hu_class
 
         self.apply_deferred_score_changes()
         if self.deferred_hu_settlements:
             for settlement in self.deferred_hu_settlements:
                 winner_index = settlement.get("winner", -1)
-                source = settlement.get("source")
-                hu_class = "hu_self" if source == "self_draw" else "hu"
+                hu_class = _settlement_hu_class(settlement)
                 hu_fan = list(settlement.get("fan_names") or settlement.get("fan_ids") or [])
                 score_changes = list(settlement.get("score_changes") or [0, 0, 0, 0])
                 player_action_record_hu(
@@ -508,6 +638,11 @@ class NewRuleGameState:
 
         return game_start_payload(self, player_index, reveal_final=self.game_status == "END")
 
+    def emit_game_start_payloads(self) -> list[dict]:
+        payloads = [self.build_game_start_payload(idx) for idx in range(4)]
+        self.outbound_payloads.extend(payloads)
+        return payloads
+
     def build_pending_action_payload(self, player_index: int) -> Optional[dict]:
         from .boardcast import pending_action_payload
 
@@ -518,11 +653,56 @@ class NewRuleGameState:
 
         return final_settlement_payload(self, player_index)
 
+    def emit_ready_status_payloads(self) -> list[dict]:
+        from .boardcast import ready_status_payload
+
+        payloads = [ready_status_payload(self, idx) for idx in range(4)]
+        self.outbound_payloads.extend(payloads)
+        return payloads
+
+    def emit_game_end_payloads(self) -> list[dict]:
+        from .boardcast import game_end_payload
+        from ..public.logic_common import assign_strict_final_ranks
+
+        assign_strict_final_ranks(self.player_list)
+        payloads = [game_end_payload(self, idx) for idx in range(4)]
+        self.outbound_payloads.extend(payloads)
+        return payloads
+
+    async def complete_game_lifecycle(self) -> None:
+        if self.lifecycle_completed:
+            return
+        self.lifecycle_completed = True
+        self.action_dict = {idx: [] for idx in range(4)}
+        self.waiting_players_list = []
+        self.emit_ready_status_payloads()
+        await self.flush_outbound_payloads()
+
+        self.emit_game_end_payloads()
+        await self.flush_outbound_payloads()
+
+        if self.game_server is None:
+            return
+        gamestate_manager = getattr(self.game_server, "gamestate_manager", None)
+        if gamestate_manager is not None:
+            await gamestate_manager.cleanup_game_state_complete(gamestate_id=self.gamestate_id)
+        room_manager = getattr(self.game_server, "room_manager", None)
+        if room_manager is not None:
+            if self.room_type == "match" and hasattr(room_manager, "destroy_room"):
+                await room_manager.destroy_room(self.room_id)
+            elif hasattr(room_manager, "finish_custom_game_room"):
+                await room_manager.finish_custom_game_room(self.room_id)
+
     async def flush_outbound_payloads(self) -> None:
         """Send newly recorded payloads to connected players where possible."""
         while self.outbound_send_cursor < len(self.outbound_payloads):
             payload = self.outbound_payloads[self.outbound_send_cursor]
             self.outbound_send_cursor += 1
+            if payload.get("type") == "gamestate/new_rule/_internal_mid_hand_hu_delay":
+                delay_seconds = float(payload.get("delay_seconds") or 0)
+                if delay_seconds > 0:
+                    await asyncio.sleep(delay_seconds)
+                continue
             player_index = payload.get("player_index")
             if player_index is None:
                 continue
@@ -582,6 +762,8 @@ class NewRuleGameState:
                 raise ValueError(f"Missing action for player {player_index}.")
             action = action_data["action_type"]
             tile = action_data.get("TileId") if action == "cut" else action_data.get("target_tile")
+            if tile is not None and tile <= 0:
+                tile = None
             if action == "hu_self":
                 tile = tile if tile is not None else self.player_list[player_index].hand_tiles[-1]
             next_window = self.apply_turn_action(
@@ -590,16 +772,39 @@ class NewRuleGameState:
                 tile=tile,
                 settlement=settlements.get(player_index),
             )
-            self.emit_visible_action_payloads(
-                {
-                    "action": action,
-                    "player": player_index,
-                    "tile": tile,
-                    "cutIndex": action_data.get("cutIndex"),
-                    "cutClass": action_data.get("cutClass", False),
-                },
-                reveal_final=next_window.get("status") == "END",
-            )
+            action_payload = {
+                "action": action,
+                "player": player_index,
+                "tile": tile,
+                "cutIndex": action_data.get("cutIndex"),
+                "cutClass": action_data.get("cutClass", False),
+            }
+            result = next_window.get("result") or {}
+            for key in ("meld_code", "combination_mask", "is_mo_gang"):
+                if key in result:
+                    action_payload[key] = result[key]
+            self.emit_visible_action_payloads(action_payload, reveal_final=next_window.get("status") == "END")
+            if action == "hu_self":
+                settlement = self._latest_hu_settlement_for(player_index)
+                if settlement is not None and next_window.get("status") != "END":
+                    self.emit_mid_hand_hu_payloads(settlement)
+                if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
+                    self.emit_visible_action_payloads(
+                        {
+                            "action": "deal_tile",
+                            "player": next_window.get("player"),
+                            "tile": next_window.get("drawn_tile"),
+                        },
+                    )
+            if action in {"angang", "jiagang"} and next_window.get("drawn_tile") is not None:
+                self.emit_visible_action_payloads(
+                    {
+                        "action": "deal_gang_tile",
+                        "player": player_index,
+                        "tile": next_window.get("drawn_tile"),
+                    },
+                    reveal_final=next_window.get("status") == "END",
+                )
             return self.open_action_window(next_window)
 
         if status == "waiting_action_after_cut":
@@ -620,6 +825,26 @@ class NewRuleGameState:
                 claim_responses,
                 settlements=settlements,
             )
+            win_result = next_window.get("win_result") or {}
+            winners = list(win_result.get("winners", []))
+            is_multi_ron = len(winners) > 1
+            for ron_i, winner_index in enumerate(winners):
+                settlement = self._latest_hu_settlement_for(winner_index)
+                self.emit_visible_action_payloads(
+                    {
+                        "action": self._hu_action_for_settlement(settlement),
+                        "player": winner_index,
+                        "tile": tile,
+                    },
+                    reveal_final=next_window.get("status") == "END",
+                )
+                if settlement is not None and next_window.get("status") != "END":
+                    recycle_discard = (not is_multi_ron) or (ron_i == len(winners) - 1)
+                    self.emit_mid_hand_hu_payloads(
+                        settlement,
+                        multi_ron=is_multi_ron,
+                        recycle_discard=recycle_discard,
+                    )
             claim_result = next_window.get("claim_result") or next_window.get("result") or {}
             if claim_result.get("claimed"):
                 self.emit_visible_action_payloads(
@@ -632,9 +857,10 @@ class NewRuleGameState:
                     },
                 )
             if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
+                deal_action = "deal_gang_tile" if next_window.get("reason") == "discard_gang" else "deal_tile"
                 self.emit_visible_action_payloads(
                     {
-                        "action": "deal_tile",
+                        "action": deal_action,
                         "player": next_window.get("player"),
                         "tile": next_window.get("drawn_tile"),
                     },
@@ -651,10 +877,44 @@ class NewRuleGameState:
                 responses,
                 settlements=settlements,
             )
-            if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
+            rob_kong_result = next_window.get("rob_kong_result") or {}
+            if rob_kong_result.get("robbed"):
+                winners = list(rob_kong_result.get("winners", []))
+                is_multi_ron = len(winners) > 1
+                for ron_i, winner_index in enumerate(winners):
+                    settlement = self._latest_hu_settlement_for(winner_index)
+                    self.emit_visible_action_payloads(
+                        {
+                            "action": self._hu_action_for_settlement(settlement),
+                            "player": winner_index,
+                            "tile": tile,
+                        },
+                        reveal_final=next_window.get("status") == "END",
+                    )
+                    if settlement is not None and next_window.get("status") != "END":
+                        recycle_discard = (not is_multi_ron) or (ron_i == len(winners) - 1)
+                        self.emit_mid_hand_hu_payloads(
+                            settlement,
+                            multi_ron=is_multi_ron,
+                            recycle_discard=recycle_discard,
+                        )
+            if not rob_kong_result.get("robbed") and rob_kong_result.get("meld_code"):
                 self.emit_visible_action_payloads(
                     {
-                        "action": "deal_tile",
+                        "action": "jiagang",
+                        "player": kong_player_index,
+                        "tile": tile,
+                        "meld_code": rob_kong_result.get("previous_meld_code", f"k{tile}"),
+                        "combination_mask": rob_kong_result.get("combination_mask"),
+                        "is_mo_gang": rob_kong_result.get("is_mo_gang", False),
+                    },
+                    reveal_final=next_window.get("status") == "END",
+                )
+            if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
+                deal_action = "deal_tile" if rob_kong_result.get("robbed") else "deal_gang_tile"
+                self.emit_visible_action_payloads(
+                    {
+                        "action": deal_action,
                         "player": next_window.get("player"),
                         "tile": next_window.get("drawn_tile"),
                     },
@@ -664,6 +924,14 @@ class NewRuleGameState:
         if status == "END":
             return window
         raise ValueError(f"Unsupported live action window status: {status}")
+
+    @staticmethod
+    def _hu_action_for_settlement(settlement: Optional[dict]) -> str:
+        if settlement is None:
+            return "hu_first"
+        from .boardcast import _settlement_hu_class
+
+        return _settlement_hu_class(settlement)
 
     @staticmethod
     def _default_room_data() -> Dict[str, Any]:
@@ -684,6 +952,20 @@ class NewRuleGameState:
         seed = self.room_random_seed or 1
         return seed * 1009 + self.current_round
 
+    def advance_round_after_ready(self) -> None:
+        """Advance to the next hand with fixed dealer rotation and fresh action state."""
+        self.advance_dealer_after_round()
+        self.current_player_index = self.dealer_index
+        self.live_pending_window = None
+        self.action_dict = {idx: [] for idx in range(4)}
+        self.waiting_players_list = []
+        self.hand_action_is_gang_draw = {idx: False for idx in range(4)}
+        self.natural_draw_count = {idx: 0 for idx in range(4)}
+        self.opening_action_taken = False
+        self.opening_flow_interrupted = False
+        self.bot_action_ticks = {}
+        self.game_status = "waiting"
+
     def reset_round_state(self) -> None:
         for player in self.player_list:
             player.reset_for_round()
@@ -694,6 +976,18 @@ class NewRuleGameState:
         self.deferred_scores_applied = False
         self.ended_by = None
         self.game_status = "waiting"
+        self.live_pending_window = None
+        self.action_dict = {idx: [] for idx in range(4)}
+        self.waiting_players_list = []
+        for idx in range(4):
+            self.action_events[idx].clear()
+            while not self.action_queues[idx].empty():
+                self.action_queues[idx].get_nowait()
+        self.hand_action_is_gang_draw = {idx: False for idx in range(4)}
+        self.natural_draw_count = {idx: 0 for idx in range(4)}
+        self.opening_action_taken = False
+        self.opening_flow_interrupted = False
+        self.bot_action_ticks = {}
         self.round_random_seed = self._derive_round_seed()
 
     def initialize_round(self) -> None:
@@ -708,6 +1002,7 @@ class NewRuleGameState:
 
         player_index = self.current_player_index if player_index is None else player_index
         self.current_player_index = player_index
+        self.hand_action_is_gang_draw[player_index] = bool(is_get_gang_tile)
         refresh_waiting_tiles(self, player_index, exclude_last_tile=True)
         self.game_status = "waiting_hand_action"
         return {
@@ -721,6 +1016,7 @@ class NewRuleGameState:
         from .action_check import check_only_cut
 
         self.current_player_index = player_index
+        self.hand_action_is_gang_draw[player_index] = False
         self.game_status = "onlycut_after_action"
         return {
             "status": self.game_status,
@@ -742,6 +1038,7 @@ class NewRuleGameState:
         if action == "cut":
             if tile is None:
                 raise ValueError("Discard action requires a tile.")
+            self.hand_action_is_gang_draw[player_index] = False
             cut_tile = self.record_discard(player_index, tile)
             for other in self.player_list:
                 if other.player_index != player_index and not other.is_hu:
@@ -756,6 +1053,8 @@ class NewRuleGameState:
 
         if action == "hu_self":
             win_tile = tile if tile is not None else self.player_list[player_index].hand_tiles[-1]
+            if win_tile is not None and win_tile <= 0:
+                win_tile = self.player_list[player_index].hand_tiles[-1]
             self.record_self_draw_win(player_index, win_tile, settlement)
             if self.game_status == "END":
                 return {"status": self.game_status, "player": player_index, "tile": win_tile, "actions": None}
@@ -772,6 +1071,7 @@ class NewRuleGameState:
             result = self.declare_concealed_kong(player_index, tile)
             next_window = self.begin_hand_action(player_index, is_get_gang_tile=True)
             next_window["result"] = result
+            next_window["drawn_tile"] = result.get("drawn_tile")
             return next_window
 
         if action == "jiagang":
@@ -806,11 +1106,7 @@ class NewRuleGameState:
         hand_tiles = list(player.hand_tiles)
         if source != "self_draw":
             hand_tiles.append(tile)
-
-        context = {
-            "win_source": source,
-            "chankan": source == "rob_kong",
-        }
+        context = self._settlement_context(winner_index, source, hand_tiles, tile)
         if self.calculation_service is not None and hasattr(self.calculation_service, "NewRule_hepai_detail"):
             detail = self.calculation_service.NewRule_hepai_detail(
                 hand_tiles,
@@ -826,7 +1122,13 @@ class NewRuleGameState:
                     meld_codes=player.combination_tiles,
                     winning_tile=tile,
                     win_source=source,
-                    chankan=source == "rob_kong",
+                    pre_win_tiles=context["pre_win_tiles"],
+                    heavenly_win=context["heavenly_win"],
+                    earthly_win=context["earthly_win"],
+                    haitei=context["haitei"],
+                    houtei=context["houtei"],
+                    rinshan=context["rinshan"],
+                    chankan=context["chankan"],
                 )
             )
             detail = {
@@ -909,6 +1211,7 @@ class NewRuleGameState:
             window = self.begin_hand_action(claim_result["claimant"], is_get_gang_tile=True)
             window["reason"] = "discard_gang"
             window["claim_result"] = claim_result
+            window["drawn_tile"] = claim_result.get("drawn_tile")
             return window
         window = self.begin_only_cut(claim_result["claimant"])
         window["reason"] = "discard_claim"
@@ -949,6 +1252,7 @@ class NewRuleGameState:
         self.hu_order_counter += 1
         player.is_hu = True
         player.hu_order = self.hu_order_counter
+        self._mark_opening_action(interrupt=True)
         if settlement is not None:
             self.deferred_hu_settlements.append({**settlement, "winner": player_index, "hu_order": player.hu_order})
         if self.should_end_hand():
@@ -1002,6 +1306,7 @@ class NewRuleGameState:
         player.discard_origin_tiles.append(tile)
         player.has_draw_slot = False
         self.current_player_index = player_index
+        self._mark_opening_action()
         self.clear_lockout_on_discard(player_index, tile)
         return tile
 
@@ -1053,9 +1358,9 @@ class NewRuleGameState:
             },
         )
 
-    def draw_after_discard_resolution(self, discarder_index: int) -> Optional[int]:
-        """Draw for the next active player after all discard responses resolve."""
-        next_index = self.next_active_index(discarder_index)
+    def draw_after_discard_resolution(self, from_index: int) -> Optional[int]:
+        """Draw for the next active player after a discard-response branch resolves."""
+        next_index = self.next_active_index(from_index)
         if next_index is None:
             return None
         self.current_player_index = next_index
@@ -1063,7 +1368,9 @@ class NewRuleGameState:
             self.ended_by = self.ended_by or "wall"
             self.game_status = "END"
             return None
-        return self.player_list[next_index].get_tile(self.tiles_list)
+        drawn_tile = self.player_list[next_index].get_tile(self.tiles_list)
+        self.natural_draw_count[next_index] = self.natural_draw_count.get(next_index, 0) + 1
+        return drawn_tile
 
     def resolve_discard_win_responses(
         self,
@@ -1082,7 +1389,7 @@ class NewRuleGameState:
         winners: list[int] = []
         passed: list[int] = []
 
-        for player_index in sorted(responses):
+        for player_index in self._response_order_after(discarder_index, responses):
             action = responses[player_index]
             if player_index == discarder_index or self.player_list[player_index].is_hu:
                 continue
@@ -1107,7 +1414,7 @@ class NewRuleGameState:
         drawn_tile = None
         draw_player = None
         if self.game_status != "END" and winners:
-            drawn_tile = self.draw_after_discard_resolution(discarder_index)
+            drawn_tile = self.draw_after_discard_resolution(winners[-1])
             draw_player = self.current_player_index if drawn_tile is not None else None
 
         return {
@@ -1167,14 +1474,21 @@ class NewRuleGameState:
     def declare_concealed_kong(self, player_index: int, tile: int) -> dict:
         """Declare a concealed kong, store true tile server-side, and draw a supplement."""
         player = self.player_list[player_index]
+        is_mo_gang = bool(player.has_draw_slot and player.hand_tiles and player.hand_tiles[-1] == tile)
         self._remove_tiles(player.hand_tiles, [tile, tile, tile, tile])
+        player.has_draw_slot = False
         player.combination_tiles.append(f"G{tile}")
+        combination_mask = [2, tile, 2, tile, 2, tile, 2, tile]
+        player.combination_mask.append(combination_mask)
+        self._mark_opening_action(interrupt=True)
         drawn_tile = self._draw_supplement_tile(player_index)
         return {
             "player": player_index,
             "action": "angang",
             "meld_code": f"G{tile}",
             "public_meld_code": "G0",
+            "combination_mask": combination_mask,
+            "is_mo_gang": is_mo_gang,
             "drawn_tile": drawn_tile,
             "next_status": self.game_status,
         }
@@ -1187,11 +1501,24 @@ class NewRuleGameState:
         if f"k{tile}" not in player.combination_tiles:
             raise ValueError(f"Player {player_index} has no exposed triplet k{tile} to upgrade.")
         self.current_player_index = player_index
+        self._mark_opening_action(interrupt=True)
         self.game_status = "waiting_action_qianggang"
+        is_mo_gang = bool(player.has_draw_slot and player.hand_tiles and player.hand_tiles[-1] == tile)
+        try:
+            triplet_index = player.combination_tiles.index(f"k{tile}")
+            combination_mask = list(player.combination_mask[triplet_index])
+        except (ValueError, IndexError):
+            combination_mask = [1, tile, 0, tile, 0, tile]
+        insert_index = next((idx for idx in range(0, len(combination_mask), 2) if combination_mask[idx] == 1), 0)
+        preview_mask = list(combination_mask)
+        preview_mask[insert_index:insert_index] = [3, tile]
         return {
             "player": player_index,
             "tile": tile,
             "action": "jiagang",
+            "meld_code": f"k{tile}",
+            "combination_mask": preview_mask,
+            "is_mo_gang": is_mo_gang,
             "next_status": self.game_status,
         }
 
@@ -1207,7 +1534,7 @@ class NewRuleGameState:
         winners: list[int] = []
         passed: list[int] = []
 
-        for player_index in sorted(responses):
+        for player_index in self._response_order_after(kong_player_index, responses):
             action = responses[player_index]
             if player_index == kong_player_index or self.player_list[player_index].is_hu:
                 continue
@@ -1244,10 +1571,11 @@ class NewRuleGameState:
                 raise ValueError(f"Unsupported robbing-kong response: {action}")
 
         if winners:
+            self._consume_robbed_added_kong_tile(kong_player_index, tile)
             drawn_tile = None
             draw_player = None
             if self.game_status != "END":
-                drawn_tile = self.draw_after_discard_resolution(kong_player_index)
+                drawn_tile = self.draw_after_discard_resolution(winners[-1])
                 draw_player = self.current_player_index if drawn_tile is not None else None
             return {
                 "robbed": True,
@@ -1258,13 +1586,13 @@ class NewRuleGameState:
                 "ended": self.game_status == "END",
             }
 
-        meld_code = self._finalize_added_kong(kong_player_index, tile)
+        kong_result = self._finalize_added_kong(kong_player_index, tile)
         drawn_tile = self._draw_supplement_tile(kong_player_index)
         return {
             "robbed": False,
             "winners": [],
             "passed": passed,
-            "meld_code": meld_code,
+            **kong_result,
             "draw_player": kong_player_index,
             "drawn_tile": drawn_tile,
             "ended": self.game_status == "END",
@@ -1293,6 +1621,10 @@ class NewRuleGameState:
             return None
         _, _, player_index, action = min(candidates)
         return player_index, action
+
+    @staticmethod
+    def _response_order_after(from_index: int, responses: Dict[int, str]) -> list[int]:
+        return sorted(responses, key=lambda player_index: (player_index - from_index) % 4)
 
     def _apply_discard_claim(self, player: NewRulePlayer, tile: int, action: str) -> tuple[str, list[int]]:
         if action == "peng":
@@ -1324,17 +1656,38 @@ class NewRuleGameState:
             raise ValueError(f"Unsupported discard claim action: {action}")
         player.combination_tiles.append(meld_code)
         player.combination_mask.append(combination_mask)
+        self._mark_opening_action(interrupt=True)
         return meld_code, combination_mask
 
-    def _finalize_added_kong(self, player_index: int, tile: int) -> str:
+    def _finalize_added_kong(self, player_index: int, tile: int) -> dict:
         player = self.player_list[player_index]
+        is_mo_gang = bool(player.has_draw_slot and player.hand_tiles and player.hand_tiles[-1] == tile)
         self._remove_tiles(player.hand_tiles, [tile])
+        player.has_draw_slot = False
         try:
             triplet_index = player.combination_tiles.index(f"k{tile}")
         except ValueError as exc:
             raise ValueError(f"Player {player_index} has no exposed triplet k{tile} to upgrade.") from exc
+        if triplet_index < len(player.combination_mask):
+            combination_mask = list(player.combination_mask[triplet_index])
+        else:
+            combination_mask = [1, tile, 0, tile, 0, tile]
+        insert_index = next((idx for idx in range(0, len(combination_mask), 2) if combination_mask[idx] == 1), 0)
+        combination_mask[insert_index:insert_index] = [3, tile]
+        player.combination_mask[triplet_index:triplet_index + 1] = [combination_mask]
         player.combination_tiles[triplet_index] = f"g{tile}"
-        return f"g{tile}"
+        return {
+            "meld_code": f"g{tile}",
+            "previous_meld_code": f"k{tile}",
+            "combination_mask": combination_mask,
+            "is_mo_gang": is_mo_gang,
+        }
+
+    def _consume_robbed_added_kong_tile(self, player_index: int, tile: int) -> None:
+        """Robbed added-kong tile leaves the kong player's hand, but the meld stays a triplet."""
+        player = self.player_list[player_index]
+        self._remove_tiles(player.hand_tiles, [tile])
+        player.has_draw_slot = False
 
     def _window_after_draw_result(self, result: dict, reason: str, extra: dict) -> dict:
         if result.get("ended") or self.game_status == "END":
@@ -1353,6 +1706,41 @@ class NewRuleGameState:
         if extra:
             payload.update(extra)
         return payload
+
+    def _mark_opening_action(self, *, interrupt: bool = False) -> None:
+        self.opening_action_taken = True
+        if interrupt:
+            self.opening_flow_interrupted = True
+
+    def _pre_win_tiles_for_context(self, source: str, hand_tiles: list[int], winning_tile: int) -> list[int]:
+        pre_win_tiles = list(hand_tiles)
+        if winning_tile in pre_win_tiles:
+            pre_win_tiles.remove(winning_tile)
+        return pre_win_tiles
+
+    def _settlement_context(self, winner_index: int, source: str, hand_tiles: list[int], tile: int) -> dict:
+        rinshan = source == "self_draw" and bool(self.hand_action_is_gang_draw.get(winner_index))
+        return {
+            "win_source": source,
+            "pre_win_tiles": self._pre_win_tiles_for_context(source, hand_tiles, tile),
+            "heavenly_win": (
+                source == "self_draw"
+                and winner_index == self.dealer_index
+                and not self.opening_action_taken
+                and not rinshan
+            ),
+            "earthly_win": (
+                source == "self_draw"
+                and winner_index != self.dealer_index
+                and self.natural_draw_count.get(winner_index, 0) == 1
+                and not self.opening_flow_interrupted
+                and not rinshan
+            ),
+            "haitei": source == "self_draw" and len(self.tiles_list) <= self.dead_wall_count,
+            "houtei": source == "discard" and len(self.tiles_list) <= self.dead_wall_count,
+            "rinshan": rinshan,
+            "chankan": source == "rob_kong",
+        }
 
     def _draw_supplement_tile(self, player_index: int) -> int:
         if not self.tiles_list:

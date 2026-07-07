@@ -5,6 +5,29 @@ from typing import Any, Optional
 from ..public.deal_tile_view import sanitize_deal_tile_for_viewer
 
 
+def _is_full_concealed_kong_mask(mask: Optional[list[int]]) -> bool:
+    if not mask or len(mask) != 8:
+        return False
+    return all(mask[i] == 2 for i in range(0, 8, 2))
+
+
+def _public_concealed_kong_mask(
+    mask: Optional[list[int]],
+    owner_index: Optional[int],
+    viewer_index: Optional[int],
+    *,
+    reveal_final: bool = False,
+) -> Optional[list[int]]:
+    if mask is None:
+        return None
+    if reveal_final or owner_index == viewer_index or not _is_full_concealed_kong_mask(mask):
+        return list(mask)
+    public_mask = list(mask)
+    for i in range(1, len(public_mask), 2):
+        public_mask[i] = 0
+    return public_mask
+
+
 def public_melds_for_viewer(player: Any, viewer_index: Optional[int], *, reveal_final: bool = False) -> list[str]:
     melds: list[str] = []
     for meld in player.combination_tiles:
@@ -13,6 +36,23 @@ def public_melds_for_viewer(player: Any, viewer_index: Optional[int], *, reveal_
         else:
             melds.append(meld)
     return melds
+
+
+def public_combination_masks_for_viewer(
+    player: Any,
+    viewer_index: Optional[int],
+    *,
+    reveal_final: bool = False,
+) -> list[list[int]]:
+    return [
+        _public_concealed_kong_mask(
+            mask,
+            player.player_index,
+            viewer_index,
+            reveal_final=reveal_final,
+        )
+        for mask in player.combination_mask
+    ]
 
 
 def _safe_room_id(room_id: Any) -> int:
@@ -40,7 +80,7 @@ def player_info_payload(
         "discard_tiles": list(player.discard_tiles),
         "discard_origin_tiles": list(player.discard_origin_tiles),
         "combination_tiles": public_melds_for_viewer(player, viewer_index, reveal_final=reveal_final),
-        "combination_mask": list(player.combination_mask),
+        "combination_mask": public_combination_masks_for_viewer(player, viewer_index, reveal_final=reveal_final),
         "remaining_time": player.remaining_time,
         "player_index": player_index,
         "original_player_index": player.original_player_index,
@@ -171,6 +211,15 @@ def visible_action_payload(
     actor = action_info.get("player")
     deal_tile = action_info.get("tile") if action in {"deal_tile", "deal_gang_tile", "deal_buhua_tile"} else None
     viewer_deal_tile = sanitize_deal_tile_for_viewer(deal_tile, actor, viewer_index) if actor is not None and viewer_index is not None else deal_tile
+    combination_mask = _public_concealed_kong_mask(
+        action_info.get("combination_mask"),
+        actor,
+        viewer_index,
+        reveal_final=reveal_final,
+    )
+    combination_target = action_info.get("meld_code")
+    if action == "angang" and not reveal_final and viewer_index != actor:
+        combination_target = "G0"
     payload = {
         "type": "gamestate/new_rule/do_action",
         "success": True,
@@ -186,9 +235,9 @@ def visible_action_payload(
             "cut_tile_index": action_info.get("cutIndex"),
             "cut_class": action_info.get("cutClass", False),
             "deal_tile": viewer_deal_tile,
-            "combination_target": action_info.get("meld_code"),
-            "combination_mask": action_info.get("combination_mask"),
-            "is_mo_gang": action == "angang",
+            "combination_target": combination_target,
+            "combination_mask": combination_mask,
+            "is_mo_gang": action_info.get("is_mo_gang", action == "angang"),
         },
     }
 
@@ -210,6 +259,47 @@ def visible_action_payload(
     return payload
 
 
+def mid_hand_hu_result_payload(
+    game_state: Any,
+    viewer_index: Optional[int],
+    settlement: dict,
+    *,
+    multi_ron: bool = False,
+    recycle_discard: Optional[bool] = None,
+) -> dict:
+    winner_index = settlement.get("winner", -1)
+    source = settlement.get("source")
+    hu_class = _settlement_hu_class(settlement)
+    hepai_tile = settlement.get("tile")
+    if source == "self_draw" and viewer_index != winner_index:
+        hepai_tile = 0
+    return {
+        "type": "gamestate/new_rule/show_result",
+        "success": True,
+        "message": "显示中途和牌",
+        "game_info": game_info_payload(game_state, viewer_index),
+        "show_result_info": {
+            "hepai_player_index": winner_index,
+            "player_to_score": _final_scores(game_state),
+            "hu_score": 0,
+            "hu_fan": [],
+            "hu_class": hu_class,
+            "hepai_player_hand": None,
+            "hepai_player_huapai": [],
+            "hepai_player_combination_mask": None,
+            "action_tick": getattr(game_state, "server_action_tick", 0),
+            "hepai_tile": hepai_tile,
+            "suppress_hand_reveal": True,
+            "defer_score_settlement": True,
+            "ron_discarder_index": _settlement_payer_index(settlement),
+            "is_qianggang": source == "rob_kong",
+            "multi_ron": multi_ron,
+            "recycle_discard": recycle_discard,
+            "round_continues": game_state.game_status != "END",
+        },
+    }
+
+
 def _final_scores(game_state: Any) -> dict[int, int]:
     return {
         player.player_index: player.score
@@ -227,7 +317,36 @@ def _total_score_changes(game_state: Any) -> dict[int, int]:
     return totals
 
 
-def _final_show_result_info(game_state: Any) -> dict:
+def _settlement_score_changes(game_state: Any, settlement: dict) -> dict[int, int]:
+    changes = settlement.get("score_changes") or []
+    return {
+        player.player_index: changes[player.player_index] if player.player_index < len(changes) else 0
+        for player in game_state.player_list
+    }
+
+
+def _score_changes_through(game_state: Any, settlement_index: int) -> dict[int, int]:
+    totals = {player.player_index: 0 for player in game_state.player_list}
+    settlements = list(getattr(game_state, "deferred_hu_settlements", []))
+    for settlement in settlements[: settlement_index + 1]:
+        changes = settlement.get("score_changes") or []
+        for player_index, change in enumerate(changes):
+            if player_index in totals:
+                totals[player_index] += change
+    return totals
+
+
+def _scores_after_settlement(game_state: Any, settlement_index: int) -> dict[int, int]:
+    final_scores = _final_scores(game_state)
+    total_changes = _total_score_changes(game_state)
+    panel_changes = _score_changes_through(game_state, settlement_index)
+    return {
+        player_index: final_scores[player_index] - total_changes.get(player_index, 0) + panel_changes.get(player_index, 0)
+        for player_index in final_scores
+    }
+
+
+def _final_show_result_info(game_state: Any, settlement_index: Optional[int] = None) -> dict:
     settlements = list(getattr(game_state, "deferred_hu_settlements", []))
     player_to_score = _final_scores(game_state)
     score_changes = _total_score_changes(game_state)
@@ -249,7 +368,12 @@ def _final_show_result_info(game_state: Any) -> dict:
             "liuju_status_final": True,
         }
 
-    settlement = settlements[-1]
+    if settlement_index is None:
+        settlement_index = len(settlements) - 1
+    settlement = settlements[settlement_index]
+    is_final_panel = settlement_index == len(settlements) - 1
+    player_to_score = _scores_after_settlement(game_state, settlement_index)
+    score_changes = _settlement_score_changes(game_state, settlement)
     winner_index = settlement.get("winner", -1)
     winner = game_state.player_list[winner_index] if winner_index in range(len(game_state.player_list)) else None
     hand = list(winner.hand_tiles) if winner is not None else []
@@ -257,13 +381,13 @@ def _final_show_result_info(game_state: Any) -> dict:
     if settlement.get("source") != "self_draw" and win_tile is not None:
         hand = hand + [win_tile]
     source = settlement.get("source")
-    hu_class = "hu_self" if source == "self_draw" else "hu"
+    hu_class = _settlement_hu_class(settlement)
 
     return {
         "hepai_player_index": winner_index,
         "player_to_score": player_to_score,
         "hu_score": settlement.get("points", 0),
-        "hu_fan": list(settlement.get("fan_names") or settlement.get("fan_ids") or []),
+        "hu_fan": list(settlement.get("fan_ids") or settlement.get("fan_names") or []),
         "hu_class": hu_class,
         "hepai_player_hand": hand,
         "hepai_player_huapai": [],
@@ -273,6 +397,8 @@ def _final_show_result_info(game_state: Any) -> dict:
         "hepai_tile": win_tile,
         "suppress_hand_reveal": False,
         "defer_score_settlement": False,
+        "liuju_step": "settle_hu",
+        "liuju_status_final": is_final_panel,
         "is_qianggang": source == "rob_kong",
         "ron_discarder_index": _settlement_payer_index(settlement),
     }
@@ -285,6 +411,21 @@ def _settlement_payer_index(settlement: dict) -> Optional[int]:
     return settlement.get("kong_player")
 
 
+def _settlement_hu_class(settlement: dict) -> str:
+    if settlement.get("source") == "self_draw":
+        return "hu_self"
+    payer_index = _settlement_payer_index(settlement)
+    winner_index = settlement.get("winner")
+    if payer_index is None or winner_index is None:
+        return "hu_first"
+    distance = (int(winner_index) - int(payer_index)) % 4
+    if distance == 2:
+        return "hu_second"
+    if distance == 3:
+        return "hu_third"
+    return "hu_first"
+
+
 def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> dict:
     if hasattr(game_state, "apply_deferred_score_changes"):
         game_state.apply_deferred_score_changes()
@@ -294,4 +435,62 @@ def final_settlement_payload(game_state: Any, viewer_index: Optional[int]) -> di
         "player_index": viewer_index,
         "game_info": game_info_payload(game_state, viewer_index, reveal_final=True),
         "show_result_info": _final_show_result_info(game_state),
+    }
+
+
+def final_settlement_payloads(game_state: Any, viewer_index: Optional[int]) -> list[dict]:
+    if hasattr(game_state, "apply_deferred_score_changes"):
+        game_state.apply_deferred_score_changes()
+    settlements = list(getattr(game_state, "deferred_hu_settlements", []))
+    if not settlements:
+        return [final_settlement_payload(game_state, viewer_index)]
+    return [
+        {
+            "type": "gamestate/new_rule/show_result",
+            "success": True,
+            "player_index": viewer_index,
+            "game_info": game_info_payload(game_state, viewer_index, reveal_final=True),
+            "show_result_info": _final_show_result_info(game_state, settlement_index),
+        }
+        for settlement_index in range(len(settlements))
+    ]
+
+
+def ready_status_payload(game_state: Any, viewer_index: Optional[int]) -> dict:
+    player_to_ready = {}
+    for player in game_state.player_list:
+        pending = game_state.action_dict.get(player.player_index, [])
+        player_to_ready[player.player_index] = "ready" not in pending
+    return {
+        "type": "gamestate/new_rule/ready_status",
+        "success": True,
+        "player_index": viewer_index,
+        "message": "ready status update",
+        "ready_status_info": {
+            "player_to_ready": player_to_ready,
+        },
+    }
+
+
+def game_end_payload(game_state: Any, viewer_index: Optional[int]) -> dict:
+    player_final_data = {}
+    for player in game_state.player_list:
+        player_final_data[str(player.player_index)] = {
+            "rank": player.record_counter.rank_result,
+            "score": player.score,
+            "pt": 0,
+            "username": player.username,
+            "original_player_index": player.original_player_index,
+        }
+    return {
+        "type": "gamestate/new_rule/game_end",
+        "success": True,
+        "player_index": viewer_index,
+        "message": "game end",
+        "game_end_info": {
+            "master_seed": str(getattr(game_state, "master_seed", "")),
+            "commitment": str(getattr(game_state, "commitment", "")),
+            "salt": str(getattr(game_state, "salt", "")),
+            "player_final_data": player_final_data,
+        },
     }

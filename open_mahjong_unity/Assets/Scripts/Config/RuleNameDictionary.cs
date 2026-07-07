@@ -31,6 +31,11 @@ public static class RuleNameDictionary {
         { "riichi/langyong", "浪涌" },
     };
 
+    static RuleNameDictionary() {
+        WholeName["new_rule/standard"] = "\u65b0\u89c4\u5219\u9ebb\u5c06(\u6d4b\u8bd5)";
+        ShortName["new_rule/standard"] = "\u65b0\u89c4\u5219";
+    }
+
     public static string GetWholeName(string subRule) {
         return subRule != null && WholeName.TryGetValue(subRule, out string name) ? name : subRule ?? "";
     }

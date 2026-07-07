@@ -172,7 +172,7 @@ def _detect_dragons(decomp: Decomposition) -> list[FanOccurrence]:
         return [FanOccurrence("two_dragon_triplets")]
     if len(dragon_sets) == 1:
         tile = next(iter(dragon_sets))
-        return [FanOccurrence({45: "red_dragon", 46: "green_dragon", 47: "white_dragon"}[tile])]
+        return [FanOccurrence({45: "red_dragon", 46: "white_dragon", 47: "green_dragon"}[tile])]
     return []
 
 

@@ -23,6 +23,9 @@ def _validate_action_payload(
     target_tile: Optional[int],
 ) -> tuple[bool, Optional[int]]:
     player = game_state.player_list[player_index]
+    if target_tile is not None and target_tile <= 0:
+        target_tile = None
+
     if action_type == "cut":
         if TileId is None or not hand_contains_tile(player.hand_tiles, TileId):
             logger.warning(
@@ -73,6 +76,23 @@ async def get_ai_action(
     if player_index not in range(4):
         logger.warning("Invalid new-rule AI player index: %s", player_index)
         return
+    if player_index not in getattr(game_state, "waiting_players_list", []):
+        logger.info(
+            "New-rule late action ignored: player_index=%s action=%s status=%s",
+            player_index,
+            action_type,
+            getattr(game_state, "game_status", None),
+        )
+        return
+    if action_type not in getattr(game_state, "action_dict", {}).get(player_index, []):
+        logger.info(
+            "New-rule illegal/late action ignored: player_index=%s action=%s legal=%s status=%s",
+            player_index,
+            action_type,
+            getattr(game_state, "action_dict", {}).get(player_index, []),
+            getattr(game_state, "game_status", None),
+        )
+        return
     is_valid, target_tile = _validate_action_payload(game_state, player_index, action_type, TileId, target_tile)
     if not is_valid:
         return
@@ -116,6 +136,8 @@ async def get_action(
         return
 
     if (
+        action_type != "ready"
+        and
         action_tick is not None
         and action_tick != getattr(game_state, "server_action_tick", action_tick)
     ):

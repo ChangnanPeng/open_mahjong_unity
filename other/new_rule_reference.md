@@ -96,9 +96,12 @@ Use independent win confirmation for multiple wins from the same discard:
 
 - All players who can win from a discard should see their own `hu` / `pass` choice.
 - Each eligible player chooses independently.
+- Eligible players respond during the same response window. Do not ask them sequentially one-by-one.
+- Click timing must not affect settlement order. After the window closes, accepted winners are sorted by fixed seat order from the discarder: next seat, opposite seat, previous seat.
 - Only players who explicitly choose `hu` should enter the accepted winner list.
 - Players who choose `pass` should not be included in the win settlement for that discard.
 - If at least one eligible player chooses `hu`, settle only those accepted winners.
+- If accepted winners do not end the hand, the next draw starts from the seat after the last accepted winner in that fixed seat-sorted list, skipping players who have already won.
 - If every eligible player chooses `pass` or times out, continue resolving lower-priority actions such as peng/gang/chi, or continue to the next draw if none exist.
 - Exception: if the wall is empty after the discard, do not resolve lower-priority chi/peng/gang. The final discard can only be won; if nobody wins, the hand ends as exhausted wall.
 - Chi is seat-relative, not active-player-relative. Only the fixed next seat after the discarder may chi. If that player has already won and exited, the chi opportunity disappears; it does not pass to the next active player.
