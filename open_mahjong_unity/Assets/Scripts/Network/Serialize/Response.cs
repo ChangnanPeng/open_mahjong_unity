@@ -135,6 +135,7 @@ public class AskHandActionGBInfo { // 询问手牌操作
     public int remaining_time; // 剩余时间
     public int player_index; // 玩家索引
     public int remain_tiles; // 剩余牌数 只有摸牌以后牌堆牌数会减少
+    public int[] forced_cut_tiles;
     public int action_tick;
     // 立直麻将：可立直切牌候选 {tile_id: [waiting_tile_id, ...]}，仅 action_list 含 riichi_cut 时下发
     public Dictionary<int, int[]> riichi_candidate_cuts;

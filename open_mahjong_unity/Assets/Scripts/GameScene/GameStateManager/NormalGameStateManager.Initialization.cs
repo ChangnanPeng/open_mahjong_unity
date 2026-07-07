@@ -161,6 +161,7 @@ public partial class NormalGameStateManager {
     private void InitializeSetInfo(GameInfo gameInfo, bool isNewMatch){
         // 清空操作列表
         allowActionList = new List<string>();
+        selfForcedCutTiles.Clear();
         // 清空弃牌列表
         player_to_info["self"].discard_tiles = new List<int>();
         player_to_info["left"].discard_tiles = new List<int>();

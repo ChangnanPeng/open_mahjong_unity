@@ -5,7 +5,8 @@ using UnityEngine;
 public partial class NormalGameStateManager {
     // 询问手牌操作 手牌操作包括 切牌 补花 胡 暗杠 加杠
     public void AskHandAction(int remaining_time, int playerIndex, int remain_tiles, string[] action_list,
-                              Dictionary<int, int[]> riichi_candidate_cuts = null, int[] forbidden_cut_tiles = null) {
+                              Dictionary<int, int[]> riichi_candidate_cuts = null, int[] forbidden_cut_tiles = null,
+                              int[] forced_cut_tiles = null) {
         TryResumeAfterCuoheContinue();
         TryResumeAfterSichuanContinue();
         string GetCardPlayer = indexToPosition[playerIndex];
@@ -14,6 +15,9 @@ public partial class NormalGameStateManager {
         selfRiichiCandidateCuts = riichi_candidate_cuts ?? new Dictionary<int, int[]>();
         selfForbiddenCutTiles = forbidden_cut_tiles != null
             ? new HashSet<int>(forbidden_cut_tiles)
+            : new HashSet<int>();
+        selfForcedCutTiles = forced_cut_tiles != null
+            ? new HashSet<int>(forced_cut_tiles)
             : new HashSet<int>();
         // 如果行动者是自己
         if (playerIndex == selfIndex){
