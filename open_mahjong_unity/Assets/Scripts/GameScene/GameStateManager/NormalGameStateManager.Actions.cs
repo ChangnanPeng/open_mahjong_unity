@@ -5,7 +5,8 @@ using UnityEngine;
 public partial class NormalGameStateManager {
     // 询问手牌操作 手牌操作包括 切牌 补花 胡 暗杠 加杠
     public void AskHandAction(int remaining_time, int playerIndex, int remain_tiles, string[] action_list,
-                              Dictionary<int, int[]> riichi_candidate_cuts = null, int[] forbidden_cut_tiles = null) {
+                              Dictionary<int, int[]> riichi_candidate_cuts = null, int[] forbidden_cut_tiles = null,
+                              int[] forced_cut_tiles = null) {
         TryResumeAfterCuoheContinue();
         TryResumeAfterSichuanContinue();
         string GetCardPlayer = indexToPosition[playerIndex];
@@ -15,11 +16,14 @@ public partial class NormalGameStateManager {
         selfForbiddenCutTiles = forbidden_cut_tiles != null
             ? new HashSet<int>(forbidden_cut_tiles)
             : new HashSet<int>();
+        selfForcedCutTiles = forced_cut_tiles != null
+            ? new HashSet<int>(forced_cut_tiles)
+            : new HashSet<int>();
         // 如果行动者是自己
         if (playerIndex == selfIndex){
             allowActionList.Clear();
             // 存储全部可用行动；riichi_cut 在 UI 上以「立直」按钮展示
-            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self" , "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
+            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self", "initial_hu", "sea_bottom", "buzhang", "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
             foreach (string action in action_list){
                 if (AllowHandActionCheck.Contains(action)){
                     allowActionList.Add(action);
@@ -52,7 +56,7 @@ public partial class NormalGameStateManager {
     }
 
     // 执行行动
-    public void DoAction(string[] action_list, int action_player, int? cut_tile, int? cut_tile_index, bool? cut_class, int? deal_tile, int? buhua_tile, int[] combination_mask,string combination_target, bool? is_riichi_horizontal = null, bool isClaim = false, bool isSilent = false, bool? is_mo_gang = null, Dictionary<int, int> gangScoreChanges = null, bool? is_mo_buhua = null, int action_tick = 0, int? cut_from_player = null, float? meld_reveal_delay = null) {
+    public void DoAction(string[] action_list, int action_player, int? cut_tile, int[] cut_tiles, int? cut_tile_index, bool? cut_class, int? deal_tile, int[] deal_tiles, int? buhua_tile, int[] combination_mask,string combination_target, bool? is_riichi_horizontal = null, bool isClaim = false, bool isSilent = false, bool? is_mo_gang = null, Dictionary<int, int> gangScoreChanges = null, bool? is_mo_buhua = null, int action_tick = 0, int? cut_from_player = null, float? meld_reveal_delay = null) {
         string GetCardPlayer = indexToPosition[action_player]; // 获取执行操作的玩家位置
         bool isRiichiHorizontalCut = is_riichi_horizontal == true;
         if (isClaim) {
@@ -66,11 +70,14 @@ public partial class NormalGameStateManager {
 
             Debug.Log($"执行DoAction操作: {action} (silent={isSilent})");
             bool deferMeldFeedback = !isSilent && meldRevealDelaySec > 0f && IsChiPengMingGangAction(action);
+            string soundAction = action == "buzhang"
+                ? (!string.IsNullOrEmpty(combination_target) && combination_target.StartsWith("G") ? "angang" : "jiagang")
+                : action;
             if (!isSilent && !deferMeldFeedback) {
-                SoundManager.Instance.PlayActionSound(GetCardPlayer, action);
+                SoundManager.Instance.PlayActionSound(GetCardPlayer, soundAction);
                 // 切牌物理音改在 3D 出牌手牌队列中播放，避免吃牌后立刻收到 cut 消息时声音早于出牌动画
                 if (action != "cut") {
-                    SoundManager.Instance.PlayPhysicsSound(action);
+                    SoundManager.Instance.PlayPhysicsSound(soundAction);
                 }
                 GameCanvas.Instance.ShowActionDisplay(GetCardPlayer, action, roomRule);
             }
@@ -81,11 +88,23 @@ public partial class NormalGameStateManager {
                 case "deal_gang_tile":
                 case "deal_buhua_tile":
                     lastDealTileType = action;
-                    remainTiles--; // 剩余牌数减少
+                    int[] resolvedDealTiles = deal_tiles != null && deal_tiles.Length > 0
+                        ? deal_tiles
+                        : (deal_tile.HasValue ? new int[] { deal_tile.Value } : new int[0]);
+                    remainTiles -= resolvedDealTiles.Length;
                     if (GetCardPlayer == "self"){
-                        if (!deal_tile.HasValue) {
-                            Debug.LogError($"摸牌操作缺少 deal_tile: action={action}, player={action_player}");
+                        if (resolvedDealTiles.Length == 0) {
+                            Debug.LogError($"Missing deal_tile: action={action}, player={action_player}");
                             break;
+                        }
+                        for (int i = 0; i < resolvedDealTiles.Length; i++) {
+                            int dealtTile = resolvedDealTiles[i];
+                            selfHandTiles.Add(dealtTile);
+                            string handChangeType = i == 0
+                                ? "GetCard"
+                                : (action == "deal_gang_tile" ? "GetGangReplacementCardNoLayout" : "GetCardNoAnimation");
+                            GameCanvas.Instance.ChangeHandCards(handChangeType, dealtTile, null, null);
+                            Game3DManager.Instance.Change3DTile("GetCard", dealtTile, 0, GetCardPlayer, false, null);
                         }
                         lastDealTileId = deal_tile.Value;
                         selfHandTiles.Add(deal_tile.Value);
@@ -93,34 +112,62 @@ public partial class NormalGameStateManager {
                         Game3DManager.Instance.Change3DTile("GetCard", deal_tile.Value, 0, GetCardPlayer, false, null);
                     }
                     else{
-                        player_to_info[GetCardPlayer].hand_tiles_count++;
-                        // 服务端对他人不下发 deal_tile；3D 仅增加背面牌，tileId 传 0
-                        Game3DManager.Instance.Change3DTile("GetCard", deal_tile ?? 0, 0, GetCardPlayer, false, null);
+                        int dealCount = resolvedDealTiles.Length > 0 ? resolvedDealTiles.Length : 1;
+                        player_to_info[GetCardPlayer].hand_tiles_count += dealCount;
+                        for (int i = 0; i < dealCount; i++) {
+                            int hiddenTile = resolvedDealTiles.Length > i ? resolvedDealTiles[i] : 0;
+                            Game3DManager.Instance.Change3DTile("GetCard", hiddenTile, 0, GetCardPlayer, false, null);
+                        }
                     }
                     break;
-                
+
                 // 切牌
                 case "cut":
                     pendingAskFromJiagang = false;
-                    lastCutCardID = cut_tile.Value; // 存储上次切牌的ID
+                    int[] resolvedCutTiles = cut_tiles != null && cut_tiles.Length > 0
+                        ? cut_tiles
+                        : (cut_tile.HasValue ? new int[] { cut_tile.Value } : new int[0]);
+                    if (resolvedCutTiles.Length == 0) {
+                        Debug.LogError($"Missing cut_tile: action={action}, player={action_player}");
+                        break;
+                    }
+                    int claimedOrLastCutTile = cut_tile ?? resolvedCutTiles[resolvedCutTiles.Length - 1];
+                    lastCutCardID = claimedOrLastCutTile;
                     lastDiscardPlayerPosition = GetCardPlayer;
-                    player_to_info[GetCardPlayer].discard_tiles.Add(cut_tile.Value); // 存储弃牌
-                    // 同步保存横置标记，用于他家鸣牌后下一张续横、重连/牌谱重建时还原立直横置弃牌
-                    player_to_info[GetCardPlayer].discard_riichi_flags.Add(isRiichiHorizontalCut);
+                    foreach (int discardedTile in resolvedCutTiles) {
+                        player_to_info[GetCardPlayer].discard_tiles.Add(discardedTile);
+                        player_to_info[GetCardPlayer].discard_riichi_flags.Add(isRiichiHorizontalCut);
+                    }
                     if (GetCardPlayer == "self"){
+                        if (cut_class.Value && resolvedCutTiles.Length > 1){
+                            for (int i = 0; i < resolvedCutTiles.Length; i++) {
+                                int discardedTile = resolvedCutTiles[i];
+                                selfHandTiles.Remove(discardedTile);
+                            }
+                            Game3DManager.Instance.Change3DDiscardTiles(resolvedCutTiles, GetCardPlayer, cut_class.Value, isRiichiHorizontalCut, playCutPhysicsSound: !isSilent);
+                            GameCanvas.Instance.ChangeHandCards("RemoveGetCards", 0, resolvedCutTiles, null);
+                            break;
                         lastDealTileId = 0;
                         selfHandTiles.Remove(cut_tile.Value); // 删除手牌
                         Game3DManager.Instance.Change3DTile("Discard",cut_tile.Value,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent); // 3D切牌行为
                         if (cut_class.Value){
                             GameCanvas.Instance.ChangeHandCards("RemoveGetCard",cut_tile.Value,null,null); // 2D摸切行为
                         }
-                        else{
-                            GameCanvas.Instance.ChangeHandCards("RemoveHandCard", cut_tile.Value, null, cut_tile_index); // 2D手切；定缺纠正时 cut_tile_index 可为 null，按 tileId 删牌
+                        for (int i = 0; i < resolvedCutTiles.Length; i++) {
+                            int discardedTile = resolvedCutTiles[i];
+                            selfHandTiles.Remove(discardedTile);
+                            Game3DManager.Instance.Change3DTile("Discard",discardedTile,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent && i == 0);
+                            if (cut_class.Value && i == 0){
+                                GameCanvas.Instance.ChangeHandCards("RemoveGetCard",discardedTile,null,null);
+                            }
+                            else{
+                                GameCanvas.Instance.ChangeHandCards("RemoveHandCard", discardedTile, null, i == 0 ? cut_tile_index : null);
+                            }
                         }
                     }
                     else{
-                        player_to_info[GetCardPlayer].hand_tiles_count--; // 减少手牌
-                        Game3DManager.Instance.Change3DTile("Discard",cut_tile.Value,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent); // 3D切牌行为
+                        player_to_info[GetCardPlayer].hand_tiles_count -= resolvedCutTiles.Length;
+                        Game3DManager.Instance.Change3DDiscardTiles(resolvedCutTiles, GetCardPlayer, cut_class.Value, isRiichiHorizontalCut, playCutPhysicsSound: !isSilent);
                     } 
                     break;
 
@@ -149,8 +196,14 @@ public partial class NormalGameStateManager {
                     break;
 
                 // 吃碰杠
-                case "chi_left": case"chi_mid": case"chi_right": case "angang": case "jiagang": case "peng": case "gang":
-                    if (action == "jiagang"){
+                case "chi_left": case"chi_mid": case"chi_right": case "buzhang": case "angang": case "jiagang": case "peng": case "gang":
+                    bool isBuzhangJiagang = action == "buzhang"
+                        && !string.IsNullOrEmpty(combination_target)
+                        && combination_target.StartsWith("k");
+                    bool isBuzhangAngang = action == "buzhang"
+                        && !string.IsNullOrEmpty(combination_target)
+                        && combination_target.StartsWith("G");
+                    if (action == "jiagang" || isBuzhangJiagang){
                         pendingAskFromJiagang = true;
                         var meldPlayer = player_to_info[GetCardPlayer];
                         int meldIdx = GameRecordMeldCodec.FindCombinationIndex(meldPlayer.combination_tiles, combination_target);
@@ -183,7 +236,7 @@ public partial class NormalGameStateManager {
                         }
                         Game3DManager.Instance.Change3DTile("jiagang", tile_id, 1, GetCardPlayer, isMoGang, combination_mask);
                     }
-                    else if (action == "angang"){
+                    else if (action == "angang" || isBuzhangAngang){
                         bool isMoGang = is_mo_gang == true;
                         player_to_info[GetCardPlayer].combination_tiles.Add(combination_target);
                         AppendCombinationMask(player_to_info[GetCardPlayer], combination_mask);

@@ -49,7 +49,7 @@ public partial class GameRecordManager {
 
         int hepaiLimit = ReadGameTitleInt(gameRecord.gameTitle, "hepai_limit", 0);
         if (hepaiLimit <= 0) {
-            hepaiLimit = roomRule == "riichi" ? 1 : 8;
+            hepaiLimit = roomRule == "riichi" || roomRule == "changsha" ? 1 : 8;
         }
 
         int displayRound = currentRoundIndex;

@@ -83,6 +83,7 @@ public partial class NormalGameStateManager {
                 if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
                 selfRiichiCandidateCuts.Clear();
                 selfForbiddenCutTiles.Clear();
+                selfForcedCutTiles.Clear();
                 // 立刻恢复手牌正常颜色，避免用户看到禁切灰色滞留到下一轮询问
                 GameCanvas.Instance.RefreshHandTileSelectability();
                 // 在自己执行操作以后计算听牌提示，如果有提示就显示右侧提示块
@@ -106,6 +107,7 @@ public partial class NormalGameStateManager {
             allowActionList.Clear();
             selfRiichiCandidateCuts.Clear();
             selfForbiddenCutTiles.Clear();
+            selfForcedCutTiles.Clear();
             if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);
@@ -119,6 +121,7 @@ public partial class NormalGameStateManager {
             // 清空操作按钮
             GameCanvas.Instance.ClearActionButton();
             if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+            selfForcedCutTiles.Clear();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);
         }

@@ -1,10 +1,11 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using System;
 using System.Collections.Generic;
 using TMPro;
 
 /// <summary>
-/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical）
+/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical / sichuan / changsha）
 /// 驱动配置项的显隐与默认值。
 ///
 /// 设计要点：头部 <see cref="RuleConfigs"/> 为每条规则"全量"登记需要的配置项及默认值。
@@ -33,6 +34,16 @@ public class CreatePanel : MonoBehaviour {
     private const string CfgHepaiWay       = "hepai_way";        // 和牌方式下拉索引
     private const string CfgTacticalCall   = "tactical_call";    // 战术鸣牌（国标 / 青雀 / 四川）
     private const string CfgBloodBattle    = "blood_battle";     // 血战到底（四川）
+    private const string CfgCsOpenKongCount = "cs_open_kong_count";
+    private const string CfgCsInitialSiXi = "cs_initial_si_xi";
+    private const string CfgCsInitialBanBanHu = "cs_initial_ban_ban_hu";
+    private const string CfgCsInitialQueYiSe = "cs_initial_que_yi_se";
+    private const string CfgCsInitialLiuLiuShun = "cs_initial_liu_liu_shun";
+    private const string CfgCsInitialSanTong = "cs_initial_san_tong";
+    private const string CfgCsBirdCount = "cs_bird_count";
+    private const string CfgCsDealerBird = "cs_dealer_bird";
+
+    private static readonly int[] ChangshaBirdCountOptions = { 0, 1, 2, 4 };
 
     /// <summary>
     /// 每条规则需要显示的全部配置项与默认值。
@@ -105,9 +116,28 @@ public class CreatePanel : MonoBehaviour {
             { CfgTacticalCall,   false }, // 战术鸣牌
             { CfgBloodBattle,    true },  // 血战到底：默认开
         } },
+        { "changsha", new Dictionary<string, object> {
+            { CfgGameRound,      4 },
+            { CfgRoundTimer,     2 },
+            { CfgStepTimer,      1 },
+            { CfgTips,           true },
+            { CfgPassword,       false },
+            { CfgRandomSeed,     false },
+            { CfgTouristLimit,   false },
+            { CfgAllowSpectator, true },
+            { CfgTacticalCall,   false },
+            { CfgCsOpenKongCount, 2 },
+            { CfgCsInitialSiXi, true },
+            { CfgCsInitialBanBanHu, true },
+            { CfgCsInitialQueYiSe, true },
+            { CfgCsInitialLiuLiuShun, true },
+            { CfgCsInitialSanTong, true },
+            { CfgCsBirdCount, 2 },
+            { CfgCsDealerBird, true },
+        } },
     };
 
-    /// <summary>规则状态：guobiao / riichi / qingque / classical，与 chooseRule 下拉索引对应 0/1/2/3。</summary>
+    /// <summary>规则状态：guobiao / riichi / qingque / classical / sichuan / changsha。</summary>
     private string _ruleState = "guobiao";
 
     [Header("Dropdown")]
@@ -137,6 +167,12 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private Toggle TobiToggle;
     [SerializeField] private Toggle TacticalCallToggle;
     [SerializeField] private Toggle BloodBattleToggle;
+    private Toggle ChangshaInitialSiXiToggle;
+    private Toggle ChangshaInitialBanBanHuToggle;
+    private Toggle ChangshaInitialQueYiSeToggle;
+    private Toggle ChangshaInitialLiuLiuShunToggle;
+    private Toggle ChangshaInitialSanTongToggle;
+    private Toggle ChangshaDealerBirdToggle;
 
     [Header("面板")]
     [SerializeField] private GameObject SetRandomSeedPanel;
@@ -146,6 +182,10 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private TMP_Dropdown HepaiWayDropdown;
     [SerializeField] private GameObject CuoheTypePanel;
     [SerializeField] private TMP_Dropdown CuoheTypeDropdown;
+    private GameObject ChangshaOpenKongPanel;
+    private TMP_Dropdown ChangshaOpenKongDropdown;
+    private GameObject ChangshaBirdCountPanel;
+    private TMP_Dropdown ChangshaBirdCountDropdown;
 
     [Header("输入字段")]
     [SerializeField] private TMP_InputField roomNameInput;
@@ -158,7 +198,20 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private Button createButton;
     [SerializeField] private Button addRuleButton;
 
+    private bool _gameRoundLabelsCached;
+    private string[] _defaultGameRoundLabels;
+
+    private void EnsureRuleDropdownOptions() {
+        if (chooseRule == null) return;
+        foreach (TMP_Dropdown.OptionData option in chooseRule.options) {
+            if (option.text.Contains("长沙")) return;
+        }
+        chooseRule.options.Add(new TMP_Dropdown.OptionData("长沙麻将"));
+        chooseRule.RefreshShownValue();
+    }
+
     private void Start() {
+        EnsureRuleDropdownOptions();
         chooseRule.onValueChanged.AddListener(OnRuleDropdownChanged);
         closeButton.onClick.AddListener(ClosePanel);
         createButton.onClick.AddListener(CreateRoom);
@@ -184,6 +237,7 @@ public class CreatePanel : MonoBehaviour {
         EnsureRiichiOptionToggles();
         EnsureCuoheTypePanel();
         InitCuoheTypeDropdown();
+        EnsureChangshaOptionControls();
         InitSubRuleDropdown();
         ApplyRuleDefaults(_ruleState);
         RefreshVisibility();
@@ -199,6 +253,7 @@ public class CreatePanel : MonoBehaviour {
             2 => "qingque",
             3 => "classical",
             4 => "sichuan",
+            5 => "changsha",
             _ => "guobiao"
         };
         bool hasSubRule = RuleConfigs[_ruleState].ContainsKey(CfgSubRule);
@@ -248,6 +303,14 @@ public class CreatePanel : MonoBehaviour {
             case CfgHepaiWay:       HepaiWayDropdown.value = (int)value; break;
             case CfgTacticalCall:   TacticalCallToggle.isOn = (bool)value; break;
             case CfgBloodBattle:    if (BloodBattleToggle != null) BloodBattleToggle.isOn = (bool)value; break;
+            case CfgCsOpenKongCount: SetChangshaOpenKongCount((int)value); break;
+            case CfgCsInitialSiXi:   if (ChangshaInitialSiXiToggle != null) ChangshaInitialSiXiToggle.isOn = (bool)value; break;
+            case CfgCsInitialBanBanHu: if (ChangshaInitialBanBanHuToggle != null) ChangshaInitialBanBanHuToggle.isOn = (bool)value; break;
+            case CfgCsInitialQueYiSe: if (ChangshaInitialQueYiSeToggle != null) ChangshaInitialQueYiSeToggle.isOn = (bool)value; break;
+            case CfgCsInitialLiuLiuShun: if (ChangshaInitialLiuLiuShunToggle != null) ChangshaInitialLiuLiuShunToggle.isOn = (bool)value; break;
+            case CfgCsInitialSanTong: if (ChangshaInitialSanTongToggle != null) ChangshaInitialSanTongToggle.isOn = (bool)value; break;
+            case CfgCsBirdCount:    SetChangshaBirdCount((int)value); break;
+            case CfgCsDealerBird:   if (ChangshaDealerBirdToggle != null) ChangshaDealerBirdToggle.isOn = (bool)value; break;
         }
     }
 
@@ -287,6 +350,8 @@ public class CreatePanel : MonoBehaviour {
         HepaiWayPanel.SetActive(visible.ContainsKey(CfgHepaiWay));
         TacticalCallToggle.gameObject.SetActive(visible.ContainsKey(CfgTacticalCall));
         if (BloodBattleToggle != null) BloodBattleToggle.gameObject.SetActive(visible.ContainsKey(CfgBloodBattle));
+        SetChangshaOptionsVisible(_ruleState == "changsha");
+        ApplyGameRoundDisplayForRule();
         RefreshCuoheTypePanelVisibility();
     }
 
@@ -294,6 +359,7 @@ public class CreatePanel : MonoBehaviour {
         if (_ruleState == "qingque") return "qingque/standard";
         if (_ruleState == "classical") return "classical/standard";
         if (_ruleState == "sichuan") return "sichuan/standard";
+        if (_ruleState == "changsha") return "changsha/classic_double_bird";
         if (_ruleState == "riichi") return GetSelectedRiichiSubRule();
         return GetSelectedSubRule();
     }
@@ -406,6 +472,142 @@ public class CreatePanel : MonoBehaviour {
         }
     }
 
+    private void EnsureChangshaOptionControls() {
+        Toggle toggleTemplate = TacticalCallToggle != null ? TacticalCallToggle : RedDoraToggle;
+        ChangshaInitialSiXiToggle = EnsureClonedToggle(toggleTemplate, ChangshaInitialSiXiToggle, "ChangshaInitialSiXi", "四喜", true);
+        Toggle lastToggle = ChangshaInitialSiXiToggle != null ? ChangshaInitialSiXiToggle : toggleTemplate;
+        ChangshaInitialBanBanHuToggle = EnsureClonedToggle(lastToggle, ChangshaInitialBanBanHuToggle, "ChangshaInitialBanBanHu", "板板胡", true);
+        lastToggle = ChangshaInitialBanBanHuToggle != null ? ChangshaInitialBanBanHuToggle : lastToggle;
+        ChangshaInitialQueYiSeToggle = EnsureClonedToggle(lastToggle, ChangshaInitialQueYiSeToggle, "ChangshaInitialQueYiSe", "缺一色", true);
+        lastToggle = ChangshaInitialQueYiSeToggle != null ? ChangshaInitialQueYiSeToggle : lastToggle;
+        ChangshaInitialLiuLiuShunToggle = EnsureClonedToggle(lastToggle, ChangshaInitialLiuLiuShunToggle, "ChangshaInitialLiuLiuShun", "六六顺", true);
+        lastToggle = ChangshaInitialLiuLiuShunToggle != null ? ChangshaInitialLiuLiuShunToggle : lastToggle;
+        ChangshaInitialSanTongToggle = EnsureClonedToggle(lastToggle, ChangshaInitialSanTongToggle, "ChangshaInitialSanTong", "三同", true);
+        lastToggle = ChangshaInitialSanTongToggle != null ? ChangshaInitialSanTongToggle : lastToggle;
+        ChangshaDealerBirdToggle = EnsureClonedToggle(lastToggle, ChangshaDealerBirdToggle, "ChangshaDealerBird", "定庄扎鸟", true);
+
+        ChangshaOpenKongPanel = EnsureClonedDropdownPanel(HepaiWayPanel, ChangshaOpenKongPanel, "ChangshaOpenKongPanel", "开杠张数");
+        ChangshaOpenKongDropdown = ChangshaOpenKongPanel != null
+            ? ChangshaOpenKongPanel.GetComponentInChildren<TMP_Dropdown>(true)
+            : null;
+        if (ChangshaOpenKongDropdown != null) {
+            ChangshaOpenKongDropdown.ClearOptions();
+            ChangshaOpenKongDropdown.AddOptions(new List<string> { "1张", "2张", "3张", "4张" });
+            SetChangshaOpenKongCount(2);
+        }
+
+        GameObject birdTemplate = ChangshaOpenKongPanel != null ? ChangshaOpenKongPanel : HepaiWayPanel;
+        ChangshaBirdCountPanel = EnsureClonedDropdownPanel(birdTemplate, ChangshaBirdCountPanel, "ChangshaBirdCountPanel", "扎鸟张数");
+        ChangshaBirdCountDropdown = ChangshaBirdCountPanel != null
+            ? ChangshaBirdCountPanel.GetComponentInChildren<TMP_Dropdown>(true)
+            : null;
+        if (ChangshaBirdCountDropdown != null) {
+            ChangshaBirdCountDropdown.ClearOptions();
+            ChangshaBirdCountDropdown.AddOptions(new List<string> { "不扎鸟", "1鸟", "2鸟", "4鸟" });
+            SetChangshaBirdCount(2);
+        }
+
+        SetChangshaOptionsVisible(false);
+    }
+
+    private GameObject EnsureClonedDropdownPanel(GameObject template, GameObject existing, string goName, string labelText) {
+        if (existing != null) return existing;
+        if (template == null) return null;
+        GameObject clone = Instantiate(template, template.transform.parent);
+        clone.name = goName;
+        SetPanelLabel(clone, labelText);
+        clone.SetActive(false);
+        return clone;
+    }
+
+    private static void SetPanelLabel(GameObject panel, string labelText) {
+        if (panel == null) return;
+        foreach (TMP_Text label in panel.GetComponentsInChildren<TMP_Text>(true)) {
+            if (label.GetComponentInParent<TMP_Dropdown>() != null) continue;
+            label.text = labelText;
+            return;
+        }
+    }
+
+    private void SetChangshaOptionsVisible(bool visible) {
+        if (ChangshaOpenKongPanel != null) ChangshaOpenKongPanel.SetActive(visible);
+        if (ChangshaBirdCountPanel != null) ChangshaBirdCountPanel.SetActive(visible);
+        SetToggleVisible(ChangshaInitialSiXiToggle, visible);
+        SetToggleVisible(ChangshaInitialBanBanHuToggle, visible);
+        SetToggleVisible(ChangshaInitialQueYiSeToggle, visible);
+        SetToggleVisible(ChangshaInitialLiuLiuShunToggle, visible);
+        SetToggleVisible(ChangshaInitialSanTongToggle, visible);
+        SetToggleVisible(ChangshaDealerBirdToggle, visible);
+    }
+
+    private static void SetToggleVisible(Toggle toggle, bool visible) {
+        if (toggle != null) toggle.gameObject.SetActive(visible);
+    }
+
+    private void SetChangshaOpenKongCount(int count) {
+        if (ChangshaOpenKongDropdown == null) return;
+        ChangshaOpenKongDropdown.value = Mathf.Clamp(count, 1, 4) - 1;
+        ChangshaOpenKongDropdown.RefreshShownValue();
+    }
+
+    private int GetChangshaOpenKongCount() {
+        return ChangshaOpenKongDropdown != null
+            ? Mathf.Clamp(ChangshaOpenKongDropdown.value + 1, 1, 4)
+            : 2;
+    }
+
+    private void SetChangshaBirdCount(int count) {
+        if (ChangshaBirdCountDropdown == null) return;
+        int index = Array.IndexOf(ChangshaBirdCountOptions, count);
+        ChangshaBirdCountDropdown.value = index >= 0 ? index : 2;
+        ChangshaBirdCountDropdown.RefreshShownValue();
+    }
+
+    private int GetChangshaBirdCount() {
+        if (ChangshaBirdCountDropdown == null) return 2;
+        int index = Mathf.Clamp(ChangshaBirdCountDropdown.value, 0, ChangshaBirdCountOptions.Length - 1);
+        return ChangshaBirdCountOptions[index];
+    }
+
+    private void CacheDefaultGameRoundLabels() {
+        if (_gameRoundLabelsCached) return;
+        _defaultGameRoundLabels = new[] {
+            GetToggleLabelText(gameTime1Button),
+            GetToggleLabelText(gameTime2Button),
+            GetToggleLabelText(gameTime3Button),
+            GetToggleLabelText(gameTime4Button),
+        };
+        _gameRoundLabelsCached = true;
+    }
+
+    private void ApplyGameRoundDisplayForRule() {
+        CacheDefaultGameRoundLabels();
+        bool isChangsha = _ruleState == "changsha";
+        if (isChangsha && gameTime3Button != null && gameTime3Button.isOn) {
+            SelectGameTime(4);
+        }
+
+        SetToggleLabel(gameTime1Button, isChangsha ? "4局" : _defaultGameRoundLabels[0]);
+        SetToggleLabel(gameTime2Button, isChangsha ? "8局" : _defaultGameRoundLabels[1]);
+        SetToggleLabel(gameTime3Button, _defaultGameRoundLabels[2]);
+        SetToggleLabel(gameTime4Button, isChangsha ? "16局" : _defaultGameRoundLabels[3]);
+        if (gameTime3Button != null) gameTime3Button.gameObject.SetActive(!isChangsha);
+    }
+
+    private static string GetToggleLabelText(Toggle toggle) {
+        TMP_Text label = GetToggleLabel(toggle);
+        return label != null ? label.text : "";
+    }
+
+    private static void SetToggleLabel(Toggle toggle, string text) {
+        TMP_Text label = GetToggleLabel(toggle);
+        if (label != null) label.text = text;
+    }
+
+    private static TMP_Text GetToggleLabel(Toggle toggle) {
+        return toggle != null ? toggle.GetComponentInChildren<TMP_Text>(true) : null;
+    }
+
     private void ClosePanel() {
         WindowsManager.Instance.SwitchWindow("menu");
     }
@@ -437,6 +639,12 @@ public class CreatePanel : MonoBehaviour {
 
         if (_ruleState == "sichuan") {
             CreateSichuanRoom();
+            return;
+        }
+
+        if (_ruleState == "changsha") {
+            CreateChangshaRoom();
+            return;
         }
     }
 
@@ -610,7 +818,44 @@ public class CreatePanel : MonoBehaviour {
         RoomNetworkManager.Instance.Create_Sichuan_Room(config);
     }
 
+    private void CreateChangshaRoom() {
+        var config = new Changsha_Create_RoomConfig {
+            RoomName = roomNameInput.text.Trim(),
+            GameRound = GetSelectedGameTime(),
+            Password = passwordToggle.isOn ? passwordInput.text.Trim() : "",
+            RandomSeed = SetRandomSeedToggle.isOn ? randomSeedInput.text.Trim() : "",
+            Rule = "changsha",
+            SubRule = "changsha/classic_double_bird",
+            RoundTimer = GetSelectedRoundTimer(),
+            StepTimer = GetSelectedStepTimer(),
+            Tips = tipsToggle.isOn,
+            TouristLimit = TouristLimitToggle.isOn,
+            AllowSpectator = AllowSpectatorToggle.isOn,
+            TacticalCall = TacticalCallToggle.isOn,
+            OpenKongReplacementCount = GetChangshaOpenKongCount(),
+            InitialHuSiXi = ChangshaInitialSiXiToggle == null || ChangshaInitialSiXiToggle.isOn,
+            InitialHuBanBanHu = ChangshaInitialBanBanHuToggle == null || ChangshaInitialBanBanHuToggle.isOn,
+            InitialHuQueYiSe = ChangshaInitialQueYiSeToggle == null || ChangshaInitialQueYiSeToggle.isOn,
+            InitialHuLiuLiuShun = ChangshaInitialLiuLiuShunToggle == null || ChangshaInitialLiuLiuShunToggle.isOn,
+            InitialHuSanTong = ChangshaInitialSanTongToggle == null || ChangshaInitialSanTongToggle.isOn,
+            BirdCount = GetChangshaBirdCount(),
+            DealerBird = ChangshaDealerBirdToggle == null || ChangshaDealerBirdToggle.isOn,
+        };
+
+        if (!config.Validate(out string error, passwordToggle.isOn, SetRandomSeedToggle.isOn)) {
+            Debug.LogWarning(error);
+            NotificationManager.Instance.ShowTip("create_room", false, $"创建房间失败: {error}");
+            return;
+        }
+        RoomNetworkManager.Instance.Create_Changsha_Room(config);
+    }
+
     private int GetSelectedGameTime() {
+        if (_ruleState == "changsha") {
+            if (gameTime1Button.isOn) return 1;
+            if (gameTime2Button.isOn) return 2;
+            return 4;
+        }
         if (gameTime1Button.isOn) return 1;
         if (gameTime2Button.isOn) return 2;
         if (gameTime3Button.isOn) return 3;
@@ -658,7 +903,11 @@ public class CreatePanel : MonoBehaviour {
             if (_ruleState == "guobiao")
                 HepaiLimitInput.text = GetGuobiaoSubRuleDefaultHepaiLimit(GetSelectedSubRule()).ToString();
             else {
-                int fallback = (int)RuleConfigs[_ruleState].GetValueOrDefault(CfgHepaiLimit, 8);
+                object fallbackValue;
+                int fallback = RuleConfigs.TryGetValue(_ruleState, out var config)
+                    && config.TryGetValue(CfgHepaiLimit, out fallbackValue)
+                    ? Convert.ToInt32(fallbackValue)
+                    : 8;
                 HepaiLimitInput.text = fallback.ToString();
             }
         }

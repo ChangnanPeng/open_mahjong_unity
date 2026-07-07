@@ -316,6 +316,10 @@ class GameServer:
     async def create_Qingque_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True) -> Response:
         return await self.room_manager.create_Qingque_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, False, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection)
 
+    # 创建长沙麻将房间
+    async def create_Changsha_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, open_kong_replacement_count: int = 2, initial_hu_si_xi: bool = True, initial_hu_ban_ban_hu: bool = True, initial_hu_que_yi_se: bool = True, initial_hu_liu_liu_shun: bool = True, initial_hu_san_tong: bool = True, bird_count: int = 2, dealer_bird: bool = True) -> Response:
+        return await self.room_manager.create_Changsha_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, open_kong_replacement_count, initial_hu_si_xi, initial_hu_ban_ban_hu, initial_hu_que_yi_se, initial_hu_liu_liu_shun, initial_hu_san_tong, bird_count, dealer_bird)
+
     # 创建古典麻将房间
     async def create_Classical_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True) -> Response:
         return await self.room_manager.create_Classical_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator)

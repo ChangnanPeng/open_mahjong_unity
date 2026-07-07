@@ -151,8 +151,19 @@ public partial class GameCanvas{
             return "吃";
         } else if (actionType == "peng"){
             return "碰";
-        } else if (actionType == "angang" || actionType == "jiagang" || actionType == "gang"){
+        } else if (actionType == "angang"){
+            if (roomRule == "changsha") return "开杠";
+            return "暗杠";
+        } else if (actionType == "buzhang"){
+            return "补张";
+        } else if (actionType == "jiagang"){
+            if (roomRule == "changsha") return "开杠";
+            return "加杠";
+        } else if (actionType == "gang"){
+            if (roomRule == "changsha") return "开杠";
             return "杠";
+        } else if (actionType == "initial_hu") {
+            return "起手胡";
         } else if (actionType == "hu" || actionType == "hu_self" || actionType == "hu_first" || actionType == "hu_second" || actionType == "hu_third"){
             GameRecordManager.ResolveActionRuleContext(roomRule, null, out string rule, out string subRule);
             if (actionType == "hu_self"){
@@ -161,6 +172,7 @@ public partial class GameCanvas{
             if (rule == "riichi" || (!string.IsNullOrEmpty(subRule) && subRule.StartsWith("riichi/"))) return "荣";
             return "和";
         } else if (actionType == "buhua"){
+            if (roomRule == "changsha") return string.Empty;
             return "补花";
         } else if (actionType == "riichi"){
             return "立直";

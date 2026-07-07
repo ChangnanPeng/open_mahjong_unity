@@ -19,6 +19,7 @@ public partial class NormalGameStateManager {
         lastDealTileId = 0;
         selfRiichiCandidateCuts.Clear();
         selfForbiddenCutTiles.Clear();
+        selfForcedCutTiles.Clear();
         chiCandidates.Clear();
         IsQiangGangAsk = false;
         pendingAskFromJiagang = false;

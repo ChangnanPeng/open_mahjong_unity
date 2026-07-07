@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from .room_validators import GBRoomValidator, MMCValidator, RiichiRoomValidator, SichuanRoomValidator
+from .room_validators import GBRoomValidator, MMCValidator, RiichiRoomValidator, SichuanRoomValidator, ChangshaRoomValidator
 from ..response import Response
 from ..gamestate.game_guobiao.GuobiaoGameState import GuobiaoGameState
 from ..game_calculation.game_calculation_service import Chinese_Hepai_Check
@@ -24,6 +24,7 @@ class RoomManager:
         # 房间的合法性验证器
         self.room_validators = {
             "guobiao": GBRoomValidator,
+            "changsha": ChangshaRoomValidator,
             "mmc": MMCValidator,
             "riichi": RiichiRoomValidator,
             "sichuan": SichuanRoomValidator
@@ -328,6 +329,112 @@ class RoomManager:
                 success=False,
                 message=f"创建房间失败: {str(e)}"
         )
+
+    async def create_Changsha_room(self, player_id: str, room_name: str, gameround: int,
+                                   password: str, roundTimerValue: int, stepTimerValue: int,
+                                   tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird",
+                                   tourist_limit: bool = False, allow_spectator: bool = True,
+                                   tactical_call: bool = False, claim_protection: bool = True,
+                                   open_kong_replacement_count: int = 2,
+                                   initial_hu_si_xi: bool = True,
+                                   initial_hu_ban_ban_hu: bool = True,
+                                   initial_hu_que_yi_se: bool = True,
+                                   initial_hu_liu_liu_shun: bool = True,
+                                   initial_hu_san_tong: bool = True,
+                                   bird_count: int = 2,
+                                   dealer_bird: bool = True) -> Response:
+        """创建长沙麻将房间。当前接入经典双鸟规则。"""
+        try:
+            if player_id not in self.game_server.players:
+                return Response(type="tips", success=False, message="请先登录")
+
+            player = self.game_server.players[player_id]
+            if not player.user_id:
+                return Response(type="tips", success=False, message="请先登录")
+            host_user_id = player.user_id
+            blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
+            if blocked:
+                return blocked
+            host_name = player.username
+
+            host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
+            if not host_settings:
+                return Response(type="tips", success=False, message="获取用户设置失败")
+
+            has_password = password != ""
+            room_config = {
+                "room_name": room_name,
+                "game_round": gameround,
+                "round_timer": roundTimerValue,
+                "step_timer": stepTimerValue,
+                "random_seed": random_seed,
+                "open_cuohe": False,
+                "tactical_call": tactical_call,
+                "claim_protection": claim_protection,
+                "open_kong_replacement_count": open_kong_replacement_count,
+                "initial_hu_si_xi": initial_hu_si_xi,
+                "initial_hu_ban_ban_hu": initial_hu_ban_ban_hu,
+                "initial_hu_que_yi_se": initial_hu_que_yi_se,
+                "initial_hu_liu_liu_shun": initial_hu_liu_liu_shun,
+                "initial_hu_san_tong": initial_hu_san_tong,
+                "bird_count": bird_count,
+                "dealer_bird": dealer_bird,
+            }
+
+            try:
+                validator_class = self.room_validators["changsha"]
+                validated_config = validator_class(**room_config)
+            except ValueError as e:
+                return Response(type="tips", success=False, message=f"房间配置无效: {str(e)}")
+
+            room_id = self._generate_room_id()
+            room_data = {
+                "room_id": room_id,
+                "room_type": "custom",
+                "room_rule": "changsha",
+                "sub_rule": sub_rule,
+                "hepai_limit": 1,
+                "tourist_limit": tourist_limit,
+                "allow_spectator": allow_spectator,
+                "max_player": 4,
+                "player_list": [host_user_id],
+                "player_settings": {
+                    host_user_id: {
+                        "user_id": host_user_id,
+                        "username": host_settings.get('username', host_name),
+                        "title_id": host_settings.get('title_id', 1),
+                        "profile_image_id": host_settings.get('profile_image_id', 1),
+                        "character_id": host_settings.get('character_id', 1),
+                        "voice_id": host_settings.get('voice_id', 1)
+                    }
+                },
+                "has_password": has_password,
+                "tips": tips,
+                "show_moqie_hint": False,
+                "host_user_id": host_user_id,
+                "host_name": host_name,
+                "is_game_running": False,
+            }
+
+            room_data.update(validated_config.dict())
+            room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
+
+            self.rooms[room_id] = room_data
+            if has_password:
+                self.room_passwords[room_id] = password
+
+            player.current_room_id = room_id
+            await self._broadcast_room_info(room_id)
+
+            return Response(
+                type="room/create_room_done",
+                success=True,
+                message="房间创建成功",
+                room_info=room_data
+            )
+
+        except Exception as e:
+            return Response(type="error_message", success=False, message=f"创建房间失败: {str(e)}")
 
     async def create_Classical_room(self, player_id: str, room_name: str, gameround: int,
                                     password: str, roundTimerValue: int, stepTimerValue: int,

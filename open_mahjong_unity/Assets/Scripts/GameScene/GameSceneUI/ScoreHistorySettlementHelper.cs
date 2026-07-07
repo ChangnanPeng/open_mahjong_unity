@@ -16,6 +16,7 @@ public static class ScoreHistorySettlementHelper {
             "classical" => "classical/standard",
             "riichi" => "riichi/standard",
             "sichuan" => "sichuan/standard",
+            "changsha" => "changsha/classic_double_bird",
             _ => r
         };
     }
@@ -66,7 +67,11 @@ public static class ScoreHistorySettlementHelper {
     /// <summary>主番选取时排除花牌乘算项（花牌*1～花牌*8 等），不参与最大番比较。</summary>
     public static bool ShouldExcludeFromMainFanPick(string fanKey) {
         if (string.IsNullOrEmpty(fanKey)) return true;
-        return fanKey.StartsWith("花牌");
+        return fanKey.StartsWith("花牌")
+            || fanKey.StartsWith("鸟牌:")
+            || fanKey.StartsWith("中鸟:")
+            || fanKey.StartsWith("中鸟x")
+            || fanKey.StartsWith("扎鸟倍数:");
     }
 
     /// <summary>
@@ -192,6 +197,7 @@ public static class ScoreHistorySettlementHelper {
         bool isClassical = subRule == "classical/standard";
         bool isRiichi = subRule != null && subRule.StartsWith("riichi");
         bool isSichuan = subRule != null && subRule.StartsWith("sichuan");
+        bool isChangsha = subRule != null && subRule.StartsWith("changsha");
 
         string fanPart;
         if (isRiichi && snapshot.han.HasValue) {
@@ -201,6 +207,8 @@ public static class ScoreHistorySettlementHelper {
             fanPart = fanTotal >= 0 ? $"{fanTotal}番" : "满贯";
         } else if (isSichuan) {
             fanPart = $"{CalculateSichuanFanTotal(subRule, snapshot.huFan)}番";
+        } else if (isChangsha) {
+            fanPart = $"{snapshot.huScore}分";
         } else {
             fanPart = $"{snapshot.huScore}番";
         }
