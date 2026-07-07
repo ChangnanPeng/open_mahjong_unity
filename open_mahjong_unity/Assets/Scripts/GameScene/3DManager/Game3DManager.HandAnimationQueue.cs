@@ -173,13 +173,8 @@ public partial class Game3DManager {
     }
 
     /// <summary>
-    /// 吃碰明杠等：被鸣牌来自河牌时回收河牌切子（加杠/暗杠除外）。
-    /// 旧实现依赖全局 lastCutJiagang3DObject，一旦「吃→立刻出牌」紧邻发生，全局引用会被新切牌覆盖，
-    /// 导致误回收新切牌而河牌残留；这里改为按「打牌者位置 + 被鸣牌张 id」在河里精确查找要回收的对象，
-    /// 并只终止该打牌者的飞牌协程（按玩家隔离），不再触碰他家飞牌与全局引用。
-    /// 打牌者位置 + 被鸣牌张优先取 NormalGameStateManager 由 action_tick 回查得到的
-    /// currentMeldDiscarderPos / currentMeldClaimedTileId（乱序下比 lastDiscardPlayerPosition 可靠），
-    /// 回退到 lastDiscardPlayerPosition / currentAskCutTileId 兼容回放/边界。
+    /// 吃碰明杠等：仅回收 RegisterLastDiscard 登记的河牌切子（加杠/暗杠除外）。
+    /// 认不到登记对象则打 Warning 并放弃，不扫描河牌末张。
     /// </summary>
     private void TryReturnLastCutTileForMeld(string actionType, string discarderPosOverride = null, int claimedTileOverride = 0) {
         if (actionType == "jiagang" || actionType == "angang") {
@@ -188,7 +183,6 @@ public partial class Game3DManager {
         string discarderPos = discarderPosOverride;
         int claimedTile = claimedTileOverride;
 
-        // override 缺失（牌谱回放路径）时，退回共享字段解析 discarder/tile。
         if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
             discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
             if (string.IsNullOrEmpty(discarderPos)) {
@@ -198,10 +192,13 @@ public partial class Game3DManager {
             if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
         }
 
-        // 1) 优先用「该家最新弃牌」的登记对象（出牌 3D Spawn 时登记），校验 tileId 一致；
-        //    退回河里精确搜索，再退全局 lastCutJiagang3DObject。消除同类牌歧义与新弃牌未就位认错旧牌。
         GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
         if (obj == null) {
+            int regTile = !string.IsNullOrEmpty(discarderPos)
+                && _lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int t) ? t : 0;
+            Debug.LogWarning(
+                $"TryReturnLastCutTileForMeld: 未认到登记弃牌，放弃河牌回收 action={actionType}, "
+                + $"discarder={discarderPos}, claimed={claimedTile}, regTile={regTile}");
             return;
         }
 

@@ -47,30 +47,102 @@ public partial class Game3DManager : MonoBehaviour {
         _lastDiscardObjByPlayer[playerPosition] = null;
     }
 
-    /// <summary>认走/荣和取走弃牌时，解析「该家最新弃牌」的确切 3D 对象：
-    /// 优先用 Spawn 时登记的 per-player 对象（校验 tileId），退回河里精确搜索，再退全局 lastCutJiagang3DObject。
-    /// 消除同类牌歧义与新弃牌 3D 未就位时认错上一张牌的问题（碰牌/荣和共用）。
-    /// 仅解析，不停协程/不清登记（由调用方按需 OnLastDiscardTaken 处理）。</summary>
+    /// <summary>登记 tileId 与期望牌张是否一致（含赤宝 105/15 归一化）。</summary>
+    private static bool TilesMatchForDiscardLookup(int registeredTileId, int expectedTileId) {
+        if (expectedTileId <= 0) return true;
+        if (registeredTileId == expectedTileId) return true;
+        return GameRecordMeldCodec.NormalizeMeldsLookupTileId(registeredTileId)
+            == GameRecordMeldCodec.NormalizeMeldsLookupTileId(expectedTileId);
+    }
+
+    /// <summary>
+    /// 认走/荣和取走弃牌时，仅认 Set3DTile Discard 分支 RegisterLastDiscard 登记的对象。
+    /// 不扫描河牌、不退回全局 lastCut；认不到返回 null，由调用方打日志并放弃。
+    /// </summary>
     private GameObject ResolveLastDiscardObject(string discarderPos, int expectedTileId) {
-        if (!string.IsNullOrEmpty(discarderPos)
-            && _lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
-            && regObj != null && regObj.activeInHierarchy
-            && _lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int regTile)
-            && (expectedTileId <= 0 || regTile == expectedTileId)) {
-            return regObj;
+        if (string.IsNullOrEmpty(discarderPos)) return null;
+        if (!_lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
+            || regObj == null || !regObj.activeInHierarchy) {
+            return null;
         }
-        GameObject found = FindDiscardTileObject(discarderPos, expectedTileId);
-        if (found == null) {
-            found = FindJiagangTileObject(discarderPos, expectedTileId);
+        if (!_lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int regTile)) {
+            return null;
         }
-        if (found != null) return found;
-        if (lastCutJiagang3DObject != null && expectedTileId >= 10) {
+        if (!TilesMatchForDiscardLookup(regTile, expectedTileId)) {
+            return null;
+        }
+        return regObj;
+    }
+
+    /// <summary>
+    /// 抢杠/加杠和牌张：副露区 id 匹配，或 live 加杠动画写入的 lastCutJiagang3DObject（校验 tileId）。
+    /// 不扫描河牌；供荣和/抢杠取牌，不用于鸣牌回收河牌。
+    /// </summary>
+    private GameObject TryResolveJiagangSourceObject(string playerPosition, int expectedTileId) {
+        GameObject jiagangObj = FindJiagangTileObject(playerPosition, expectedTileId);
+        if (jiagangObj != null) return jiagangObj;
+        if (lastCutJiagang3DObject != null && lastCutJiagang3DObject.activeInHierarchy) {
             Tile3D t = lastCutJiagang3DObject.GetComponent<Tile3D>();
-            if (t != null && t.GetTileId() == expectedTileId) {
+            if (t != null && TilesMatchForDiscardLookup(t.GetTileId(), expectedTileId)) {
                 return lastCutJiagang3DObject;
             }
         }
-        return lastCutJiagang3DObject;
+        return null;
+    }
+
+    /// <summary>
+    /// 牌谱 Goto 重建专用：仅当河末张 id 与和牌张一致时登记，不做全河扫描。
+    /// </summary>
+    private GameObject TryRegisterRecordRiverLastDiscard(string sourcePlayerPosition, int expectedTileId) {
+        PosPanel3D panel = GetPosPanel(sourcePlayerPosition);
+        Transform river = panel?.discardsPosition;
+        if (river == null || river.childCount == 0) return null;
+        GameObject lastObj = river.GetChild(river.childCount - 1).gameObject;
+        Tile3D lastTile = lastObj.GetComponent<Tile3D>();
+        if (lastTile == null || !TilesMatchForDiscardLookup(lastTile.GetTileId(), expectedTileId)) {
+            return null;
+        }
+        RegisterLastDiscard(sourcePlayerPosition, lastObj, lastTile.GetTileId());
+        return lastObj;
+    }
+
+    private GameObject FindJiagangTileObject(string playerPosition, int expectedTileId) {
+        if (string.IsNullOrEmpty(playerPosition) || expectedTileId < 10) return null;
+        PosPanel3D panel = GetPosPanel(playerPosition);
+        if (panel?.combination3DObjects == null) return null;
+
+        GameObject lastMatch = null;
+        foreach (Transform comboParent in panel.combination3DObjects) {
+            if (comboParent == null) continue;
+            for (int i = 0; i < comboParent.childCount; i++) {
+                Tile3D tile3D = comboParent.GetChild(i).GetComponent<Tile3D>();
+                if (tile3D != null && TilesMatchForDiscardLookup(tile3D.GetTileId(), expectedTileId)) {
+                    lastMatch = tile3D.gameObject;
+                }
+            }
+        }
+        return lastMatch;
+    }
+
+    /// <summary>牌谱 Goto 重建：同步跑完副露放置（无动画），避免加杠 3D 下一帧才生成。</summary>
+    public void RunMeldRebuildImmediate(string playerIndex, string actionType, int[] combinationMask) {
+        RunCoroutineImmediate(ActionAnimationCoroutine(playerIndex, actionType, combinationMask, false));
+    }
+
+    private static void RunCoroutineImmediate(IEnumerator routine) {
+        if (routine == null) return;
+        var stack = new System.Collections.Generic.Stack<IEnumerator>();
+        stack.Push(routine);
+        while (stack.Count > 0) {
+            IEnumerator current = stack.Peek();
+            if (!current.MoveNext()) {
+                stack.Pop();
+                continue;
+            }
+            if (current.Current is IEnumerator nested) {
+                stack.Push(nested);
+            }
+        }
     }
 
     /// <summary>认走/荣和取走弃牌后：停掉该打牌者飞牌协程并清掉登记，

@@ -130,7 +130,7 @@ public partial class GameRecordManager {
         if (!indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) yield break;
 
         HepaiPresentationRequest request = HepaiRevealDirector.BuildSichuanMidGameRequest(
-            winnerPos, action, hepaiTile, multiRon, ronDiscarderIndex, recycleDiscard, isQianggang: false);
+            winnerPos, action, hepaiTile, multiRon, ronDiscarderIndex, recycleDiscard, isQianggang);
         request.DiscardPlayerPosition = discardPos;
         yield return Game3DManager.Instance.PlaySichuanMidGameHu(request);
         if (action != "hu_self" && recycleDiscard) {

@@ -99,6 +99,20 @@ public partial class NormalGameStateManager {
         return BuildRemainingActionsAfterMeldFilter(allowActions).Count == 0;
     }
 
+    /// <summary>自家当前摸入牌 id：优先 lastDealTileId，否则回退 2D 摸牌区标记。</summary>
+    public int GetCurrentDrawTileId() {
+        if (lastDealTileId > 0) {
+            return lastDealTileId;
+        }
+        if (GameCanvas.Instance != null) {
+            TileCard drawTile = GameCanvas.Instance.GetDrawTile();
+            if (drawTile != null && drawTile.tileId > 0) {
+                return drawTile.tileId;
+            }
+        }
+        return 0;
+    }
+
     /// <summary>
     /// 等待并执行自动操作协程。
     /// AutoMingPaiAction（他人切牌/加杠后的鸣牌询问）优先级：
@@ -107,7 +121,8 @@ public partial class NormalGameStateManager {
     ///   3. 鸣牌过滤 +「不点和」后无任何剩余可操作项 → 自动 pass
     ///   4. 仍有剩余项（含手动和牌或与未过滤鸣牌并存的点和）→ 不自动操作，等待玩家
     /// AutoHandAction（自己回合手牌询问）优先级：
-    ///   1. 自动自摸（受不自摸约束） 2. 自动补花 3. 自动出牌
+    ///   1. 牌张设置命中摸入牌 → 跳过自动自摸
+    ///   2. 自动自摸（受不自摸约束） 3. 自动补花 4. 自动出牌
     /// </summary>
     private IEnumerator WaitAutoAction(string action){
         if (IsRealtimeSpectator) {
@@ -154,8 +169,9 @@ public partial class NormalGameStateManager {
             else if (action == "AutoHandAction"){
                 // 如果允许操作列表有hu_self
                 if (allowActionList.Contains("hu_self")){
-                    // 自动胡牌开启且未勾选「不自摸」时执行自动自摸
-                    if (AutoAction.Instance.ShouldAutoWinTsumo()){
+                    // 自动胡牌开启、未勾选「不自摸」、且摸入牌未命中「不询问」列表时执行自动自摸
+                    if (AutoAction.Instance.ShouldAutoWinTsumo()
+                        && !AutoAction.Instance.ShouldAutoPassForCurrentDraw()){
                         yield return new WaitForSeconds(0.2f);
                         GameCanvas.Instance.ChooseAction("hu_self", 0);
                         yield break;
