@@ -282,6 +282,17 @@ public class AutoAction : MonoBehaviour{
         return tilePassSettingPanel != null && tilePassSettingPanel.ShouldAutoPassForCurrentDiscard();
     }
 
+    /// <summary>
+    /// 当前摸入牌是否命中牌张设置的跳过列表。
+    /// 命中时跳过自动自摸（仍可手动和牌），与「不自摸」不同（后者阻止一切自动自摸）。
+    /// </summary>
+    public bool ShouldAutoPassForCurrentDraw() {
+        NormalGameStateManager gsm = NormalGameStateManager.Instance;
+        if (gsm == null || tilePassSettingPanel == null) return false;
+        int drawnTileId = gsm.GetCurrentDrawTileId();
+        return tilePassSettingPanel.ShouldAutoPassForDrawnTile(drawnTileId);
+    }
+
     private TilePassSettingPanel GetTilePassPanel() {
         EnsureTilePassSettingPanel();
         return tilePassSettingPanel;

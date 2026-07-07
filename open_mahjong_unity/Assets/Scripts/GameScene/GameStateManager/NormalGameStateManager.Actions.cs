@@ -87,6 +87,7 @@ public partial class NormalGameStateManager {
                             Debug.LogError($"摸牌操作缺少 deal_tile: action={action}, player={action_player}");
                             break;
                         }
+                        lastDealTileId = deal_tile.Value;
                         selfHandTiles.Add(deal_tile.Value);
                         GameCanvas.Instance.ChangeHandCards("GetCard", deal_tile.Value, null, null);
                         Game3DManager.Instance.Change3DTile("GetCard", deal_tile.Value, 0, GetCardPlayer, false, null);
@@ -107,6 +108,7 @@ public partial class NormalGameStateManager {
                     // 同步保存横置标记，用于他家鸣牌后下一张续横、重连/牌谱重建时还原立直横置弃牌
                     player_to_info[GetCardPlayer].discard_riichi_flags.Add(isRiichiHorizontalCut);
                     if (GetCardPlayer == "self"){
+                        lastDealTileId = 0;
                         selfHandTiles.Remove(cut_tile.Value); // 删除手牌
                         Game3DManager.Instance.Change3DTile("Discard",cut_tile.Value,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent); // 3D切牌行为
                         if (cut_class.Value){
