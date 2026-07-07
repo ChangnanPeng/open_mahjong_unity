@@ -1,0 +1,15 @@
+{
+  "method": "GET",
+  "url": "https://salasasa.cn/api/bot/player/rank-stats/10000001",
+  "headers": {
+    "Authorization": "Bearer <JWT>"
+  },
+  "path_params": {
+    "key": "10000001"
+  },
+  "query_params": {
+    "tier": "intermediate",
+    "rule": "guobiao"
+  },
+  "query_params_note": "query 参数均可选，与 /api/player/rank-stats/:key 相同；tier 可传 rank、custom、beginner、intermediate、advanced、mcrpl 等"
+}

@@ -30,6 +30,7 @@ from ..public.claim_protection import (
 from ..public.tactical_claim import (
     init_tactical_round_state,
     apply_tactical_claim_if_needed,
+    tactical_mark_player_committed,
 )
 from .boardcast import _send_do_action_payload_to_viewer
 
@@ -116,6 +117,8 @@ async def wait_action(self):
                     self.player_list[temp_player_index].remaining_time -= (used_int_time - timeout_grace)
                
                 self.action_dict[temp_player_index] = [] # 从可执行操作列表中移除操作
+                if temp_action_type != "pass":
+                    tactical_mark_player_committed(self, temp_player_index)
                 # 主询问 pass 不记入战术 passed；低优先级鸣牌申请后仍从快照再问更高优先级（含已 pass 者）。
                 # 同一批完成任务中可能已有更高优先级操作清空等待列表，因此移除前先确认仍在等待。
                 if temp_player_index in self.waiting_players_list:
@@ -357,7 +360,7 @@ async def wait_action(self):
                     self.player_list[player_index].hand_tiles.remove(tile_id-2)
                     self.player_list[player_index].combination_tiles.append(f"s{tile_id-1}")
                     combination_target = f"s{tile_id-1}"
-                    combination_mask = [1,tile_id,0,tile_id-1,0,tile_id-2]
+                    combination_mask = [1,tile_id,0,tile_id-2,0,tile_id-1] # 非吃牌张从小到大排序
                 elif action_type == "chi_mid": # [tile_id-1,tile_id,tile_id+1]
                     if (tile_id - 1) not in self.player_list[player_index].hand_tiles or (tile_id + 1) not in self.player_list[player_index].hand_tiles:
                         logger.error(
@@ -465,7 +468,7 @@ async def wait_action(self):
                     self.player_list[self.current_player_index].discard_tiles.pop(-1) # 删除弃牌堆的最后一张
                     self.player_list[self.current_player_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
                     self.player_list[player_index].combination_mask.append(combination_mask) # 添加组合掩码
-                    clear_draw_slot(self.player_list[player_index])
+                    clear_draw_slot(self.player_list[player_index]) # 清除摸牌区
                     self.current_player_index = player_index # 转移行为后 当前玩家索引变为操作玩家索引
                     flush_unexecuted_claim_applications(
                         self,

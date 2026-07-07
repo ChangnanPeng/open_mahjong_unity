@@ -159,6 +159,7 @@ class GuobiaoGameState:
         self.show_moqie_hint = room_data.get("show_moqie_hint", False) # 是否显示手摸切灰显（默认为False）
         self.hepai_limit = room_data.get("hepai_limit", 8) # 起和番限制（默认8）
         self.tactical_call = room_data.get("tactical_call", False) # 战术鸣牌：吃牌固定申请-打断；碰/和/杠/加杠仅在有更高优先级竞争者时询问
+        self.tactical_commit_lock = self.tactical_call # 国标：选定鸣牌后不可改选（川麻等规则不启用）
         self.claim_protection = room_data.get("claim_protection", True) # 鸣牌保护：无鸣牌权玩家延迟看到切牌/鸣牌（默认开启）
         # 战术鸣牌 / 鸣牌保护的时间参数（暂在此写死，后续接入外部设置）：
         self.tactical_pre_grace_delay = room_data.get("tactical_pre_grace_delay", 0.5) # 战术鸣牌：申请广播后、进入打断窗口前的固定停顿（秒）

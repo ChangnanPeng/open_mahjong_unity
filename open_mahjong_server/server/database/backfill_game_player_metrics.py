@@ -1,17 +1,11 @@
 """
-从历史牌谱回填 game_player_metrics，供 scene_daily_stats 日聚合使用。
+从历史牌谱增量回填 game_player_metrics，供 scene_daily_stats 日聚合使用。
 
-- 国标：复用 record_analyzer 完整推理
-- 其他规则：写入 rank/score/场次维度，和牌细项尝试复用 tick 分析（结构兼容时）
-- created_at 使用 game_records.created_at
-
-用法：
-  python -m server.database.backfill_game_player_metrics [--truncate] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--aggregate]
+由游戏服启动时 run_startup_stats_restore 自动调用，仅写入尚未合并的对局行。
 """
-import argparse
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date
 from typing import Any, Dict, Optional, Set
 
 from psycopg2 import Error
@@ -28,6 +22,19 @@ logger = logging.getLogger(__name__)
 REGISTERED_USER_ID_MIN = 10000000
 STAT_TZ = "Asia/Shanghai"
 STAT_DAY_OFFSET_HOURS = 4
+
+_METRIC_INSERT_SQL = """
+    INSERT INTO game_player_metrics (
+        game_id, user_id, username, rule, sub_rule, room_type, match_tier, event_id,
+        game_type, match_type, score, rank, total_rounds,
+        win_count, self_draw_count, deal_in_count, total_fan_score, total_win_turn,
+        total_fangchong_score, first_place_count, second_place_count, third_place_count,
+        fourth_place_count, fulu_round_count, cuohe_count, total_round_score, created_at
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    )
+"""
 
 
 def _stat_date_expr(column: str) -> str:
@@ -56,18 +63,6 @@ def _resolve_scene_fields(
             else:
                 match_tier = "beginner" if tips else "intermediate"
     return room_type, match_tier, event_id
-_METRIC_INSERT_SQL = """
-    INSERT INTO game_player_metrics (
-        game_id, user_id, username, rule, sub_rule, room_type, match_tier, event_id,
-        game_type, match_type, score, rank, total_rounds,
-        win_count, self_draw_count, deal_in_count, total_fan_score, total_win_turn,
-        total_fangchong_score, first_place_count, second_place_count, third_place_count,
-        fourth_place_count, fulu_round_count, cuohe_count, total_round_score, created_at
-    ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )
-"""
 
 
 def _count_rounds(record: Dict[str, Any]) -> int:
@@ -164,26 +159,28 @@ def _get_ai_game_ids(cursor) -> Set[str]:
     return {r[0] for r in cursor.fetchall()}
 
 
-def backfill_game_player_metrics(
+def backfill_missing_game_player_metrics(
     db_manager,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
-    truncate: bool = False,
 ) -> int:
-    """回填 game_player_metrics，返回写入行数。"""
+    """仅回填 game_player_metrics 中尚不存在的 (game_id, user_id) 行，返回写入行数。"""
     conn = None
     saved = 0
     try:
         conn = db_manager._get_connection()
         cursor = conn.cursor()
 
-        if truncate:
-            cursor.execute("TRUNCATE game_player_metrics")
-            logger.info("已清空 game_player_metrics")
-
         exclude_games = _get_ai_game_ids(cursor)
 
-        where = ["gpr.user_id > %s", "gr.created_at IS NOT NULL"]
+        where = [
+            "gpr.user_id > %s",
+            "gr.created_at IS NOT NULL",
+            """NOT EXISTS (
+                SELECT 1 FROM game_player_metrics m
+                WHERE m.game_id = gpr.game_id AND m.user_id = gpr.user_id
+            )""",
+        ]
         params: list = [REGISTERED_USER_ID_MIN]
         if date_from:
             where.append(f"{_stat_date_expr('gr.created_at')} >= %s")
@@ -214,7 +211,6 @@ def backfill_game_player_metrics(
             room_type, match_tier, event_id = _resolve_scene_fields(
                 record, room_type, match_tier, event_id,
             )
-            # 场次指标仅统计天梯四档
             if room_type != "match" or match_tier not in MATCH_TIER_SET:
                 continue
             try:
@@ -231,13 +227,16 @@ def backfill_game_player_metrics(
             saved += 1
             if saved % 5000 == 0:
                 conn.commit()
-                logger.info("已写入 %d 行 game_player_metrics", saved)
+                logger.info("已增量写入 %d 行 game_player_metrics", saved)
 
         conn.commit()
-        logger.info("game_player_metrics 回填完成：共 %d 行", saved)
+        if saved:
+            logger.info("game_player_metrics 增量回填完成：共 %d 行", saved)
+        else:
+            logger.info("game_player_metrics 无需增量回填")
         return saved
     except Error as e:
-        logger.error("回填 game_player_metrics 失败: %s", e, exc_info=True)
+        logger.error("增量回填 game_player_metrics 失败: %s", e, exc_info=True)
         if conn:
             conn.rollback()
         raise
@@ -245,73 +244,3 @@ def backfill_game_player_metrics(
         if conn:
             cursor.close()
             db_manager._put_connection(conn)
-
-
-def backfill_daily_aggregation_range(db_manager, date_from: date, date_to: date) -> None:
-    """对日期区间逐日运行 run_daily_aggregation。"""
-    from .daily_aggregator import run_daily_aggregation_range
-    run_daily_aggregation_range(db_manager, date_from, date_to)
-
-
-def _parse_date(s: Optional[str]) -> Optional[date]:
-    if not s:
-        return None
-    return datetime.strptime(s, "%Y-%m-%d").date()
-
-
-def _default_date_range(db_manager) -> tuple:
-    conn = None
-    try:
-        conn = db_manager._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(f"""
-            SELECT MIN({_stat_date_expr('created_at')}),
-                   MAX({_stat_date_expr('created_at')})
-            FROM game_records
-        """)
-        row = cursor.fetchone()
-        if row and row[0] and row[1]:
-            return row[0], row[1]
-    finally:
-        if conn:
-            cursor.close()
-            db_manager._put_connection(conn)
-    today = datetime.now().date()
-    return today - timedelta(days=30), today
-
-
-if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="回填 game_player_metrics 并可选重跑日聚合")
-    parser.add_argument("--truncate", action="store_true", help="回填前清空 game_player_metrics")
-    parser.add_argument("--from", dest="date_from", metavar="YYYY-MM-DD", help="起始日期（北京时间）")
-    parser.add_argument("--to", dest="date_to", metavar="YYYY-MM-DD", help="结束日期（北京时间）")
-    parser.add_argument("--aggregate", action="store_true", help="回填后重跑 daily_stats / scene_daily_stats")
-    args = parser.parse_args()
-
-    root = Path(__file__).resolve().parents[2]
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    from server.local_config import Config
-    from server.database.db_manager import DatabaseManager
-
-    db = DatabaseManager(Config.host, Config.user, Config.password, Config.database, Config.port)
-    db.init_database()
-
-    d_from = _parse_date(args.date_from)
-    d_to = _parse_date(args.date_to)
-    if args.aggregate and (d_from is None or d_to is None):
-        d_from, d_to = _default_date_range(db)
-
-    backfill_game_player_metrics(db, date_from=d_from, date_to=d_to, truncate=args.truncate)
-
-    if args.aggregate:
-        if d_from is None or d_to is None:
-            d_from, d_to = _default_date_range(db)
-        backfill_daily_aggregation_range(db, d_from, d_to)
-        print(f"日聚合完成：{d_from} ~ {d_to}")
-
-    print("game_player_metrics 回填完成")

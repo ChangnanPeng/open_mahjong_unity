@@ -1,0 +1,10 @@
+{
+  "success": true,
+  "data": {
+    "total_games": 42,
+    "first_place_count": 10,
+    "second_place_count": 12,
+    "third_place_count": 11,
+    "fourth_place_count": 9
+  }
+}

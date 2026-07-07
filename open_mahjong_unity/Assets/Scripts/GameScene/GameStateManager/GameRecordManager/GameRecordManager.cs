@@ -39,7 +39,6 @@ public partial class GameRecordManager : MonoBehaviour {
     [SerializeField] private Transform recordXunmuItemContainer;
     [SerializeField] private ScrollRect roundScrollView;
     [SerializeField] private Transform recordRoundItemContainer;
-    [SerializeField] private Transform tileListContainer;
     [SerializeField] private GameObject tileListView;
     [SerializeField] private GameObject staticCardPrefab;
     [SerializeField] private GameObject gameInfoView;
@@ -72,7 +71,8 @@ public partial class GameRecordManager : MonoBehaviour {
     // 荣和时供和牌张追加用：普通荣和=最后一张弃牌，抢杠和=被抢的加杠牌。
     // 与 lastDiscardTileId 分开维护，避免抢杠时误用早前过期的弃牌（如全数牌和牌里冒出一张西）。
     private int lastWinnableTileId = -1;
-    // 5.当前局数
+    // 最近一次加杠的玩家索引；抢杠荣和时和牌张来自其副露而非河牌。
+    private int lastJiagangPlayerIndex = -1;
     public int currentRoundIndex;
     // 立直麻将当前局已翻开的宝牌指示牌（含杠宝牌），用于回放 hu_riichi 结算展示
     private List<int> recordRiichiDoraIndicators = new List<int>();
@@ -573,6 +573,7 @@ public partial class GameRecordManager : MonoBehaviour {
         lastDiscardPlayerIndex = -1;
         lastDiscardTileId = -1;
         lastWinnableTileId = -1;
+        lastJiagangPlayerIndex = -1;
         waitingForDrawAfterCut = false;
         if (gameRecord.gameRound.rounds.TryGetValue(currentRoundIndex, out Round roundForRiichiField)) {
             ResetRecordRiichiFieldState(roundForRiichiField);
@@ -734,6 +735,7 @@ public partial class GameRecordManager : MonoBehaviour {
             lastDiscardPlayerIndex = actingPlayerIndex;
             lastDiscardTileId = cutTile;
             lastWinnableTileId = cutTile;
+            lastJiagangPlayerIndex = -1;
             waitingForDrawAfterCut = true;
             nextPlayerIndex = (actingPlayerIndex + 1) % 4;
         }
@@ -785,6 +787,7 @@ public partial class GameRecordManager : MonoBehaviour {
             int actualJia = removedTiles.Count > 0 ? removedTiles[0] : jiagangTile;
             // 抢杠和：被抢的加杠牌即和牌张，登记为可和牌张供随后 hu_* 追加
             lastWinnableTileId = actualJia;
+            lastJiagangPlayerIndex = actingPlayerIndex;
             int[] combinationMask = BuildJiagangMask(currentRecordPlayer, jiagangTile, actualJia);
             if (currentPlayerPosition == "self") {
                 if (isMoGang) {
@@ -830,6 +833,7 @@ public partial class GameRecordManager : MonoBehaviour {
             currentRecordPlayer.showHandDrawSlotActive = false;
             // 弃牌已被吃/碰/明杠取走，不再是可荣和牌张，清除避免后续误追加
             lastWinnableTileId = -1;
+            lastJiagangPlayerIndex = -1;
             if (currentPlayerPosition == "self") {
                 GameCanvas.Instance.ChangeHandCards("RemoveCombinationCard", 0, removedTiles.ToArray(), null);
             }
@@ -1058,26 +1062,6 @@ public partial class GameRecordManager : MonoBehaviour {
 
 
     /// <summary>
-    /// 在 tileListContainer 中根据 originalTilesList 生成所有牌山卡牌（GameInit/InitGameRound 时调用）
-    /// </summary>
-    private void BuildTileListInContainer() {
-        if (tileListContainer == null || staticCardPrefab == null) return;
-        tileListCards.Clear();
-        for (int i = tileListContainer.childCount - 1; i >= 0; i--) {
-            Destroy(tileListContainer.GetChild(i).gameObject);
-        }
-        for (int i = 0; i < originalTilesList.Count; i++) {
-            GameObject cardObj = Instantiate(staticCardPrefab, tileListContainer);
-            StaticCard sc = cardObj.GetComponent<StaticCard>();
-            if (sc != null) {
-                sc.SetTileOnlyImage(originalTilesList[i]);
-                tileListCards.Add(sc);
-            }
-        }
-        UpdateTileListOpacity();
-    }
-
-    /// <summary>
     /// 根据已摸走的头部/尾部张数，对牌山视图中的卡牌设置不透明度（已摸走的变灰）
     /// </summary>
     private void UpdateTileListOpacity() {
@@ -1093,11 +1077,12 @@ public partial class GameRecordManager : MonoBehaviour {
                 && i < originalTilesList.Count
                 && currentDangerTileIds.Contains(TileIdOrder.Normalize(originalTilesList[i]));
             bool isZimo = showZimo
-                && i == currentZimoDrawOriginalIndex
+                && currentZimoDrawOriginalIndices.Contains(i)
                 && !isConsumed
                 && !IsRiichiDeadWallBlockingZimoAt(i, roomRule);
             tileListCards[i].ApplyWallVisual(alpha, isDanger, isZimo);
         }
+        UpdateHandSectionDimming();
     }
 
     /// <summary>
@@ -1565,8 +1550,7 @@ public partial class GameRecordManager : MonoBehaviour {
 
         string recordRule = ResolveRecordHepaiRuleKey();
         bool showCardsExpanded = HepaiRevealDirector.IsRecordShowCardsExpanded(huPosition);
-        string discardPos = ResolveRecordRonDiscarderPosition(
-            lastDiscardPlayerIndex >= 0 ? (int?)lastDiscardPlayerIndex : null);
+        string discardPos = ResolveRecordRonDiscarderPosition(null);
         int hepaiTile = hepaiPlayerHand != null && hepaiPlayerHand.Length > 0
             ? hepaiPlayerHand[hepaiPlayerHand.Length - 1]
             : -1;

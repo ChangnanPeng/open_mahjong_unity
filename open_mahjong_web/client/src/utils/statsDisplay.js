@@ -9,9 +9,11 @@ export const rankedGames = (s) =>
 /** 顺位占比（分母 = rankedGames，与饼图中心一致） */
 export const rankRate = (count, s) => ratio(count, rankedGames(s));
 
-export const rankRateInt = (count, s) => {
+/** 饼图图例百分比（1 位小数，与统计表同分母） */
+export const rankRatePieLabel = (count, s) => {
   const d = rankedGames(s);
-  return (!d || d <= 0) ? 0 : Math.round((Number(count) / d) * 100);
+  if (!d || d <= 0) return '0.0%';
+  return `${(Number(count) / d * 100).toFixed(1)}%`;
 };
 
 /** 玩家个人副露率：副露小局数 / 该玩家总小局数 */

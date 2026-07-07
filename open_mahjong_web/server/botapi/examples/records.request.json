@@ -1,0 +1,17 @@
+{
+  "method": "GET",
+  "url": "https://salasasa.cn/api/bot/player/records/10000001",
+  "headers": {
+    "Authorization": "Bearer <JWT>"
+  },
+  "path_params": {
+    "key": "10000001"
+  },
+  "query_params": {
+    "limit": 20,
+    "offset": 0,
+    "tier": "rank",
+    "rule": "guobiao"
+  },
+  "query_params_note": "query 参数均可选，与 /api/player/records/:key 相同"
+}
