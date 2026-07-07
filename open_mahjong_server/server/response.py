@@ -26,6 +26,7 @@ class PlayerInfo(BaseModel):
     score_history: Optional[List[str]] = None  # 分数历史变化列表，每局记录 +？、-？ 或 0
     round_number_history: Optional[List[int]] = None  # 实际每手对应局数（支持连庄重复）
     tag_list: Optional[List[str]] = None  # 标签列表
+    initial_hu_types: Optional[List[str]] = None  # 长沙麻将起手胡类型
     discard_riichi_flags: Optional[List[bool]] = None  # 立直规则：与 discard_tiles 同序的横置标记，重连/牌谱重建时还原横置弃牌
     # 四川麻将（血战到底）专用
     dingque_suit: Optional[int] = None  # 定缺花色：1=万 2=饼 3=条，0/None=未定缺
@@ -56,6 +57,14 @@ class GameInfo(BaseModel):
     isPlayerSetRandomSeed: Optional[bool] = False  # 是否玩家设置了随机种子（默认为False）
     player_entry_order: Optional[List[int]] = None  # shuffle 前对局入场顺序 user_id[4]
     players_info: List[PlayerInfo]
+    open_kong_replacement_count: Optional[int] = None
+    initial_hu_si_xi: Optional[bool] = None
+    initial_hu_ban_ban_hu: Optional[bool] = None
+    initial_hu_que_yi_se: Optional[bool] = None
+    initial_hu_liu_liu_shun: Optional[bool] = None
+    initial_hu_san_tong: Optional[bool] = None
+    bird_count: Optional[int] = None
+    dealer_bird: Optional[bool] = None
     self_hand_tiles: Optional[List[int]] = None
     # 立直麻将专用字段
     honba: Optional[int] = None  # 本场棒数
@@ -83,6 +92,7 @@ class Ask_hand_action_info(BaseModel):
     remain_tiles: int
     action_list: List[str]
     action_tick: int
+    forced_cut_tiles: Optional[List[int]] = None
     # 立直麻将：可立直切牌候选 {tile_id: [waiting_tile, ...]}，仅当 action_list 含 riichi_cut 时下发
     riichi_candidate_cuts: Optional[Dict[int, List[int]]] = None
     # 立直麻将：吃后切牌阶段，本家被禁切的牌（食替规则：吃来源 + 两面搭子的筋）；客户端用于变暗与禁点
@@ -105,9 +115,11 @@ class Do_action_info(BaseModel):
     action_list: List[str] 
     action_player: int # 存储操作玩家索引
     cut_tile: Optional[int] = None # 在切牌时广播切牌
+    cut_tiles: Optional[List[int]] = None
     cut_class: Optional[bool] = None # 在切牌时广播切牌手模切类型
     cut_tile_index: Optional[int] = None # 在切牌时广播切牌位置
     deal_tile: Optional[int] = None # 在摸牌时广播摸牌
+    deal_tiles: Optional[List[int]] = None
     buhua_tile: Optional[int] = None # 在补花时广播补花
     combination_mask: Optional[List[int]] = None # 在鸣牌时传递鸣牌形状
     combination_target: Optional[str] = None # 在鸣牌时传递鸣牌目标
@@ -193,6 +205,10 @@ class Show_result_info(BaseModel):
     liuju_step: Optional[str] = None  # 流局/终局演出：reveal_hu/settle_hu/chajiao/final（cha_refund 已并入 chajiao）
     liuju_status_final: Optional[bool] = None  # 流局逐家状态面板是否为最后一条（客户端在此条应用最终分数）
     liuju_refund: Optional[bool] = None  # 该查叫面板内含刮风下雨退税（客户端加“退税”标签并多停 0.5s）
+    # 长沙麻将起手胡骰子鸟预留字段
+    initial_hu_dice: Optional[List[int]] = None
+    initial_hu_bird_seats: Optional[List[int]] = None
+    initial_hu_payer_details: Optional[List[Dict]] = None
 
 class Show_shuhewei_info(BaseModel):
     player_fu: Dict[int, int]  # 各玩家副数 {player_index: fu}

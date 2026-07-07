@@ -112,6 +112,7 @@ public class AutoAction : MonoBehaviour{
         isMingPaiPanelExpanded = false;
 
         SetSpectatorOnlyLayout(false);
+        ApplyCompactButtonLabels();
 
         // 更新显示
         UpdateAllTextColors();
@@ -134,6 +135,7 @@ public class AutoAction : MonoBehaviour{
         isMingPaiPanelExpanded = false;
 
         SetSpectatorOnlyLayout(true);
+        ApplyCompactButtonLabels();
 
         UpdateAllTextColors();
         AddClickListeners();
@@ -184,9 +186,18 @@ public class AutoAction : MonoBehaviour{
         AddClickListener(arrangeHandCardsText, ToggleArrangeHandCards);
         AddClickListener(autoHepaiText, ToggleAutoHepai);
         AddClickListener(autoCutCardText, ToggleAutoCutCard);
-        AddClickListener(autoPassText, ToggleAutoPass);
-        AddClickListener(autoBuhuaText, ToggleAutoBuhua);
+        AddClickListener(autoPassText, TogglePassPengOption);
+        AddClickListener(autoBuhuaText, TogglePassChiOption);
         AddClickListener(expandButtonText, ToggleMingPaiPanel);
+    }
+
+    private void ApplyCompactButtonLabels() {
+        if (expandButtonText != null) expandButtonText.text = "展";
+        if (arrangeHandCardsText != null) arrangeHandCardsText.text = "理";
+        if (autoHepaiText != null) autoHepaiText.text = "和";
+        if (autoBuhuaText != null) autoBuhuaText.text = "吃";
+        if (autoPassText != null) autoPassText.text = "碰";
+        if (autoCutCardText != null) autoCutCardText.text = "切";
     }
 
     // 为TMP_Text添加点击监听器
@@ -253,14 +264,33 @@ public class AutoAction : MonoBehaviour{
         }
     }
 
+    private void TogglePassChiOption() {
+        TilePassSettingPanel panel = GetTilePassPanel();
+        if (panel == null) return;
+        panel.SetMeldPassOptions(!panel.PassChi, panel.PassPeng, panel.PassMingGang);
+        SyncAutoPassFromMeldFilters();
+        UpdateTextColor(autoBuhuaText, panel.PassChi);
+    }
+
+    private void TogglePassPengOption() {
+        TilePassSettingPanel panel = GetTilePassPanel();
+        if (panel == null) return;
+        panel.SetMeldPassOptions(panel.PassChi, !panel.PassPeng, panel.PassMingGang);
+        SyncAutoPassFromMeldFilters();
+        UpdateTextColor(autoPassText, panel.PassPeng);
+    }
+
     /// <summary>根据牌张设置中「不吃/不碰/不明杠」是否全选，同步主面板「自动过牌」显示。</summary>
     private void SyncAutoPassFromMeldFilters() {
         bool allMeldPassOn = IsPassChi && IsPassPeng && IsPassMingGang;
         if (isAutoPass == allMeldPassOn) {
+            UpdateTextColor(autoBuhuaText, IsPassChi);
+            UpdateTextColor(autoPassText, IsPassPeng);
             return;
         }
         isAutoPass = allMeldPassOn;
-        UpdateTextColor(autoPassText, isAutoPass);
+        UpdateTextColor(autoBuhuaText, IsPassChi);
+        UpdateTextColor(autoPassText, IsPassPeng);
     }
 
     // 切换自动补花
@@ -316,7 +346,7 @@ public class AutoAction : MonoBehaviour{
         UpdateTextColor(arrangeHandCardsText, isAutoArrangeHandCards);
         UpdateTextColor(autoHepaiText, isAutoHepai);
         UpdateTextColor(autoCutCardText, isAutoCut);
-        UpdateTextColor(autoPassText, isAutoPass);
-        UpdateTextColor(autoBuhuaText, isAutoBuhua);
+        UpdateTextColor(autoPassText, IsPassPeng);
+        UpdateTextColor(autoBuhuaText, IsPassChi);
     }
 }

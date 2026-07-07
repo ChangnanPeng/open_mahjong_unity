@@ -167,6 +167,15 @@ public partial class NormalGameStateManager {
 
             // 手牌操作自动执行
             else if (action == "AutoHandAction"){
+                // 起手胡询问：自动胡牌开启时接受，否则等待玩家手动选择
+                if (allowActionList.Contains("initial_hu")){
+                    if (AutoAction.Instance.IsAutoHepai){
+                        yield return new WaitForSeconds(0.2f);
+                        GameCanvas.Instance.ChooseAction("initial_hu", 0);
+                        yield break;
+                    }
+                }
+
                 // 如果允许操作列表有hu_self
                 if (allowActionList.Contains("hu_self")){
                     // 自动胡牌开启、未勾选「不自摸」、且摸入牌未命中「不询问」列表时执行自动自摸
@@ -188,7 +197,7 @@ public partial class NormalGameStateManager {
                     }
                 }
 
-                List<string> allowActionWithoutCut = new List<string>{"angang","jiagang","hu_self","buhua"};
+                List<string> allowActionWithoutCut = new List<string>{"buzhang","angang","jiagang","hu_self","initial_hu","sea_bottom","buhua"};
                 // 如果允许操作列表有除去cut的其他操作 则转到玩家操作
                 if (allowActionWithoutCut.Any(allowActionList.Contains)){
                     yield return null;

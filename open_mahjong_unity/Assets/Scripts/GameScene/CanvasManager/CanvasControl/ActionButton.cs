@@ -29,6 +29,9 @@ public class ActionButton : MonoBehaviour {
         {
             Debug.LogError("ActionButton: TMP_Text component is not assigned in Inspector!");
         }
+        else {
+            ConfigureButtonText(textObject);
+        }
 
         // 按钮点击事件
         Button button = GetComponent<Button>();
@@ -38,6 +41,15 @@ public class ActionButton : MonoBehaviour {
             return;
         }
         button.onClick.AddListener(OnClick);
+    }
+
+    private static void ConfigureButtonText(TMP_Text text) {
+        text.enableAutoSizing = true;
+        text.fontSizeMax = Mathf.Max(text.fontSize, 36f);
+        text.fontSizeMin = 18f;
+        text.enableWordWrapping = false;
+        text.overflowMode = TextOverflowModes.Truncate;
+        text.alignment = TextAlignmentOptions.Center;
     }
 
     // 判定当前按钮是否为吃牌按钮
@@ -84,9 +96,13 @@ public class ActionButton : MonoBehaviour {
         bool isChi = IsChiButton();
         List<(string action, int comboIndex, int[] pair)> chiCands = isChi ? CollectChiCandidates() : null;
         bool isAngang = actionTypeList.Contains("angang");
+        bool isBuzhang = actionTypeList.Contains("buzhang");
         bool isJiagang = actionTypeList.Contains("jiagang");
         var gsm = NormalGameStateManager.Instance;
         var angangOptions = isAngang ? CollectAngangOptions(gsm.selfHandTiles) : null;
+        var buzhangOptions = isBuzhang
+            ? CollectBuzhangOptions(gsm.selfHandTiles, gsm.player_to_info["self"].combination_tiles)
+            : null;
         var jiagangOptions = isJiagang
             ? CollectJiagangOptions(gsm.selfHandTiles, gsm.player_to_info["self"].combination_tiles)
             : null;
@@ -95,6 +111,7 @@ public class ActionButton : MonoBehaviour {
         // 服务端会对每个可杠牌各下发一条 "angang"/"jiagang"，不能按 actionTypeList 条数展开。
         bool expandSubButtons = (isChi && chiCands.Count > 1)
             || (angangOptions != null && angangOptions.Count > 1)
+            || (buzhangOptions != null && buzhangOptions.Count > 1)
             || (jiagangOptions != null && jiagangOptions.Count > 1);
 
         if (expandSubButtons){
@@ -103,6 +120,8 @@ public class ActionButton : MonoBehaviour {
                 currentButtonType = "chi";
             } else if (actionTypeList.Contains("angang")){
                 currentButtonType = "angang";
+            } else if (actionTypeList.Contains("buzhang")){
+                currentButtonType = "buzhang";
             } else if (actionTypeList.Contains("jiagang")){
                 currentButtonType = "jiagang";
             }
@@ -133,6 +152,11 @@ public class ActionButton : MonoBehaviour {
                         CreateActionCards(angangOption.displayTiles, "angang", angangOption.targetTile);
                     }
                 }
+                if (buzhangOptions != null) {
+                    foreach (var buzhangOption in buzhangOptions) {
+                        CreateActionCards(buzhangOption.displayTiles, "buzhang", buzhangOption.targetTile);
+                    }
+                }
                 if (jiagangOptions != null) {
                     foreach (var jiagangOption in jiagangOptions) {
                         CreateActionCards(jiagangOption.displayTiles, "jiagang", jiagangOption.targetTile);
@@ -153,6 +177,10 @@ public class ActionButton : MonoBehaviour {
         if (actionTypeList[0] == "jiagang"){
             Debug.Log($"选择了行动 {actionTypeList[0]}");
             int targetTile = jiagangOptions != null && jiagangOptions.Count > 0 ? jiagangOptions[0].targetTile : 0;
+            GameCanvas.Instance.ChooseAction(actionTypeList[0], targetTile);
+        } else if (actionTypeList[0] == "buzhang"){
+            Debug.Log($"选择了行动 {actionTypeList[0]}");
+            int targetTile = buzhangOptions != null && buzhangOptions.Count > 0 ? buzhangOptions[0].targetTile : 0;
             GameCanvas.Instance.ChooseAction(actionTypeList[0], targetTile);
         } else if (actionTypeList[0] == "angang"){
             Debug.Log($"选择了行动 {actionTypeList[0]}");
@@ -191,6 +219,25 @@ public class ActionButton : MonoBehaviour {
             if (!combinations.Contains($"k{norm}")) continue;
             processedNorms.Add(norm);
             options.Add((tileID, new List<int> { tileID, tileID, tileID, tileID }));
+        }
+        return options;
+    }
+
+    private static List<(int targetTile, List<int> displayTiles)> CollectBuzhangOptions(
+        List<int> handTiles, List<string> combinations) {
+        var options = new List<(int, List<int>)>();
+        var processedNorms = new HashSet<int>();
+        foreach (var option in CollectJiagangOptions(handTiles, combinations)) {
+            int norm = RiichiTileUtil.Normalize(option.targetTile);
+            if (processedNorms.Add(norm)) {
+                options.Add(option);
+            }
+        }
+        foreach (var option in CollectAngangOptions(handTiles)) {
+            int norm = RiichiTileUtil.Normalize(option.targetTile);
+            if (processedNorms.Add(norm)) {
+                options.Add(option);
+            }
         }
         return options;
     }

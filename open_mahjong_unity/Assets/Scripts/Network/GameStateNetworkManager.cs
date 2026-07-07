@@ -36,6 +36,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_start":
             case "gamestate/riichi/game_start":
             case "gamestate/sichuan/game_start":
+            case "gamestate/changsha/game_start":
                 HandleGameStart(response);
                 break;
             case "gamestate/guobiao/broadcast_hand_action":
@@ -43,6 +44,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/broadcast_hand_action":
             case "gamestate/riichi/broadcast_hand_action":
             case "gamestate/sichuan/broadcast_hand_action":
+            case "gamestate/changsha/broadcast_hand_action":
                 HandleBroadcastHandAction(response);
                 break;
             case "gamestate/guobiao/ask_other_action":
@@ -50,6 +52,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ask_other_action":
             case "gamestate/riichi/ask_other_action":
             case "gamestate/sichuan/ask_other_action":
+            case "gamestate/changsha/ask_other_action":
                 HandleAskOtherAction(response);
                 break;
             case "gamestate/guobiao/do_action":
@@ -57,6 +60,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/do_action":
             case "gamestate/riichi/do_action":
             case "gamestate/sichuan/do_action":
+            case "gamestate/changsha/do_action":
                 HandleDoAction(response);
                 break;
             case "gamestate/guobiao/show_result":
@@ -64,6 +68,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/show_result":
             case "gamestate/riichi/show_result":
             case "gamestate/sichuan/show_result":
+            case "gamestate/changsha/show_result":
                 HandleShowResult(response);
                 break;
             case "gamestate/guobiao/game_end":
@@ -71,6 +76,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_end":
             case "gamestate/riichi/game_end":
             case "gamestate/sichuan/game_end":
+            case "gamestate/changsha/game_end":
                 HandleGameEnd(response);
                 break;
             case "gamestate/sichuan/ask_dingque":
@@ -99,6 +105,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ready_status":
             case "gamestate/riichi/ready_status":
             case "gamestate/sichuan/ready_status":
+            case "gamestate/changsha/ready_status":
                 HandleReadyStatus(response);
                 break;
             case "gamestate/classical/show_shuhewei":
@@ -143,7 +150,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             handresponse.remain_tiles,
             handresponse.action_list,
             handresponse.riichi_candidate_cuts,
-            handresponse.forbidden_cut_tiles
+            handresponse.forbidden_cut_tiles,
+            handresponse.forced_cut_tiles
         );
     }
     
@@ -204,9 +212,11 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.action_list,
             doresponse.action_player,
             doresponse.cut_tile,
+            doresponse.cut_tiles,
             doresponse.cut_tile_index,
             doresponse.cut_class,
             doresponse.deal_tile,
+            doresponse.deal_tiles,
             doresponse.buhua_tile,
             doresponse.combination_mask,
             doresponse.combination_target,
