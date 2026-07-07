@@ -146,7 +146,7 @@ async def _daily_stats_loop() -> None:
 
 
 async def _daily_stats_startup_restore() -> None:
-    """启动时在后台做统计维护（首次全量 / 之后轻量补齐）。"""
+    """启动时在后台增量回补未合并的 metrics，并补齐缺失日的聚合。"""
     try:
         from .database.daily_aggregator import run_startup_stats_restore
         await asyncio.to_thread(run_startup_stats_restore, db_manager)

@@ -1,0 +1,51 @@
+{
+  "success": true,
+  "message": "获取玩家信息成功",
+  "data": {
+    "user_id": 10000001,
+    "user_settings": {
+      "user_id": 10000001,
+      "username": "示例玩家",
+      "title_id": 1,
+      "profile_image_id": 1,
+      "character_id": 1,
+      "voice_id": 1
+    },
+    "guobiao_stats": [
+      {
+        "rule": "guobiao",
+        "mode": "4/4_rank",
+        "total_games": 42,
+        "total_rounds": 168,
+        "win_count": 15,
+        "self_draw_count": 8,
+        "deal_in_count": 12,
+        "total_fan_score": 320,
+        "total_win_turn": 45,
+        "total_fangchong_score": 0,
+        "first_place_count": 10,
+        "second_place_count": 12,
+        "third_place_count": 11,
+        "fourth_place_count": 9,
+        "fulu_round_count": 5,
+        "cuohe_count": 0,
+        "total_round_score": 1200,
+        "fan_stats": {
+          "pengpenghe": 3,
+          "qingyise": 1
+        }
+      }
+    ],
+    "riichi_stats": [],
+    "qingque_stats": [],
+    "classical_stats": [],
+    "fan_dict": {
+      "guobiao": {
+        "pengpenghe": "碰碰和",
+        "qingyise": "清一色"
+      },
+      "qingque": {},
+      "classical": {}
+    }
+  }
+}

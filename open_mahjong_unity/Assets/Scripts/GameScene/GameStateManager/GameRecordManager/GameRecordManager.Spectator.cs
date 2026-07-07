@@ -86,11 +86,6 @@ public partial class GameRecordManager {
         RemoveAskTicksFromAllRounds();
         SyncRoundInspectorAndRoundButtons();
 
-        // 默认观战视角固定东家（可按既有牌谱逻辑切换视角）
-        selectedPlayerIndex = 0;
-        selectedPlayerUserid = gameRecord.gameRound.rounds.ContainsKey(1)
-            ? gameRecord.gameRound.rounds[1].p0UserId : 0;
-
         JumpToLatestState();
         ShowSpectatorModePanel(true);
         BindSpectatorButtons();

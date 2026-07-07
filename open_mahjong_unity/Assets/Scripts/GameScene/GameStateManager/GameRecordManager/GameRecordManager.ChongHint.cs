@@ -8,17 +8,19 @@ public partial class GameRecordManager {
 
     private readonly HashSet<int> currentDangerTileIds = new HashSet<int>();
 
-    private int currentZimoDrawOriginalIndex = -1;
+    private readonly HashSet<int> currentZimoDrawOriginalIndices = new HashSet<int>();
 
+    internal int ConsumedFromFrontForChongHint => consumedFromFront;
 
+    internal int OriginalWallTileCountForChongHint => originalTilesList?.Count ?? 0;
 
-    internal List<int> GetCurrentTilesListForSim() => currentTilesList;
+    internal bool IsWaitingForDrawAfterCutForChongHint => waitingForDrawAfterCut;
 
-    internal List<int> GetCurrentOriginalIndicesForSim() => currentOriginalIndices;
+    internal int LastDiscardPlayerIndexForChongHint => lastDiscardPlayerIndex;
 
-    internal HashSet<int> GetConsumedBackIndicesForSim() => consumedBackIndices;
-
-    internal string GetBackwardTilesTypeForSim() => backwardTilesType;
+    internal bool IsOriginalWallIndexBackConsumed(int originalIndex) {
+        return consumedBackIndices != null && consumedBackIndices.Contains(originalIndex);
+    }
 
 
 
@@ -78,18 +80,10 @@ public partial class GameRecordManager {
 
 
 
-        currentZimoDrawOriginalIndex = -1;
+        currentZimoDrawOriginalIndices.Clear();
 
         if (ShouldApplyRecordChongHint() && IsTileListViewVisible()) {
-
-            if (RecordChongHintCalculator.TryPredictNextSelfDrawOriginalIndex(this, out int zimoIdx)
-
-                && !IsRiichiDeadWallBlockingZimoAt(zimoIdx, roomRule)) {
-
-                currentZimoDrawOriginalIndex = zimoIdx;
-
-            }
-
+            RecordChongHintCalculator.ComputeMoqieZimoDrawOriginalIndices(this, currentZimoDrawOriginalIndices);
         }
 
 
@@ -148,7 +142,7 @@ public partial class GameRecordManager {
 
         currentDangerTileIds.Clear();
 
-        currentZimoDrawOriginalIndex = -1;
+        currentZimoDrawOriginalIndices.Clear();
 
         if (Card3DHoverManager.Instance != null) {
 

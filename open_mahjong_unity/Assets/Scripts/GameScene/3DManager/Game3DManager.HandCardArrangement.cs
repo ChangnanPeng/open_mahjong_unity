@@ -59,9 +59,14 @@ public partial class Game3DManager {
         return false; // 不需要排列
     }
 
-    // 检测并排列所有玩家的3D手牌（公共方法，供外部调用）
-    public void CheckAndRearrangeAllPlayersHandCards() {
+    /// <summary>
+    /// 检测并排列各家 3D 手牌。skipPlayerPosition 为当前行动者时不收拢，保留摸牌区间隙（与 2D askHand 不收拢摸牌区一致）。
+    /// </summary>
+    public void CheckAndRearrangeAllPlayersHandCards(string skipPlayerPosition = null) {
         foreach (string playerPosition in HandAnimPlayerPositions) {
+            if (!string.IsNullOrEmpty(skipPlayerPosition) && playerPosition == skipPlayerPosition) {
+                continue;
+            }
             PosPanel3D panel = GetPosPanel(playerPosition);
             if (panel != null && NeedsRearrangement(panel.cardsPosition)) {
                 StartHandRearrange(playerPosition);

@@ -290,7 +290,7 @@ public partial class Game3DManager {
 
 
 
-        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition);
+        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition, tileId);
 
         if (riverTile != null) {
 
@@ -582,9 +582,9 @@ public partial class Game3DManager {
 
 
 
-    private GameObject DetachLastDiscardFromRiver(string discarderPos) {
+    private GameObject DetachLastDiscardFromRiver(string discarderPos, int expectedTileId = 0) {
 
-        GameObject obj = PeekLastDiscardObject(discarderPos);
+        GameObject obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
 
         if (obj == null) return null;
 

@@ -60,7 +60,17 @@ public partial class Game3DManager : MonoBehaviour {
             return regObj;
         }
         GameObject found = FindDiscardTileObject(discarderPos, expectedTileId);
-        return found ?? lastCutJiagang3DObject;
+        if (found == null) {
+            found = FindJiagangTileObject(discarderPos, expectedTileId);
+        }
+        if (found != null) return found;
+        if (lastCutJiagang3DObject != null && expectedTileId >= 10) {
+            Tile3D t = lastCutJiagang3DObject.GetComponent<Tile3D>();
+            if (t != null && t.GetTileId() == expectedTileId) {
+                return lastCutJiagang3DObject;
+            }
+        }
+        return lastCutJiagang3DObject;
     }
 
     /// <summary>认走/荣和取走弃牌后：停掉该打牌者飞牌协程并清掉登记，
@@ -257,7 +267,7 @@ public partial class Game3DManager : MonoBehaviour {
         else if (playerPosition == "left") rotation = Quaternion.Euler(90, 0, 90);
         else if (playerPosition == "top") rotation = Quaternion.Euler(90, 0, 0);
         else if (playerPosition == "right") rotation = Quaternion.Euler(90, 0, 270);
-        if (isHorizontal) rotation = Quaternion.Euler(0, 90, 0) * rotation;
+        if (isHorizontal) rotation = Quaternion.Euler(0, -90, 0) * rotation;
         return rotation;
     }
 
