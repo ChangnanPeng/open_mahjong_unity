@@ -5,7 +5,7 @@
 - 已和退场玩家 player.is_hu=True：不再行动、不被询问、不被点炮。
 - 和牌优先级 > 碰/杠（priority: hu_self=6, hu=5, peng/gang=2）。
 - 一炮多响：本次弃牌所有可和玩家结果都暂存到 self.sichuan_hu_results[idx]。
-- 顺和：跳过自摸/点炮/抢杠（含碰杠放弃）记录番数；听牌出牌后至下次摸牌前不可点和≤跳过番的牌（自摸不受限，tag: shunhe_N，仅本人可见）。
+- 顺和：跳过自摸/点炮/抢杠（含碰杠放弃）记录番数；听牌时立即生效，至下次摸牌前不可点和≤跳过番的牌（自摸不受限，tag: shunhe_N，仅本人可见）。
 """
 from typing import Dict, List
 import logging

@@ -333,9 +333,22 @@ public partial class Game3DManager {
 
 
 
-    /// <summary>牌谱跳转重建后：将最后切牌 3D 对象与河牌末张对齐，供荣和收牌演出使用。</summary>
-    public void SyncRecordLastDiscardForRon(string discardPlayerPosition, int expectedTileId) {
-        lastCutJiagang3DObject = FindDiscardTileObject(discardPlayerPosition, expectedTileId);
+    /// <summary>牌谱跳转重建后：将河牌/加杠牌 3D 对象与和牌张对齐，供荣和收牌演出使用。</summary>
+    public void SyncRecordLastDiscardForRon(string sourcePlayerPosition, int expectedTileId) {
+        if (expectedTileId < 10) return;
+        GameObject obj = FindDiscardTileObject(sourcePlayerPosition, expectedTileId);
+        if (obj == null) {
+            obj = FindJiagangTileObject(sourcePlayerPosition, expectedTileId);
+        }
+        if (obj == null && lastCutJiagang3DObject != null) {
+            Tile3D t = lastCutJiagang3DObject.GetComponent<Tile3D>();
+            if (t != null && t.GetTileId() == expectedTileId) {
+                obj = lastCutJiagang3DObject;
+            }
+        }
+        if (obj != null) {
+            lastCutJiagang3DObject = obj;
+        }
     }
 
     private GameObject FindDiscardTileObject(string discardPlayerPosition, int expectedTileId) {
@@ -358,6 +371,24 @@ public partial class Game3DManager {
 
         // 未指定 tileId（边界/回放）：取末张兜底。
         return river.GetChild(river.childCount - 1).gameObject;
+    }
+
+    private GameObject FindJiagangTileObject(string playerPosition, int expectedTileId) {
+        if (string.IsNullOrEmpty(playerPosition) || expectedTileId < 10) return null;
+        PosPanel3D panel = GetPosPanel(playerPosition);
+        if (panel?.combination3DObjects == null) return null;
+
+        GameObject lastMatch = null;
+        foreach (Transform comboParent in panel.combination3DObjects) {
+            if (comboParent == null) continue;
+            for (int i = 0; i < comboParent.childCount; i++) {
+                Tile3D tile3D = comboParent.GetChild(i).GetComponent<Tile3D>();
+                if (tile3D != null && tile3D.GetTileId() == expectedTileId) {
+                    lastMatch = tile3D.gameObject;
+                }
+            }
+        }
+        return lastMatch;
     }
 
 

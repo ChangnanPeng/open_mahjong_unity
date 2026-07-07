@@ -6,10 +6,6 @@ using UnityEngine;
 /// 牌谱铳牌/自摸提示：听牌计算、放铳危险牌、下一摸预测。
 /// </summary>
 public static class RecordChongHintCalculator {
-  private static readonly HashSet<string> ChiPengGangActions = new HashSet<string> {
-    "cl", "cm", "cr", "p", "g",
-  };
-
   /// <summary>合并所有未和牌玩家的待牌（用于牌山铳牌标红）。</summary>
   public static HashSet<int> ComputeDangerTiles(
     Dictionary<string, GameRecordManager.RecordPlayer> players,
@@ -113,70 +109,39 @@ public static class RecordChongHintCalculator {
     return null;
   }
 
+  private const int MoqieZimoDrawInterval = 4;
+  private const int MoqieZimoDrawPredictionCount = 6;
+
   /// <summary>
-  /// 自摸提示：自当前节点起，若无吃碰明杠，预测视角玩家下一次摸牌在 originalTilesList 中的索引。
+  /// 摸切假设下的自摸预测：从牌山头部下一张起算，间隔 4 张标蓝（不模拟补花/鸣牌）。
+  /// 锚点为当前操作玩家；出牌后 current 已切到下家，此时仍按出牌者计（lastDiscard）。
+  /// 例：下家摸牌/出牌时 offset=3，标 2、6、10、14、18、22（相对 front 的下一张）。
   /// </summary>
-  public static bool TryPredictNextSelfDrawOriginalIndex(
+  public static void ComputeMoqieZimoDrawOriginalIndices(
     GameRecordManager mgr,
-    out int originalIndex) {
-    originalIndex = -1;
-    if (mgr == null || mgr.gameRecord?.gameRound?.rounds == null) return false;
-    if (!mgr.gameRecord.gameRound.rounds.TryGetValue(mgr.currentRoundIndex, out Round roundData)) return false;
-    if (roundData.actionTicks == null) return false;
+    ICollection<int> outIndices) {
+    outIndices?.Clear();
+    if (mgr == null || outIndices == null) return;
 
-    var wall = new WallSimState {
-      currentTiles = new List<int>(mgr.GetCurrentTilesListForSim()),
-      origIndices = new List<int>(mgr.GetCurrentOriginalIndicesForSim()),
-      consumedBack = new HashSet<int>(mgr.GetConsumedBackIndicesForSim()),
-      backwardType = mgr.GetBackwardTilesTypeForSim(),
-    };
+    int wallCount = mgr.OriginalWallTileCountForChongHint;
+    if (wallCount <= 0) return;
 
-    int actingPlayer = mgr.currentPlayerIndex;
     int selfIndex = mgr.selectedPlayerIndex;
-
-    for (int node = mgr.currentNode; node < roundData.actionTicks.Count; node++) {
-      List<string> tick = roundData.actionTicks[node];
-      if (tick == null || tick.Count == 0) continue;
-
-      string action = tick[0];
-      if (action == "ask_hand" || action == "ask_other" || action == "ca") continue;
-
-      actingPlayer = ResolveActingPlayerIndex(tick, action, actingPlayer);
-
-      if (ChiPengGangActions.Contains(action)) {
-        return false;
-      }
-
-      if (action == "d" || action == "gd" || action == "bd") {
-        if (actingPlayer == selfIndex) {
-          if (!TryPeekDrawOriginalIndex(wall, action, out originalIndex)) return false;
-          return true;
-        }
-        if (!SimulateDraw(wall, action)) return false;
-        continue;
-      }
-
-      if (action == "c") {
-        actingPlayer = (actingPlayer + 1) % 4;
-        continue;
-      }
-
-      if (action == "bh") {
-        continue;
-      }
-
-      if (action == "ag" || action == "jg" || action == "riichi" || action == "dora") {
-        continue;
-      }
-
-      if (action.StartsWith("hu") || action == "liuju" || action == "ryuukyoku"
-          || action == "end" || action == "shuhewei" || action == "gr"
-          || action == "jiuzhongjiupai" || action == "chajiao") {
-        return false;
-      }
+    int anchorIndex = mgr.currentPlayerIndex;
+    if (mgr.IsWaitingForDrawAfterCutForChongHint && mgr.LastDiscardPlayerIndexForChongHint >= 0) {
+      anchorIndex = mgr.LastDiscardPlayerIndexForChongHint;
     }
+    int offset = (selfIndex - anchorIndex + MoqieZimoDrawInterval) % MoqieZimoDrawInterval;
 
-    return false;
+    int front = mgr.ConsumedFromFrontForChongHint;
+    for (int n = 0; n < MoqieZimoDrawPredictionCount; n++) {
+      int originalIndex = front + offset + n * MoqieZimoDrawInterval - 1;
+      if (originalIndex < 0) continue;
+      if (originalIndex >= wallCount) break;
+      if (originalIndex < front) continue;
+      if (mgr.IsOriginalWallIndexBackConsumed(originalIndex)) continue;
+      outIndices.Add(originalIndex);
+    }
   }
 
   public static bool IsRiichiDeadWallBlockingZimo(
@@ -241,70 +206,6 @@ public static class RecordChongHintCalculator {
     }
   }
 
-  private static int ParseTickInt(List<string> tick, int index) {
-    if (tick == null || index < 0 || index >= tick.Count) return 0;
-    if (!int.TryParse(tick[index]?.Trim(), out int value)) return 0;
-    return value;
-  }
-
-  private static int ResolveActingPlayerIndex(List<string> tick, string action, int defaultPlayer) {
-    return GameRecordJsonDecoder.ResolveRecordActingPlayerIndex(tick, action, defaultPlayer);
-  }
-
-  private static bool TryPeekDrawOriginalIndex(WallSimState wall, string action, out int originalIndex) {
-    originalIndex = -1;
-    if (wall.currentTiles.Count == 0 || wall.origIndices.Count == 0) return false;
-
-    if (action == "d") {
-      originalIndex = wall.origIndices[0];
-      return true;
-    }
-
-    if (action == "gd" || action == "bd") {
-      int removePos;
-      if (wall.backwardType == "double" && wall.currentTiles.Count > 1) {
-        removePos = wall.currentTiles.Count - 2;
-      }
-      else {
-        removePos = wall.currentTiles.Count - 1;
-      }
-      if (removePos < 0 || removePos >= wall.origIndices.Count) return false;
-      originalIndex = wall.origIndices[removePos];
-      return true;
-    }
-
-    return false;
-  }
-
-  private static bool SimulateDraw(WallSimState wall, string action) {
-    if (wall.currentTiles.Count == 0 || wall.origIndices.Count == 0) return false;
-
-    if (action == "d") {
-      wall.currentTiles.RemoveAt(0);
-      wall.origIndices.RemoveAt(0);
-      return true;
-    }
-
-    if (action == "gd" || action == "bd") {
-      int removePos;
-      if (wall.backwardType == "double" && wall.currentTiles.Count > 1) {
-        removePos = wall.currentTiles.Count - 2;
-      }
-      else {
-        removePos = wall.currentTiles.Count - 1;
-      }
-      if (removePos < 0 || removePos >= wall.origIndices.Count) return false;
-      int origIdx = wall.origIndices[removePos];
-      wall.currentTiles.RemoveAt(removePos);
-      wall.origIndices.RemoveAt(removePos);
-      wall.consumedBack.Add(origIdx);
-      wall.backwardType = wall.backwardType == "double" ? "single" : "double";
-      return true;
-    }
-
-    return false;
-  }
-
   private static bool PlayerHasSuit(GameRecordManager.RecordPlayer player, int suit) {
     foreach (int tileId in player.tileList) {
       if (tileId / 10 == suit) return true;
@@ -313,12 +214,5 @@ public static class RecordChongHintCalculator {
       if (GameRecordMeldCodec.NormalizeCombinationTileId(combo) / 10 == suit) return true;
     }
     return false;
-  }
-
-  private class WallSimState {
-    public List<int> currentTiles;
-    public List<int> origIndices;
-    public HashSet<int> consumedBack;
-    public string backwardType;
   }
 }

@@ -153,6 +153,7 @@ public partial class GameRecordManager {
         if (shouldShow) {
             tileListView.SetActive(true);
             RefreshRecordChongHint();
+            FocusTileListScrollOnWallSection();
         } else {
             tileListView.SetActive(false);
             RefreshRecordChongHint();

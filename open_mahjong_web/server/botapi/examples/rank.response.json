@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "data": {
+    "user_id": 10000001,
+    "username": "示例玩家",
+    "guobiao_rank": "三段",
+    "guobiao_score": 850.5,
+    "updated_at": "2026-07-01T08:00:00.000Z",
+    "bounds": {
+      "startScore": 600,
+      "promoteScore": 1200,
+      "canDemote": true,
+      "minScore": 600,
+      "maxScore": 1199.99,
+      "isTopRank": false
+    },
+    "progress": {
+      "current": 850.5,
+      "target": 1200,
+      "percent": 70.9,
+      "remaining": 349.5,
+      "isMaxRank": false
+    }
+  }
+}

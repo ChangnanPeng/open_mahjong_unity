@@ -1,5 +1,6 @@
 /**
  * 固定时间窗内按 key 计数，超限返回 429。
+ * 开发环境或 DEBUG=true 时不限流；仅生产且非调试时生效。
  * @param {{
  *   windowMs: number,
  *   max: number,
@@ -8,6 +9,12 @@
  * }} opts
  * countSuccessfulOnly: 仅 2xx/3xx 响应计入配额（404 等失败不计）
  */
+const config = require('../config/config');
+
+function isRateLimitEnabled() {
+  return config.isProduction && !config.isDebug;
+}
+
 function getClientIp(req) {
   return req.ip || req.socket?.remoteAddress || 'unknown';
 }
@@ -44,6 +51,10 @@ function createWindowLimiter(opts) {
   }
 
   return function rateLimitMiddleware(req, res, next) {
+    if (!isRateLimitEnabled()) {
+      return next();
+    }
+
     const key = keyFn(req);
     const now = Date.now();
     const b = getBucket(key, now);
@@ -72,4 +83,4 @@ function createWindowLimiter(opts) {
   };
 }
 
-module.exports = { createWindowLimiter, getClientIp };
+module.exports = { createWindowLimiter, getClientIp, isRateLimitEnabled };
