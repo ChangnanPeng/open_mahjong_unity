@@ -310,14 +310,14 @@ public partial class GameRecordManager
                 }
 
                 if (combinationStr.Contains("k")) {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "peng", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "peng", combinationMask);
                 }
                 else if (jiagangCount > 0) {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "peng", combinationMask, false));
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "jiagang", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "peng", combinationMask);
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "jiagang", combinationMask);
                 }
                 else {
-                    Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "None", combinationMask, false));
+                    Game3DManager.Instance.RunMeldRebuildImmediate(position, "None", combinationMask);
                 }
             }
         }

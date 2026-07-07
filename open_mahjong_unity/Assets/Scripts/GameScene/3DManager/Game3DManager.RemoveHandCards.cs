@@ -83,9 +83,8 @@ public partial class Game3DManager : MonoBehaviour {
                 MahjongObjectPool.Instance.Return(-1, randomChild.gameObject);
             }
 
-            yield return null;
-
             if (!skipRearrange) {
+                yield return null;
                 yield return StartCoroutine(Rearrange3DCardsWithAnimation(cardPosition));
             }
         }

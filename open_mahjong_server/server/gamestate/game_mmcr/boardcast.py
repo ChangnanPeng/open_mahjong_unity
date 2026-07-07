@@ -4,6 +4,7 @@ import logging
 import asyncio
 import time
 from ..public.ai.auto_cut_ai import auto_cut_action
+from ..public.offline import offline_auto_action
 from ..public.ai.smart_bot_ai import smart_bot_action
 from ..game_guobiao.combination_mask_view import (
     sanitize_angang_mask,
@@ -138,7 +139,7 @@ async def broadcast_ask_hand_action(self):
             if "offline" in current_player.tag_list:
                 logger.info(f"玩家 {current_player.username} 已掉线，跳过广播")
                 if self.action_dict.get(i, []):
-                    asyncio.create_task(auto_cut_action(self, i, self.action_dict[i], bot_ask_hand_game_status(self, i)))
+                    asyncio.create_task(offline_auto_action(self, i, self.action_dict[i], bot_ask_hand_game_status(self, i)))
                 continue
             
             # 机器人 user_id < 10 整段视为机器人，分发对应 AI
@@ -215,7 +216,7 @@ async def broadcast_ask_other_action(self, remaining_time_override: Optional[int
             if "offline" in current_player.tag_list:
                 logger.info(f"玩家 {current_player.username} 已掉线，跳过广播")
                 if self.action_dict.get(i, []):
-                    asyncio.create_task(auto_cut_action(self, i, self.action_dict[i], self.game_status))
+                    asyncio.create_task(offline_auto_action(self, i, self.action_dict[i], self.game_status))
                 continue
             
             # 机器人 user_id < 10 整段视为机器人，分发对应 AI
