@@ -528,6 +528,10 @@ async def broadcast_result(self,
                           hepai_player_huapai: Optional[List[int]] = None,
                           hepai_player_combination_mask: Optional[List[List[int]]] = None,
                           score_changes: Optional[Dict[int, int]] = None,
+                          initial_hu_dice: Optional[List[int]] = None,
+                          initial_hu_bird_seats: Optional[List[int]] = None,
+                          initial_hu_payer_details: Optional[List[Dict]] = None,
+                          round_continues: Optional[bool] = None,
                           silent: bool = False):
     # 战术鸣牌：胡牌结算复用申请阶段的发声/动画，本次静默
     if not silent and getattr(self, "_tactical_silent_action", False):
@@ -564,6 +568,10 @@ async def broadcast_result(self,
                         hepai_player_combination_mask=hepai_player_combination_mask, # 和牌玩家组合掩码
                         action_tick=self.server_action_tick,
                         score_changes=score_changes,
+                        initial_hu_dice=initial_hu_dice,
+                        initial_hu_bird_seats=initial_hu_bird_seats,
+                        initial_hu_payer_details=initial_hu_payer_details,
+                        round_continues=round_continues,
                         silent=True if silent else None,
                     )
                 )

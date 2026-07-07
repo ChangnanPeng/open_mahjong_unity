@@ -194,8 +194,12 @@ class ChangshaGameState:
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
         self.forced_cut_tiles = []
+        self.pending_gang_replacement_hu_player_index = None
+        self.pending_gang_replacement_hu_tile = None
+        self.pending_gang_replacement_hu_hand = None
         self.current_claim_cut_tile = None
         self.initial_hu_types = {}
+        self.sea_bottom_candidates = []
         self.player_passed_hu_base = {}
         self.temp_fan = [] ###### 临时番数 不启用 暂时通过不同的和牌检测和给和牌检测传递is_first or if tiles_list == [] 来计算额外加减的役
 
@@ -212,7 +216,8 @@ class ChangshaGameState:
         "peng": 2, "gang": 2,  # 碰杠优先级 次高优先级
         "chi_left": 1, "chi_mid": 1, "chi_right": 1,
         "ready": 0,  # 准备操作优先级 最低优先级
-        "pass": 0,"cut":0,"buzhang":0,"angang":0,"jiagang":0,"deal_tile":0,"deal_gang_tile":0 # 其他优先级 最低优先级
+        "pass": 0,"cut":0,"buzhang":0,"angang":0,"jiagang":0,"deal_tile":0,"deal_gang_tile":0,
+        "initial_hu": 0, "sea_bottom": 0 # 其他优先级 最低优先级
         }
 
         self.backward_tiles_list_type = "double"
@@ -436,7 +441,13 @@ class ChangshaGameState:
         self.pending_gang_replacement_count = 0
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
+        self.forced_cut_tiles = []
+        self.pending_gang_replacement_hu_player_index = None
+        self.pending_gang_replacement_hu_tile = None
+        self.pending_gang_replacement_hu_hand = None
+        self.current_claim_cut_tile = None
         self.sea_bottom_player_index = None
+        self.sea_bottom_candidates = []
         self.initial_hu_types = {}
         self.player_passed_hu_base = {}
         for player in self.player_list:
@@ -453,7 +464,8 @@ class ChangshaGameState:
             if types:
                 self.initial_hu_types[player.player_index] = types
 
-    def _next_sea_bottom_player(self) -> Optional[int]:
+    def _sea_bottom_waiting_candidates(self) -> List[int]:
+        candidates = []
         for offset in range(1, 5):
             player_index = (self.current_player_index + offset) % 4
             player = self._player_by_index(player_index) if hasattr(self, "_player_by_index") else self.player_list[player_index]
@@ -470,8 +482,150 @@ class ChangshaGameState:
             else:
                 logger.info("长沙海底检查 player=%s waiting_tiles=%s", player_index, waiting_tiles)
             if player.waiting_tiles:
-                return player_index
-        return None
+                candidates.append(player_index)
+        return candidates
+
+    def _next_sea_bottom_player(self) -> Optional[int]:
+        candidates = ChangshaGameState._sea_bottom_waiting_candidates(self)
+        return candidates[0] if candidates else None
+
+    def _prepare_next_sea_bottom_choice(self) -> bool:
+        while self.sea_bottom_candidates:
+            player_index = self.sea_bottom_candidates.pop(0)
+            player = self._player_by_index(player_index)
+            if "peida" in player.tag_list:
+                continue
+            waiting_tiles = self.calculation_service.Changsha_tingpai_check(
+                player.hand_tiles,
+                player.combination_tiles,
+            )
+            player.waiting_tiles = waiting_tiles
+            if waiting_tiles:
+                self.current_player_index = player_index
+                self.action_dict = {0: [], 1: [], 2: [], 3: []}
+                self.action_dict[player_index] = ["sea_bottom", "pass"]
+                self.game_status = "waiting_sea_bottom"
+                return True
+        self.action_dict = {0: [], 1: [], 2: [], 3: []}
+        return False
+
+    def _roll_initial_hu_dice(self, player_index: int) -> List[int]:
+        seed = f"{self.round_random_seed}:{self.current_round}:initial_hu:{player_index}"
+        rng = random.Random(seed)
+        return [rng.randint(1, 6), rng.randint(1, 6)]
+
+    @staticmethod
+    def _initial_hu_dice_seat(player_index: int, die: int) -> int:
+        return (player_index + die - 1) % 4
+
+    def _score_initial_hu(self, winner: int, hu_types: List[str]):
+        dice = self._roll_initial_hu_dice(winner)
+        bird_seats = [self._initial_hu_dice_seat(winner, die) for die in dice]
+        payers = [p.player_index for p in self.player_list if p.player_index != winner]
+        total_win = 0
+        total_base = 0
+        payer_details = []
+
+        for payer in payers:
+            dealer_related = winner == 0 or payer == 0
+            base = self.calculation_service.Changsha_base_from_fans(["小胡"], dealer_related)
+            hit_count = sum(1 for seat in bird_seats if seat in (winner, payer))
+            multiplier = 2 ** hit_count
+            payment = base * multiplier
+            self._player_by_index(winner).score += payment
+            self._player_by_index(payer).score -= payment
+            total_win += payment
+            total_base += base
+            payer_details.append({
+                "payer": payer,
+                "base": base,
+                "hit_count": hit_count,
+                "multiplier": multiplier,
+                "payment": payment,
+            })
+
+        fan_display = list(hu_types or [])
+        fan_display.extend([
+            "起手胡",
+            "骰子:" + ",".join(str(die) for die in dice),
+            "骰子鸟位:" + ",".join(str(seat) for seat in bird_seats),
+        ])
+        return {
+            "actual_hu_score": total_win,
+            "base_score": total_base,
+            "dice": dice,
+            "bird_seats": bird_seats,
+            "fan_display": fan_display,
+            "payer_details": payer_details,
+        }
+
+    async def _settle_initial_hu(self, player_index: int) -> None:
+        hu_types = list(self.initial_hu_types.get(player_index, []))
+        if not hu_types:
+            return
+        scores_before = {player.original_player_index: player.score for player in self.player_list}
+        score_info = self._score_initial_hu(player_index, hu_types)
+        winner = self._player_by_index(player_index)
+        winner.record_counter.zimo_times += 1
+        winner.record_counter.recorded_fans.append(score_info["fan_display"])
+        winner.record_counter.win_score += score_info["actual_hu_score"]
+        player_to_score = {player.player_index: player.score for player in self.player_list}
+        score_changes_dict = build_score_changes_dict(self.player_list, scores_before)
+        await broadcast_result(
+            self,
+            hepai_player_index=player_index,
+            player_to_score=player_to_score,
+            hu_score=score_info["actual_hu_score"],
+            hu_fan=score_info["fan_display"],
+            hu_class="initial_hu",
+            hepai_player_hand=winner.hand_tiles,
+            hepai_player_huapai=winner.huapai_list,
+            hepai_player_combination_mask=winner.combination_mask,
+            score_changes=score_changes_dict,
+            initial_hu_dice=score_info["dice"],
+            initial_hu_bird_seats=score_info["bird_seats"],
+            initial_hu_payer_details=score_info["payer_details"],
+            round_continues=True,
+        )
+
+    async def _resolve_initial_hu_choices(self) -> None:
+        initial_players = sorted(self.initial_hu_types)
+        for player_index in initial_players:
+            if not self.initial_hu_types.get(player_index):
+                continue
+            self.current_player_index = player_index
+            self.action_dict = {0: [], 1: [], 2: [], 3: []}
+            self.action_dict[player_index] = ["initial_hu", "pass"]
+            self.game_status = "waiting_initial_hu"
+            await self.broadcast_ask_hand_action()
+            await self.wait_action()
+        self.current_player_index = 0
+        self.action_dict = {0: [], 1: [], 2: [], 3: []}
+
+    async def _take_sea_bottom_tile(self, player_index: int) -> None:
+        if not self.tiles_list:
+            self.game_status = "END"
+            return
+        self.current_player_index = player_index
+        self.sea_bottom_player_index = player_index
+        self.last_draw_was_gang = False
+        self.refresh_waiting_tiles(player_index)
+        player = self._player_by_index(player_index)
+        deal_tile = player.get_tile(self.tiles_list)
+        player_action_record_deal(self, deal_tile=deal_tile, deal_type="d")
+        await self.broadcast_do_action(
+            action_list=["deal_tile"],
+            action_player=player_index,
+            deal_tile=deal_tile,
+        )
+        self.action_dict = check_action_hand_action(self, player_index)
+        self.action_dict[player_index] = [
+            action for action in self.action_dict.get(player_index, [])
+            if action in ("hu_self", "cut")
+        ]
+        if "cut" not in self.action_dict[player_index]:
+            self.action_dict[player_index].append("cut")
+        self.game_status = "waiting_hand_action"
 
     def _make_player_next_dealer(self, dealer_index: int) -> None:
         for player in self.player_list:
@@ -489,6 +643,9 @@ class ChangshaGameState:
             return
         previous = self.player_passed_hu_base.get(player_index, 0)
         self.player_passed_hu_base[player_index] = max(previous, max(hu_bases))
+
+    def clear_hu_pass_after_own_discard(self, player_index: int) -> None:
+        self.player_passed_hu_base.pop(player_index, None)
 
     def _is_open_kong_ready_after_declared(self, player: ChangshaPlayer, tile: int) -> bool:
         normal_tile = normalize_tile(tile)
@@ -531,19 +688,44 @@ class ChangshaGameState:
         self.pending_gang_forced_discard = forced_discard and self.pending_gang_replacement_count > 0
         self.forced_cut_tile = None
         self.forced_cut_tiles = []
+        self.pending_gang_replacement_hu_player_index = None
+        self.pending_gang_replacement_hu_tile = None
+        self.pending_gang_replacement_hu_hand = None
         self.current_claim_cut_tile = None
+
+    def _remember_gang_replacement_hu_hand(self, player_index: int, pre_draw_hand_tiles: List[int], hu_tile: int) -> None:
+        self.pending_gang_replacement_hu_player_index = player_index
+        self.pending_gang_replacement_hu_tile = hu_tile
+        self.pending_gang_replacement_hu_hand = list(pre_draw_hand_tiles) + [hu_tile]
+
+    def _hepai_display_hand(self, player_index: int) -> List[int]:
+        if (
+            self.hu_class == "hu_self"
+            and getattr(self, "pending_gang_replacement_hu_player_index", None) == player_index
+            and getattr(self, "pending_gang_replacement_hu_hand", None)
+        ):
+            return list(self.pending_gang_replacement_hu_hand)
+        return self.player_list[player_index].hand_tiles
 
     def next_status_after_claim_window(self) -> str:
         if self.pending_gang_forced_discard and self.pending_gang_replacement_count > 0:
             self.forced_cut_tile = None
             self.forced_cut_tiles = []
+            self.pending_gang_replacement_hu_player_index = None
+            self.pending_gang_replacement_hu_tile = None
+            self.pending_gang_replacement_hu_hand = None
             self.current_claim_cut_tile = None
             return "deal_card_after_gang"
         self.pending_gang_replacement_count = 0
         self.pending_gang_forced_discard = False
         self.forced_cut_tile = None
         self.forced_cut_tiles = []
+        self.pending_gang_replacement_hu_player_index = None
+        self.pending_gang_replacement_hu_tile = None
+        self.pending_gang_replacement_hu_hand = None
         self.current_claim_cut_tile = None
+        if getattr(self, "tiles_list", None) == []:
+            return "END"
         return "deal_card"
 
     async def force_cut_gang_replacement_tiles(self) -> None:
@@ -553,6 +735,9 @@ class ChangshaGameState:
             forced_tiles = [forced_tile]
         if not forced_tiles:
             self.pending_gang_forced_discard = False
+            self.pending_gang_replacement_hu_player_index = None
+            self.pending_gang_replacement_hu_tile = None
+            self.pending_gang_replacement_hu_hand = None
             self.game_status = "deal_card"
             return
 
@@ -570,11 +755,16 @@ class ChangshaGameState:
         clear_draw_slot(player)
         self.forced_cut_tile = None
         self.forced_cut_tiles = []
+        self.pending_gang_replacement_hu_player_index = None
+        self.pending_gang_replacement_hu_tile = None
+        self.pending_gang_replacement_hu_hand = None
 
         for tile in forced_tiles:
             player.discard_tiles.append(tile)
             player_action_record_cut(self, cut_tile=tile, is_moqie=True)
 
+        if hasattr(self, "clear_hu_pass_after_own_discard"):
+            self.clear_hu_pass_after_own_discard(self.current_player_index)
         if self.current_player_index == 0:
             self.xunmu += 1
         refresh_waiting_tiles(self, self.current_player_index)
@@ -701,6 +891,9 @@ class ChangshaGameState:
             # 牌谱记录对局头
             init_game_round(self)
 
+            if self.initial_hu_types:
+                await self._resolve_initial_hu_choices()
+
             # 初始行为（长沙规则：庄家开局已为14张）
             self.game_status = "waiting_hand_action"  # 初始行动
             self.refresh_waiting_tiles(self.current_player_index, is_first_action=True) # 用庄家前13张手牌计算听牌
@@ -720,12 +913,10 @@ class ChangshaGameState:
                             self.game_status = "END" # 结束游戏
                             break
                         if len(self.tiles_list) == 1:
-                            sea_bottom_player = self._next_sea_bottom_player()
-                            if sea_bottom_player is None:
+                            self.sea_bottom_candidates = self._sea_bottom_waiting_candidates()
+                            if not self._prepare_next_sea_bottom_choice():
                                 self.game_status = "END"
-                                break
-                            self.sea_bottom_player_index = sea_bottom_player
-                            self.current_player_index = sea_bottom_player
+                            continue
                         else:
                             self.next_current_index() # 切换到下一个玩家
                         self.last_draw_was_gang = False
@@ -783,6 +974,12 @@ class ChangshaGameState:
                             if candidate_deal_tile in pre_draw_waiting_tiles and "hu_self" not in self.action_dict.get(self.current_player_index, []):
                                 player.hand_tiles = pre_draw_hand_tiles + [candidate_deal_tile]
                                 check_hepai(self,self.action_dict,candidate_deal_tile,self.current_player_index,"handgot",False,True)
+                                if "hu_self" in self.action_dict.get(self.current_player_index, []):
+                                    self._remember_gang_replacement_hu_hand(
+                                        self.current_player_index,
+                                        pre_draw_hand_tiles,
+                                        candidate_deal_tile,
+                                    )
                         player.hand_tiles = full_hand_tiles
                         if self.pending_gang_forced_discard:
                             self.forced_cut_tile = deal_tile
@@ -809,6 +1006,10 @@ class ChangshaGameState:
                     case "waiting_action_after_cut": # 出牌后询问碰杠和行为
                         await self.broadcast_ask_other_action() # 广播是否碰杠和
                         await self.wait_action() # 等待碰杠和操作
+
+                    case "waiting_sea_bottom":
+                        await self.broadcast_ask_hand_action()
+                        await self.wait_action()
 
                     # 等待加杠操作：
                     case "waiting_action_qianggang": # 加杠后询问胡牌行为
@@ -895,7 +1096,7 @@ class ChangshaGameState:
                 for i in self.player_list:
                     player_to_score[i.player_index] = i.score
                 # 获取和牌显示中的 手牌 花牌 组合掩码
-                he_hand = self.player_list[hepai_player_index].hand_tiles
+                he_hand = self._hepai_display_hand(hepai_player_index)
                 he_huapai = self.player_list[hepai_player_index].huapai_list
                 he_combination_mask = self.player_list[hepai_player_index].combination_mask
 

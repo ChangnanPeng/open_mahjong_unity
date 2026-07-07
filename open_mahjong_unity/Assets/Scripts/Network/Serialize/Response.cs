@@ -76,6 +76,9 @@ public class ShowResultInfo { // 显示结算结果
     public int? honba;                        // 本场数
     public int? riichi_sticks_collected;      // 和牌者收走的立直棒数
     public Dictionary<int, int> score_changes; // 点数变化 {original_player_index: delta}，全规则通用
+    public int[] initial_hu_dice;
+    public int[] initial_hu_bird_seats;
+    public Dictionary<string, int>[] initial_hu_payer_details;
     // 荒牌流局：各家听牌张 {player_index: [tile_id, ...]}，未听家不出现；以及是否发生不听罚符
     public Dictionary<int, int[]> tenpai_tiles;
     public Dictionary<int, int[]> tenpai_hands; // 荒牌流局：听牌家的实际手牌，用于倒牌展示

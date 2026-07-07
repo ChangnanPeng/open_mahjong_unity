@@ -89,6 +89,7 @@ public partial class GameCanvas : MonoBehaviour {
             case "hu_third":
                 return actionButtonColorPresets.hu;
             case "hu_self":
+            case "initial_hu":
                 return actionButtonColorPresets.huSelf;
             case "buhua":
                 return actionButtonColorPresets.buhua;
@@ -126,6 +127,7 @@ public partial class GameCanvas : MonoBehaviour {
 
     // 显示可用行动按钮
     public void SetActionButton(List<string> action_list){
+        bool isSeaBottomAsk = action_list.Contains("sea_bottom");
         // 用于跟踪吃牌按钮
         ActionButton chiButton = null;
         // 用于跟踪暗杠按钮
@@ -171,6 +173,22 @@ public partial class GameCanvas : MonoBehaviour {
                 TMP_Text buttonText = ActionButtonObj.TextObject;
                 buttonText.text = huSelfText;
                 Debug.Log($"{huSelfText}按钮: {ActionButtonObj}");
+                ActionButtonObj.actionTypeList.Add(action_list[i]);
+            }
+            else if (action_list[i] == "initial_hu"){
+                Debug.Log($"起手胡");
+                ActionButton ActionButtonObj = CreateActionButton(colorPreset);
+                TMP_Text buttonText = ActionButtonObj.TextObject;
+                buttonText.text = "起手胡";
+                Debug.Log($"起手胡按钮: {ActionButtonObj}");
+                ActionButtonObj.actionTypeList.Add(action_list[i]);
+            }
+            else if (action_list[i] == "sea_bottom"){
+                Debug.Log($"要海底");
+                ActionButton ActionButtonObj = CreateActionButton(colorPreset);
+                TMP_Text buttonText = ActionButtonObj.TextObject;
+                buttonText.text = "要海底";
+                Debug.Log($"要海底按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }
             else if (action_list[i] == "hu" || action_list[i] == "hu_first" || action_list[i] == "hu_second" || action_list[i] == "hu_third"){
@@ -255,7 +273,7 @@ public partial class GameCanvas : MonoBehaviour {
                 Debug.Log($"取消");
                 ActionButton ActionButtonObj = CreateActionButton(colorPreset);
                 TMP_Text buttonText = ActionButtonObj.TextObject;
-                buttonText.text = "取消";
+                buttonText.text = isSeaBottomAsk ? "不要" : "取消";
                 Debug.Log($"取消按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }

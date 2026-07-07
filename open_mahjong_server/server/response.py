@@ -204,6 +204,10 @@ class Show_result_info(BaseModel):
     liuju_step: Optional[str] = None  # 流局/终局演出：reveal_hu/settle_hu/chajiao/final（cha_refund 已并入 chajiao）
     liuju_status_final: Optional[bool] = None  # 流局逐家状态面板是否为最后一条（客户端在此条应用最终分数）
     liuju_refund: Optional[bool] = None  # 该查叫面板内含刮风下雨退税（客户端加“退税”标签并多停 0.5s）
+    # 长沙麻将起手胡骰子鸟预留字段
+    initial_hu_dice: Optional[List[int]] = None
+    initial_hu_bird_seats: Optional[List[int]] = None
+    initial_hu_payer_details: Optional[List[Dict]] = None
 
 class Show_shuhewei_info(BaseModel):
     player_fu: Dict[int, int]  # 各玩家副数 {player_index: fu}

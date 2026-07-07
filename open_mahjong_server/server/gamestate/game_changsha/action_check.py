@@ -142,11 +142,8 @@ def check_action_jiagang(self,jiagang_tile):
 def check_action_buhua(self,player_index):
     return {0:[],1:[],2:[],3:[]}
 
-# 摸牌后检查操作 和牌hu 暗杠angang 加杠jiagang 切牌cut
-def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_action=False):
-    temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
+def _append_self_kong_actions(self, temp_action_dict: Dict[int, list], player_index: int) -> None:
     player_item = self.player_list[player_index]
-
     # 如果牌堆内仍有牌则可以暗杠加杠
     if self.tiles_list != []:
         # 如果手牌中有4张相同的牌 则可以暗杠
@@ -169,6 +166,14 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
                         if hasattr(self, "_is_open_kong_ready_after_declared") and self._is_open_kong_ready_after_declared(player_item, jiagang_index):
                             _append_unique(temp_action_dict[player_index], "jiagang")
 
+
+# 摸牌后检查操作 和牌hu 暗杠angang 加杠jiagang 切牌cut
+def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_action=False):
+    temp_action_dict:Dict[int,list] = {0:[],1:[],2:[],3:[]}
+    player_item = self.player_list[player_index]
+
+    _append_self_kong_actions(self, temp_action_dict, player_index)
+
     # 摸牌后可以切牌
     temp_action_dict[player_index].append("cut")
 
@@ -183,11 +188,12 @@ def check_action_hand_action(self,player_index,is_get_gang_tile=False,is_first_a
 
     return temp_action_dict
 
-# 检查碰后手牌操作：长沙碰牌后直接出牌，避免出现无处理分支的杠按钮。
+# 检查吃碰后手牌操作：长沙吃碰后仍可立即补张/开杠，否则切牌。
 def check_only_cut(self, player_index):
     temp_action_dict: Dict[int, list] = {0: [], 1: [], 2: [], 3: []}
     player_item = self.player_list[player_index]
 
+    _append_self_kong_actions(self, temp_action_dict, player_index)
     temp_action_dict[player_index].append("cut")
 
     if "peida" in player_item.tag_list:
@@ -317,7 +323,7 @@ def check_hepai(self,temp_action_dict,hepai_tile,player_index,hepai_type,is_firs
 
     if result[0] >= 1:
         passed_base = getattr(self, "player_passed_hu_base", {}).get(player_index)
-        if passed_base is not None and result[0] <= passed_base:
+        if hepai_type != "handgot" and passed_base is not None and result[0] <= passed_base:
             logger.info(
                 f"玩家{player_index}已过同等或更低胡牌，跳过和牌提示 result={result[0]} passed={passed_base}"
             )

@@ -19,7 +19,7 @@ public partial class NormalGameStateManager {
         if (playerIndex == selfIndex){
             allowActionList.Clear();
             // 存储全部可用行动；riichi_cut 在 UI 上以「立直」按钮展示
-            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self" , "buzhang", "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
+            string[] AllowHandActionCheck = new string[] {"cut", "buhua", "hu_self", "initial_hu", "sea_bottom", "buzhang", "angang", "jiagang", "jiuzhongjiupai", "riichi_cut", "pass"};
             foreach (string action in action_list){
                 if (AllowHandActionCheck.Contains(action)){
                     allowActionList.Add(action);
@@ -135,8 +135,8 @@ public partial class NormalGameStateManager {
                             for (int i = 0; i < resolvedCutTiles.Length; i++) {
                                 int discardedTile = resolvedCutTiles[i];
                                 selfHandTiles.Remove(discardedTile);
-                                Game3DManager.Instance.Change3DTile("Discard",discardedTile,0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent && i == 0);
                             }
+                            Game3DManager.Instance.Change3DDiscardTiles(resolvedCutTiles, GetCardPlayer, cut_class.Value, isRiichiHorizontalCut, playCutPhysicsSound: !isSilent);
                             GameCanvas.Instance.ChangeHandCards("RemoveGetCards", 0, resolvedCutTiles, null);
                             break;
                         }
@@ -154,9 +154,7 @@ public partial class NormalGameStateManager {
                     }
                     else{
                         player_to_info[GetCardPlayer].hand_tiles_count -= resolvedCutTiles.Length;
-                        for (int i = 0; i < resolvedCutTiles.Length; i++) {
-                            Game3DManager.Instance.Change3DTile("Discard",resolvedCutTiles[i],0,GetCardPlayer,cut_class.Value,null,isRiichiHorizontalCut, playCutPhysicsSound: !isSilent && i == 0);
-                        }
+                        Game3DManager.Instance.Change3DDiscardTiles(resolvedCutTiles, GetCardPlayer, cut_class.Value, isRiichiHorizontalCut, playCutPhysicsSound: !isSilent);
                     } 
                     break;
 

@@ -294,6 +294,27 @@ async def wait_action(self):
 
     # 情形处理
     match self.game_status:
+        case "waiting_initial_hu":
+            if action_data and action_type == "initial_hu":
+                if hasattr(self, "_settle_initial_hu"):
+                    await self._settle_initial_hu(player_index)
+                return True
+            if action_data and action_type != "pass":
+                logger.error(f"起手胡阶段出现非法操作: action_type={action_type}, action_data={action_data}")
+            return True
+
+        case "waiting_sea_bottom":
+            if action_data and action_type == "sea_bottom":
+                if hasattr(self, "_take_sea_bottom_tile"):
+                    await self._take_sea_bottom_tile(player_index)
+                return True
+            if action_data and action_type not in ("pass", "sea_bottom"):
+                logger.error(f"海底漫游阶段出现非法操作: action_type={action_type}, action_data={action_data}")
+            if hasattr(self, "_prepare_next_sea_bottom_choice") and self._prepare_next_sea_bottom_choice():
+                return True
+            self.game_status = "END"
+            return True
+
         # 摸牌后手牌case 包含 切牌cut 暗杠gang 加杠jiagang 自摸hu
         # 长沙规则：不包含补花逻辑
         case "waiting_hand_action":
@@ -316,6 +337,8 @@ async def wait_action(self):
                     for cut_item in cut_tiles:
                         self.player_list[player_index].discard_tiles.append(cut_item)
                         player_action_record_cut(self,cut_tile = cut_item,is_moqie = is_moqie)
+                    if hasattr(self, "clear_hu_pass_after_own_discard"):
+                        self.clear_hu_pass_after_own_discard(player_index)
                     # broadcast cut
                     if self.current_player_index == 0:
                         self.xunmu += 1
@@ -472,6 +495,8 @@ async def wait_action(self):
                 for cut_item in cut_tiles:
                     self.player_list[self.current_player_index].discard_tiles.append(cut_item)
                     player_action_record_cut(self,cut_tile = cut_item,is_moqie = is_moqie)
+                if hasattr(self, "clear_hu_pass_after_own_discard"):
+                    self.clear_hu_pass_after_own_discard(self.current_player_index)
                 # broadcast cut
                 if self.current_player_index == 0:
                     self.xunmu += 1
@@ -673,13 +698,56 @@ async def wait_action(self):
         # 在转移行为以后只能进行切牌操作
         case "onlycut_after_action":
             if action_data:
-                if action_type == "cut": # 切牌
+                if action_type == "buzhang":
+                    buzhang_tile = action_data.get("target_tile")
+                    normal_buzhang = normalize_tile(buzhang_tile)
+                    player = self.player_list[self.current_player_index]
+                    if _has_jiagang_target(player, normal_buzhang):
+                        await _execute_jiagang_replacement(self, self.current_player_index, buzhang_tile, "buzhang", 1, False)
+                    else:
+                        await _execute_angang_replacement(self, self.current_player_index, buzhang_tile, "buzhang", 1, False)
+                    return
+
+                elif action_type == "angang":
+                    angang_tile = action_data.get("target_tile")
+                    normal_angang = normalize_tile(angang_tile)
+                    player = self.player_list[self.current_player_index]
+                    is_open_kong = (
+                        hasattr(self, "_is_open_kong_ready_after_declared")
+                        and self._is_open_kong_ready_after_declared(player, normal_angang)
+                    )
+                    replacement_count = getattr(self, "open_kong_replacement_count", 2) if is_open_kong else 1
+                    await _execute_angang_replacement(
+                        self,
+                        self.current_player_index,
+                        angang_tile,
+                        "angang",
+                        replacement_count,
+                        is_open_kong,
+                    )
+                    return
+
+                elif action_type == "jiagang":
+                    jiagang_tile = action_data.get("target_tile")
+                    await _execute_jiagang_replacement(
+                        self,
+                        self.current_player_index,
+                        jiagang_tile,
+                        "jiagang",
+                        getattr(self, "open_kong_replacement_count", 2),
+                        True,
+                    )
+                    return
+
+                elif action_type == "cut": # 切牌
                     cut_result = await apply_player_cut(self, self.current_player_index, action_data)
                     if cut_result is None:
                         return
                     tile_id, is_moqie, cut_tile_index = cut_result
                     self.player_list[self.current_player_index].discard_tiles.append(tile_id)
                     player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
+                    if hasattr(self, "clear_hu_pass_after_own_discard"):
+                        self.clear_hu_pass_after_own_discard(self.current_player_index)
                     # 广播切牌动画
                     refresh_waiting_tiles(self, self.current_player_index)
                     pre_action_dict = check_action_after_cut(self, tile_id)
@@ -693,7 +761,7 @@ async def wait_action(self):
                         self.game_status = "deal_card" # 历时行为
                     return
                 else:
-                    raise ValueError("在转移行为onlycut_afteraction阶段出现非cut的值")
+                    raise ValueError("在转移行为onlycut_afteraction阶段出现非cut/buzhang/angang/jiagang的值")
             # 超时自动出牌（碰后无摸牌区，按牌值手切）
             else:
                 player = self.player_list[self.current_player_index]
@@ -705,6 +773,8 @@ async def wait_action(self):
                 self.player_list[self.current_player_index].discard_tiles.append(tile_id)
                 # 牌谱记录摸切
                 player_action_record_cut(self,cut_tile = tile_id,is_moqie = is_moqie)
+                if hasattr(self, "clear_hu_pass_after_own_discard"):
+                    self.clear_hu_pass_after_own_discard(self.current_player_index)
                 refresh_waiting_tiles(self,self.current_player_index) # 更新听牌
                 pre_action_dict = check_action_after_cut(self,tile_id)
                 self.last_draw_was_gang = False
