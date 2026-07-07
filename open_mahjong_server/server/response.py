@@ -92,6 +92,7 @@ class Ask_hand_action_info(BaseModel):
     remain_tiles: int
     action_list: List[str]
     action_tick: int
+    forced_cut_tiles: Optional[List[int]] = None
     # 立直麻将：可立直切牌候选 {tile_id: [waiting_tile, ...]}，仅当 action_list 含 riichi_cut 时下发
     riichi_candidate_cuts: Optional[Dict[int, List[int]]] = None
     # 立直麻将：吃后切牌阶段，本家被禁切的牌（食替规则：吃来源 + 两面搭子的筋）；客户端用于变暗与禁点

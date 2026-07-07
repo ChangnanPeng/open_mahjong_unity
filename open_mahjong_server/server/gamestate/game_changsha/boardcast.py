@@ -137,6 +137,10 @@ async def broadcast_game_start(self):
 async def broadcast_ask_hand_action(self):
     self.server_action_tick += 1
     self._ask_broadcast_time = time.time()  # 供重连补发时按经过时间重算剩余时间，与观战独立
+    forced_cut_tiles = list(getattr(self, "forced_cut_tiles", []) or [])
+    forced_cut_tile = getattr(self, "forced_cut_tile", None)
+    if not forced_cut_tiles and forced_cut_tile is not None:
+        forced_cut_tiles = [forced_cut_tile]
     # 遍历列表时获取索引
     for i, current_player in enumerate(self.player_list):
         try:
@@ -172,7 +176,8 @@ async def broadcast_ask_hand_action(self):
                             player_index= self.current_player_index,
                             remain_tiles=len(self.tiles_list),
                             action_list=self.action_dict[i],
-                            action_tick=self.server_action_tick
+                            action_tick=self.server_action_tick,
+                            forced_cut_tiles=forced_cut_tiles or None
                         )
                     )
                     await player_conn.websocket.send_json(response.dict(exclude_none=True))

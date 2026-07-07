@@ -612,6 +612,8 @@ class ChangshaGameState:
         self.refresh_waiting_tiles(player_index)
         player = self._player_by_index(player_index)
         deal_tile = player.get_tile(self.tiles_list)
+        self.forced_cut_tile = deal_tile
+        self.forced_cut_tiles = [deal_tile]
         player_action_record_deal(self, deal_tile=deal_tile, deal_type="d")
         await self.broadcast_do_action(
             action_list=["deal_tile"],

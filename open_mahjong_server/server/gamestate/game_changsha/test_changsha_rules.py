@@ -881,6 +881,53 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertFalse(ChangshaGameState._prepare_next_sea_bottom_choice(state))
         self.assertEqual(state.action_dict, {0: [], 1: [], 2: [], 3: []})
 
+    def test_sea_bottom_take_marks_last_tile_as_forced_cut(self):
+        player = DummyPlayer(1, [11, 12, 13], waiting_tiles=[24])
+        state = SimpleNamespace(
+            player_list=[DummyPlayer(0), player, DummyPlayer(2), DummyPlayer(3)],
+            tiles_list=[25],
+            current_player_index=0,
+            action_dict={0: [], 1: [], 2: [], 3: []},
+            calculation_service=FixedTingpai([24]),
+        )
+        state._player_by_index = lambda index: ChangshaGameState._player_by_index(state, index)
+        state.refresh_waiting_tiles = lambda index: None
+        payloads = []
+
+        async def capture_broadcast(**kwargs):
+            payloads.append(kwargs)
+
+        state.broadcast_do_action = capture_broadcast
+
+        with patch.object(changsha_state_module, "player_action_record_deal", lambda *args, **kwargs: None):
+            asyncio.run(ChangshaGameState._take_sea_bottom_tile(state, 1))
+
+        self.assertEqual(player.hand_tiles, [11, 12, 13, 25])
+        self.assertTrue(player.has_draw_slot)
+        self.assertEqual(state.forced_cut_tile, 25)
+        self.assertEqual(state.forced_cut_tiles, [25])
+        self.assertEqual(state.action_dict[1], ["cut"])
+        self.assertEqual(state.game_status, "waiting_hand_action")
+        self.assertEqual(payloads[0]["action_list"], ["deal_tile"])
+        self.assertEqual(payloads[0]["deal_tile"], 25)
+
+    def test_forced_cut_consumes_sea_bottom_tile_instead_of_clicked_hand_tile(self):
+        player = DummyPlayer(1, [11, 12, 13, 25])
+        player.has_draw_slot = True
+        state = SimpleNamespace(
+            player_list=[DummyPlayer(0), player, DummyPlayer(2), DummyPlayer(3)],
+            forced_cut_tile=25,
+            forced_cut_tiles=[25],
+        )
+
+        cut_tiles = wait_action_module._consume_forced_gang_cut_tiles(state, 1)
+
+        self.assertEqual(cut_tiles, [25])
+        self.assertEqual(player.hand_tiles, [11, 12, 13])
+        self.assertFalse(player.has_draw_slot)
+        self.assertIsNone(state.forced_cut_tile)
+        self.assertEqual(state.forced_cut_tiles, [])
+
     def test_sea_bottom_discard_without_win_ends_after_claim_window(self):
         state = SimpleNamespace(
             pending_gang_forced_discard=False,

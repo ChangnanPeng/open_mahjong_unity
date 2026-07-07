@@ -150,7 +150,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             handresponse.remain_tiles,
             handresponse.action_list,
             handresponse.riichi_candidate_cuts,
-            handresponse.forbidden_cut_tiles
+            handresponse.forbidden_cut_tiles,
+            handresponse.forced_cut_tiles
         );
     }
     

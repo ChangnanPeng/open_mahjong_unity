@@ -128,6 +128,8 @@ public partial class NormalGameStateManager : MonoBehaviour{
     public Dictionary<int, int[]> selfRiichiCandidateCuts = new Dictionary<int, int[]>();
     /// <summary>立直麻将：当前自家本巡食替禁切牌列表（吃来源 + 两面搭子的筋）。</summary>
     public HashSet<int> selfForbiddenCutTiles = new HashSet<int>();
+    /// <summary>强制出牌列表：长沙海底/开杠补张只能打这些摸入牌。</summary>
+    public HashSet<int> selfForcedCutTiles = new HashSet<int>();
     /// <summary>当前一轮询问切牌后操作下发的吃牌候选（立直麻将赤宝牌场景）。</summary>
     public Dictionary<string, int[][]> chiCandidates = new Dictionary<string, int[][]>();
 
