@@ -313,6 +313,19 @@ public partial class Game3DManager : MonoBehaviour {
         return NetworkManager.Instance != null && NetworkManager.Instance.IsBacklogged;
     }
 
+    public void Change3DDiscardTiles(int[] tileIds, string PlayerPosition, bool cut_class, bool isRiichi = false, bool playCutPhysicsSound = false) {
+        if (tileIds == null || tileIds.Length == 0) {
+            return;
+        }
+        if (tileIds.Length == 1 && !HasPendingHandAnimWork(PlayerPosition)) {
+            Change3DTile("Discard", tileIds[0], 0, PlayerPosition, cut_class, null, isRiichi, playCutPhysicsSound: playCutPhysicsSound);
+            return;
+        }
+        for (int i = 0; i < tileIds.Length; i++) {
+            EnqueueDiscardHandWork(PlayerPosition, tileIds[i], cut_class, isRiichi, playCutPhysicsSound && i == 0);
+        }
+    }
+
     public void Change3DTile(string actionType,int tileId,int removeCount,string PlayerPosition,bool cut_class,int[] combination_mask, bool isRiichi = false, bool isMoGang = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0, string meldFeedbackAction = null, string meldFeedbackRoomRule = null){
         // 牌谱重建/重连的无动画分支直接执行，避免队列协程逐帧处理
         if (actionType == "SetDiscardWithoutAnimation" || actionType == "SetBuhuacardWithoutAnimation" || actionType == "SetRecordDiscardWithoutAnimation"){
@@ -348,6 +361,10 @@ public partial class Game3DManager : MonoBehaviour {
         // 加杠把 isMoGang 传入 cut_class 位；暗杠走命名参数 isMoGang
         bool queueMoGang = actionType == "jiagang" ? cut_class : isMoGang;
         if (TryEnqueueAnkanHandChange(actionType, tileId, removeCount, PlayerPosition, combination_mask, queueMoGang)) {
+            return;
+        }
+        if (actionType == "Discard" && HasPendingHandAnimWork(PlayerPosition)) {
+            EnqueueDiscardHandWork(PlayerPosition, tileId, cut_class, isRiichi, playCutPhysicsSound);
             return;
         }
 

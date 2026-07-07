@@ -48,6 +48,11 @@ async def smart_bot_action(game_state, player_index: int, action_list: list, gam
     try:
         current_player = game_state.player_list[player_index]
 
+        if game_status in ("waiting_initial_hu", "waiting_sea_bottom"):
+            if "pass" in action_list and await _wait_until_actionable(game_state, player_index):
+                await get_ai_action(game_state, player_index, "pass", None, None, None, None)
+            return
+
         if game_status == "waiting_hand_action":
             await asyncio.sleep(_BOT_DELAY)
             await _handle_hand_action(game_state, player_index, action_list, current_player)

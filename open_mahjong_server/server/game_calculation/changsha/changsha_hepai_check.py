@@ -24,12 +24,20 @@ BIG_HU_NAMES = {
     "全求人",
     "七小对",
     "豪华七小对",
+    "双豪华七小对",
+    "三豪华七小对",
     "天胡",
     "地胡",
     "海底",
     "杠上开花",
     "杠上炮",
     "抢杠胡",
+}
+
+BIG_HU_WEIGHTS = {
+    "豪华七小对": 2,
+    "双豪华七小对": 3,
+    "三豪华七小对": 4,
 }
 
 INITIAL_HU_NAMES = {
@@ -66,7 +74,7 @@ def evaluate_changsha_initial_hu(tiles: List[int]) -> List[str]:
         return []
 
     result: List[str] = []
-    if any(count == 4 for count in counts.values()):
+    if any(count >= 4 for count in counts.values()):
         result.append(INITIAL_HU_NAMES["siXi"])
     if all(not _is_jiang(tile) for tile in tiles):
         result.append(INITIAL_HU_NAMES["banBanHu"])
@@ -194,7 +202,14 @@ def _seven_pairs_type(hand_list: List[int], tiles_combination: List[str]) -> str
         return "none"
     if sum(c // 2 for c in counts) != 7:
         return "none"
-    return "luxury" if any(c == 4 for c in counts) else "normal"
+    quad_count = sum(1 for c in counts if c == 4)
+    if quad_count >= 3:
+        return "triple_luxury"
+    if quad_count == 2:
+        return "double_luxury"
+    if quad_count == 1:
+        return "luxury"
+    return "normal"
 
 
 def _has_winning_shape(hand_list: List[int], tiles_combination: List[str]) -> bool:
@@ -224,7 +239,7 @@ def _append_context_fans(names: List[str], has_shape: bool, way_to_hepai: List[s
     token_to_name = (
         (("天胡", "天和"), "天胡"),
         (("地胡", "地和"), "地胡"),
-        (("海底", "海底捞月", "海底漫游"), "海底"),
+        (("海底", "海底捞月", "海底漫游", "河底捞鱼"), "海底"),
         (("杠上开花", "杠上花"), "杠上开花"),
         (("杠上炮",), "杠上炮"),
         (("抢杠胡", "抢杠和", "抢杠"), "抢杠胡"),
@@ -238,7 +253,7 @@ def changsha_base_from_fans(fan_list: List[str], dealer_related: bool = False) -
     """Return one payer's base payment before bird multipliers."""
     if not fan_list:
         return 0
-    big_count = sum(1 for name in fan_list if name in BIG_HU_NAMES)
+    big_count = sum(BIG_HU_WEIGHTS.get(name, 1) for name in fan_list if name in BIG_HU_NAMES)
     if big_count > 0:
         return (7 if dealer_related else 6) * big_count
     if "小胡" in fan_list:
@@ -284,6 +299,10 @@ class Changsha_Hepai_Check:
             big_names.append("七小对")
         elif seven_pairs == "luxury":
             big_names.append("豪华七小对")
+        elif seven_pairs == "double_luxury":
+            big_names.append("双豪华七小对")
+        elif seven_pairs == "triple_luxury":
+            big_names.append("三豪华七小对")
 
         _append_context_fans(big_names, has_shape, ways)
 

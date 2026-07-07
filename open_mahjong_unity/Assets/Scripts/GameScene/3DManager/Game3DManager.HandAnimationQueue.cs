@@ -11,6 +11,7 @@ public partial class Game3DManager {
         RemoveCards,
         Rearrange,
         DrawCard,
+        DiscardTile,
     }
 
     private sealed class HandAnimOp {
@@ -20,6 +21,8 @@ public partial class Game3DManager {
         public int RemoveCount;
         public bool CutClass;
         public int[] CombinationMask;
+        public bool IsRiichi;
+        public bool PlayCutPhysicsSound;
     }
 
     private static readonly string[] HandAnimPlayerPositions = { "self", "left", "top", "right" };
@@ -88,6 +91,16 @@ public partial class Game3DManager {
         _handAnimProcessors[playerPosition] = StartCoroutine(RunHandAnimQueue(playerPosition));
     }
 
+    private bool HasPendingHandAnimWork(string playerPosition) {
+        if (!IsHandAnimPlayer(playerPosition)) {
+            return false;
+        }
+        if (_handAnimQueues.TryGetValue(playerPosition, out Queue<HandAnimOp> queue) && queue.Count > 0) {
+            return true;
+        }
+        return _handAnimProcessors.TryGetValue(playerPosition, out Coroutine running) && running != null;
+    }
+
     private IEnumerator RunHandAnimQueue(string playerPosition) {
         Queue<HandAnimOp> queue = _handAnimQueues[playerPosition];
         while (queue.Count > 0) {
@@ -116,6 +129,9 @@ public partial class Game3DManager {
                 }
                 yield return Get3DTileCoroutine(op.PlayerPosition, "get", op.TileId);
                 break;
+            case HandAnimOpKind.DiscardTile:
+                yield return DiscardTileFromQueue(panel, op);
+                break;
         }
     }
 
@@ -126,6 +142,29 @@ public partial class Game3DManager {
         else {
             yield return RemoveHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true, op.PlayerPosition);
         }
+    }
+
+    private IEnumerator DiscardTileFromQueue(PosPanel3D panel, HandAnimOp op) {
+        if (IsRecordShowCardsModeActive() && op.PlayerPosition != "self") {
+            yield return RecordDiscardShowCardsCoroutine(op.PlayerPosition, op.TileId, op.CutClass, op.IsRiichi);
+            yield break;
+        }
+
+        if (IsSelfCardsPosition(panel.cardsPosition)) {
+            yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, op.CutClass, op.TileId, null, skipRearrange: true, op.PlayerPosition);
+        }
+        else {
+            yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, op.CutClass, op.TileId, null, skipRearrange: true, op.PlayerPosition);
+        }
+        if (op.PlayCutPhysicsSound) {
+            SoundManager.Instance.PlayPhysicsSound("cut");
+        }
+        bool moqieGrayOnDiscard = ShouldApplyMoqieDiscardGray(op.CutClass);
+        yield return Set3DTileCoroutine(op.TileId, panel.discardsPosition, "Discard", op.PlayerPosition, moqieGrayOnDiscard, isRiichi: op.IsRiichi);
+        if (op.PlayerPosition != "self" && DiscardSettlePauseSec > 0f) {
+            yield return new WaitForSeconds(DiscardSettlePauseSec);
+        }
+        yield return Rearrange3DCardsWithAnimation(panel.cardsPosition);
     }
 
     private void EnqueueAnkanHandWork(string playerPosition, int[] combinationMask, bool isMoGang = false, int angangTileId = 0) {
@@ -157,6 +196,17 @@ public partial class Game3DManager {
         EnqueueHandAnimOp(playerPosition, new HandAnimOp {
             Kind = HandAnimOpKind.DrawCard,
             TileId = tileId,
+        });
+    }
+
+    private void EnqueueDiscardHandWork(string playerPosition, int tileId, bool cutClass, bool isRiichi, bool playCutPhysicsSound) {
+        EnqueueHandAnimOp(playerPosition, new HandAnimOp {
+            Kind = HandAnimOpKind.DiscardTile,
+            TileId = tileId,
+            RemoveCount = 1,
+            CutClass = cutClass,
+            IsRiichi = isRiichi,
+            PlayCutPhysicsSound = playCutPhysicsSound,
         });
     }
 
@@ -301,7 +351,7 @@ public partial class Game3DManager {
             EnqueueJiagangHandWork(playerPosition, jiagangTileId, isMoGang);
             return true;
         }
-        if (actionType == "GetCard" && _ankanPendingDrawByPlayer[playerPosition]) {
+        if (actionType == "GetCard" && (_ankanPendingDrawByPlayer[playerPosition] || HasPendingHandAnimWork(playerPosition))) {
             if (IsRecordShowCardsModeActive() && playerPosition != "self") {
                 StartCoroutine(RecordShowCardGetCoroutine(playerPosition, tileId));
                 _ankanPendingDrawByPlayer[playerPosition] = false;
