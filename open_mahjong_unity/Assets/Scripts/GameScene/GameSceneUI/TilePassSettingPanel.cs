@@ -5,9 +5,10 @@ using TMPro;
 
 /// <summary>
 /// 牌张设置子面板。
-/// - 勾选牌张：命中河牌/加杠牌时不询问任何操作（含荣和/抢杠）。
+/// - 勾选牌张：命中河牌/加杠牌时不询问任何操作（含荣和/抢杠）；命中摸入牌时不自动自摸。
 /// - 不吃/不碰/不明杠：逐项过滤对应鸣牌，不过和牌；三者全选时与主面板「自动过牌」联动。
-/// - 不点和/不自摸/不抢杠：仅在「自动胡牌」开启时，分别阻止自动荣和/自摸/抢杠和。
+/// - 不点和：阻止自动荣和，并将点和纳入自动过牌判定（与未过滤鸣牌并存时不跳过，等待玩家）。
+/// - 不自摸/不抢杠：仅在「自动胡牌」开启时，分别阻止自动自摸/抢杠和。
 /// </summary>
 public class TilePassSettingPanel : MonoBehaviour {
     private static readonly int[][] RowTileIds = {
@@ -136,7 +137,16 @@ public class TilePassSettingPanel : MonoBehaviour {
     public bool ShouldAutoPassForCurrentDiscard() {
         NormalGameStateManager gsm = NormalGameStateManager.Instance;
         if (gsm == null || gsm.currentAskCutTileId <= 0) return false;
-        return passTileIds.Contains(gsm.currentAskCutTileId);
+        return IsPassTile(gsm.currentAskCutTileId);
+    }
+
+    /// <summary>摸入牌是否在跳过列表中（命中则跳过自动自摸，仍可手动和牌）。</summary>
+    public bool ShouldAutoPassForDrawnTile(int drawnTileId) {
+        return IsPassTile(drawnTileId);
+    }
+
+    private bool IsPassTile(int tileId) {
+        return tileId > 0 && passTileIds.Contains(tileId);
     }
 
     private void WireIfNeeded() {

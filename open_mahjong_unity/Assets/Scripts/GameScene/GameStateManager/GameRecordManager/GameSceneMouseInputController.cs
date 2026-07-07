@@ -50,6 +50,8 @@ public class GameSceneMouseInputController : MonoBehaviour {
     private string _rightPressSnapshotPhase = InputPhaseNone;
     private bool _rightPressMoqieEligible;
     private bool _rightPressPassEligible;
+    /// <summary>本次右键按住期间是否已消费过快捷操作（按下路径 pass/摸切后，抬起路径不再重复触发）。</summary>
+    private bool _rightHoldShortcutConsumed;
 
     private readonly List<RaycastResult> _uiRaycastResults = new List<RaycastResult>(16);
     private PointerEventData _pointerEventData;
@@ -146,10 +148,11 @@ public class GameSceneMouseInputController : MonoBehaviour {
     }
 
     private void LateUpdate() {
-        if (state == StateGame && !Input.GetMouseButton(1)) {
+        if (!Input.GetMouseButton(1)) {
             _rightPressSnapshotPhase = InputPhaseNone;
             _rightPressMoqieEligible = false;
             _rightPressPassEligible = false;
+            _rightHoldShortcutConsumed = false;
         }
     }
 
@@ -160,13 +163,13 @@ public class GameSceneMouseInputController : MonoBehaviour {
         if (actionInputPhase == InputPhaseAskHand && gsm.allowActionList.Contains("cut")) {
             if (cfg.MoqieShortcutMode == 1) {
                 if (Input.GetMouseButtonDown(1) && TryConsumeRightClickShortcut()) {
-                    TryAutoMoqieFromSelfHand();
+                    TryAutoMoqieFromSelfHand("Update按下路径", markRightHold: true);
                 }
             } else if (cfg.MoqieShortcutMode == 0) {
                 if (Input.GetMouseButtonDown(0) && !IsPointerOverSelfHandCard()) {
                     float t = Time.unscaledTime;
                     if (t - _lastLeftClickTime <= DoubleClickThreshold) {
-                        TryAutoMoqieFromSelfHand();
+                        TryAutoMoqieFromSelfHand("Update双击路径", markRightHold: false);
                         _lastLeftClickTime = -1f;
                     } else {
                         _lastLeftClickTime = t;
@@ -176,7 +179,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
         } else if (actionInputPhase == InputPhaseAskOther && gsm.allowActionList.Contains("pass")) {
             if (cfg.AskOtherPassShortcutMode == 0) {
                 if (Input.GetMouseButtonDown(1) && TryConsumeRightClickShortcut()) {
-                    GameCanvas.Instance.TrySendPassFromShortcut();
+                    TrySendPassFromShortcut("Update按下路径");
                 }
             } else if (cfg.AskOtherPassShortcutMode == 1) {
                 if (Input.GetMouseButtonDown(0)) {
@@ -271,6 +274,14 @@ public class GameSceneMouseInputController : MonoBehaviour {
             NormalGameStateManager gsm = NormalGameStateManager.Instance;
             ConfigManager cfg = ConfigManager.Instance;
             if (eventData.button == PointerEventData.InputButton.Right) {
+                if (_rightHoldShortcutConsumed) {
+                    Debug.Log("[HandInput] 右键抬起路径已跳过：本次按住已在按下路径消费快捷操作");
+                    _rightPressSnapshotPhase = InputPhaseNone;
+                    _rightPressMoqieEligible = false;
+                    _rightPressPassEligible = false;
+                    return;
+                }
+
                 string pressPhase = _rightPressSnapshotPhase;
                 string releasePhase = actionInputPhase;
                 // 手牌抬起时若未拿到按下快照（excludeRect / 脚本顺序），用抬起瞬间的 phase 兜底摸切/过牌资格。
@@ -281,13 +292,11 @@ public class GameSceneMouseInputController : MonoBehaviour {
                 Debug.Log($"[HandInput] 手牌右键抬起 | pressPhase={pressPhase} | releasePhase={releasePhase} | moqieEligible={moqieEligible} | passEligible={passEligible}");
                 if (moqieEligible) {
                     if (cfg.MoqieShortcutMode == 1 && TryConsumeRightClickShortcut()) {
-                        Debug.Log("[HandInput] 触发摸切(手牌抬起路径)");
-                        TryAutoMoqieFromSelfHand();
+                        TryAutoMoqieFromSelfHand("手牌抬起路径", markRightHold: true);
                     }
                 } else if (passEligible) {
                     if (cfg.AskOtherPassShortcutMode == 0 && TryConsumeRightClickShortcut()) {
-                        Debug.Log("[HandInput] 触发过牌(手牌抬起路径)");
-                        GameCanvas.Instance.TrySendPassFromShortcut();
+                        TrySendPassFromShortcut("手牌抬起路径");
                     }
                 } else if (pressPhase != InputPhaseNone && pressPhase != releasePhase) {
                     Debug.LogWarning($"[HandInput] 拦截跨阶段右键抬起 | pressPhase={pressPhase} | releasePhase={releasePhase}");
@@ -300,7 +309,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
             if (actionInputPhase == InputPhaseAskHand && gsm.allowActionList.Contains("cut")) {
                 if (cfg.MoqieShortcutMode == 0) {
                     if (eventData.button == PointerEventData.InputButton.Left && eventData.clickCount >= 2) {
-                        TryAutoMoqieFromSelfHand();
+                        TryAutoMoqieFromSelfHand("手牌双击路径", markRightHold: false);
                     }
                 }
             } else if (actionInputPhase == InputPhaseAskOther && gsm.allowActionList.Contains("pass")) {
@@ -342,9 +351,26 @@ public class GameSceneMouseInputController : MonoBehaviour {
         return true;
     }
 
-    private void TryAutoMoqieFromSelfHand() {
-        Debug.Log("[HandInput] 触发摸切(Update按下路径)");
-        if (GameCanvas.Instance.TriggerMoqieHandCardClick()) return;
+    private void MarkRightHoldShortcutConsumed(string source) {
+        _rightHoldShortcutConsumed = true;
+        Debug.Log($"[HandInput] 右键按住会话已消费 | 来源={source}");
+    }
+
+    private void TrySendPassFromShortcut(string source) {
+        if (GameCanvas.Instance == null) return;
+        if (!NormalGameStateManager.Instance.allowActionList.Contains("pass")) return;
+        GameCanvas.Instance.TrySendPassFromShortcut();
+        MarkRightHoldShortcutConsumed(source);
+    }
+
+    private void TryAutoMoqieFromSelfHand(string source, bool markRightHold) {
+        Debug.Log($"[HandInput] 触发摸切({source})");
+        if (GameCanvas.Instance.TriggerMoqieHandCardClick()) {
+            if (markRightHold) {
+                MarkRightHoldShortcutConsumed(source);
+            }
+            return;
+        }
         Debug.LogWarning("[HandInput] 摸切失败：手牌容器中没有可出的牌");
     }
 

@@ -613,10 +613,10 @@ public class PlayerInfoPanel : MonoBehaviour {
             gameStatsList.Add(new KeyValuePair<string, string>("平均顺位", "0.00"));
         }
 
-        // 副露率（副露局数 / 累计回合数 / 4，四人麻将每局四席）
+        // 副露率（副露局数 / 累计回合数）
         int? fuluRounds = stats.fulu_round_count ?? 0;
         if (totalRounds > 0) {
-            float fuluRate = (float)fuluRounds.Value / (totalRounds.Value * 4f) * 100f;
+            float fuluRate = (float)fuluRounds.Value / totalRounds.Value * 100f;
             gameStatsList.Add(new KeyValuePair<string, string>("副露率", $"{fuluRate:F2}%"));
         }
         else {

@@ -45,7 +45,7 @@
       <el-button type="primary" size="small" @click="searchPlayer()" :loading="loading">查询</el-button>
       <el-button size="small" @click="resetForm">重置</el-button>
     </div>
-    <p class="page-quota-tip">每日分析每个 IP 仅 1 次机会（凌晨 4 点刷新）；牌谱下载每个 IP 限 10 次/天</p>
+    <p class="page-quota-tip">{{ pageQuotaTip }}</p>
 
     <div v-if="playerInfo" class="data-display">
       <!-- 用户信息条 -->
@@ -119,31 +119,29 @@
 
       <!-- 数据统计 -->
       <div class="stats-area">
-        <template v-if="activeStats">
+        <template v-if="showStatsTable">
           <div class="stats-table">
             <div class="stats-row" v-for="item in statsDisplay" :key="item.label">
               <span class="stats-label">{{ item.label }}</span>
               <span class="stats-value">{{ item.value }}</span>
             </div>
           </div>
-          <div v-if="!prestoredAvailable" class="stats-source-tag">本地分析</div>
+          <div v-if="analyzedStats" class="stats-source-tag">本地分析</div>
         </template>
-        <template v-else>
-          <div class="no-prestored">
-            <span>没有预存数据，可使用「每日分析」在本地计算统计</span>
-            <p class="quota-tip analyze-quota">每个 IP 每天仅 1 次分析机会，凌晨 4 点刷新；单次最多 500 局</p>
-            <el-button
-              size="small"
-              type="primary"
-              :loading="analyzing"
-              @click="runDailyAnalysis"
-            >每日分析（今日 1 次）</el-button>
-          </div>
-        </template>
+        <div v-if="needsLocalAnalysis" class="no-prestored" :class="{ compact: showStatsTable }">
+          <span>没有预存数据，可使用「每日分析」在本地计算统计</span>
+          <p class="quota-tip analyze-quota">{{ analyzeQuotaTip }}</p>
+          <el-button
+            size="small"
+            type="primary"
+            :loading="analyzing"
+            @click="runDailyAnalysis"
+          >{{ analyzeButtonLabel }}</el-button>
+        </div>
       </div>
 
       <!-- 图表面板：最近 20 局顺位折线图 + 1234 位比例饼图 -->
-      <div class="charts-panel" v-if="activeStats">
+      <div class="charts-panel" v-if="showStatsTable">
         <div class="chart-box chart-line">
           <div class="chart-title">最近 20 局顺位</div>
           <svg viewBox="0 0 400 74" class="line-svg" v-if="recentRanks.length">
@@ -181,8 +179,8 @@
             <div class="pie-legend">
               <div v-for="seg in pieSegments" :key="seg.key" class="legend-item">
                 <span class="legend-dot" :style="{ background: seg.color }"></span>
-                <span class="legend-label">{{ seg.label }}</span>
-                <span class="legend-value">{{ seg.value }}{{ seg.pct }}</span>
+                <span class="legend-label">{{ seg.label }}（{{ seg.value }}）</span>
+                <span class="legend-pct">{{ seg.pct }}</span>
               </div>
             </div>
           </div>
@@ -279,7 +277,7 @@
             @size-change="onSizeChange"
           />
           <div class="download-actions">
-            <span class="quota-tip">每 IP 每日限 10 次下载</span>
+            <span class="quota-tip">{{ downloadQuotaTip }}</span>
             <el-button
               size="small"
               :disabled="selectedIds.length === 0"
@@ -308,7 +306,27 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { analyzeRecords } from '../utils/recordAnalyzer'
-import { buildStatsRows } from '../utils/statsDisplay'
+import { buildPlayerStatsRows, rankRatePieLabel, rankedGames } from '../utils/statsDisplay'
+
+const IS_DEV_CLIENT = import.meta.env.DEV
+const ANALYZE_DAILY_MAX = 3
+
+const pageQuotaTip = computed(() =>
+  IS_DEV_CLIENT
+    ? '开发模式：每日分析与请求不限次数'
+    : `每日分析每个 IP 每日 ${ANALYZE_DAILY_MAX} 次（凌晨 4 点刷新）；牌谱下载每个 IP 限 10 次/天`
+)
+const analyzeQuotaTip = computed(() =>
+  IS_DEV_CLIENT
+    ? '开发模式不限分析次数；单次最多 500 局'
+    : `每个 IP 每天 ${ANALYZE_DAILY_MAX} 次分析机会，凌晨 4 点刷新；单次最多 500 局`
+)
+const analyzeButtonLabel = computed(() =>
+  IS_DEV_CLIENT ? '每日分析' : `每日分析（今日最多 ${ANALYZE_DAILY_MAX} 次）`
+)
+const downloadQuotaTip = computed(() =>
+  IS_DEV_CLIENT ? '开发模式不限下载次数' : '每 IP 每日限 10 次下载'
+)
 
 const RULE_DEFS = [
   { key: 'guobiao', label: '国标', statsField: 'guobiao_stats', fanField: 'guobiao' },
@@ -412,8 +430,45 @@ const currentStats = computed(() => {
 
 const sumGames = (stats) => (stats || []).reduce((s, x) => s + (x.total_games || 0), 0)
 
-// 按范围统计对局数（用于第二行括号）
+// 顺位统计（game_player_records 聚合，按 filterKey 缓存，切换筛选即时命中）
+const rankStatsCache = ref({})
+const scopeCountsFromApi = ref(null)
+let rankStatsSeq = 0
+
+const buildFilterKey = (opts = {}) => JSON.stringify({
+  user_id: opts.userId ?? playerInfo.value?.user_id ?? null,
+  rule: opts.rule ?? currentRule.value,
+  scope: opts.scope ?? scope.value,
+  length: opts.length !== undefined ? opts.length : length.value,
+  tier: opts.tier !== undefined ? opts.tier : tier.value,
+  date: opts.date !== undefined ? opts.date : dateRange.value,
+})
+
+const buildFilterPayload = (opts = {}) => {
+  const scopeVal = opts.scope ?? scope.value
+  const tierVal = opts.tier !== undefined ? opts.tier : tier.value
+  const lengthVal = opts.length !== undefined ? opts.length : length.value
+  const dateVal = opts.date !== undefined ? opts.date : dateRange.value
+  const payload = { rule: opts.rule ?? currentRule.value }
+  if (lengthVal) payload.game_type = LENGTH_TO_GAME_TYPE[lengthVal]
+  if (dateVal && dateVal.length === 2) {
+    payload.date_from = dateVal[0] + 'T00:00:00'
+    const end = new Date(dateVal[1])
+    end.setDate(end.getDate() + 1)
+    payload.date_to = end.toISOString().slice(0, 19)
+  }
+  if (tierVal) payload.tier = tierVal
+  else if (scopeVal === 'custom') payload.tier = 'custom'
+  else if (scopeVal === 'rank') payload.tier = 'rank'
+  return payload
+}
+
+const filterPayload = () => buildFilterPayload()
+
+// 按范围统计对局数（与对局记录 room_type 划分一致）
 const scopeCount = (s) => {
+  const c = scopeCountsFromApi.value
+  if (c && c[s] != null) return c[s]
   const stats = currentStats.value
   if (s === 'all') return sumGames(stats)
   if (s === 'rank') return sumGames(stats.filter(x => String(x.mode).endsWith('_rank')))
@@ -436,10 +491,9 @@ const filteredPrestoredStats = computed(() => {
 // 是否可用预存数据：tier 为空或为 custom（=自定义范围，已在预存内）
 const prestoredAvailable = computed(() => tier.value === null)
 
-const filterKey = computed(() => JSON.stringify({
-  rule: currentRule.value, scope: scope.value, length: length.value,
-  tier: tier.value, date: dateRange.value
-}))
+const filterKey = computed(() => buildFilterKey())
+
+const rankStatsForFilter = computed(() => rankStatsCache.value[filterKey.value] ?? null)
 
 const analyzedStats = computed(() => {
   if (!analyzedResult.value) return null
@@ -474,12 +528,33 @@ const mergedPrestored = computed(() => {
   return total
 })
 
+/** 顺位字段：优先本地分析，否则 game_player_records API（不用 history_stats 的 mode 后缀） */
+const mergeRankFields = (base, rankRow) => {
+  if (!rankRow) return base
+  const merged = base ? { ...base } : { ...EMPTY_TOTAL, fan_stats: {} }
+  merged.total_games = rankRow.total_games
+  merged.first_place_count = rankRow.first_place_count
+  merged.second_place_count = rankRow.second_place_count
+  merged.third_place_count = rankRow.third_place_count
+  merged.fourth_place_count = rankRow.fourth_place_count
+  return merged
+}
+
 const activeStats = computed(() => {
-  if (prestoredAvailable.value) return mergedPrestored.value
-  return analyzedStats.value
+  if (analyzedStats.value) return analyzedStats.value
+  const rankRow = rankStatsForFilter.value
+  if (prestoredAvailable.value) {
+    return mergeRankFields(mergedPrestored.value, rankRow)
+  }
+  if (rankRow) return mergeRankFields(null, rankRow)
+  return null
 })
 
-const statsDisplay = computed(() => activeStats.value ? buildStatsRows(activeStats.value) : [])
+/** 有预存或已本地分析 → 完整统计；否则需本地分析补全和牌率等 */
+const needsLocalAnalysis = computed(() => !prestoredAvailable.value && !analyzedStats.value)
+const showStatsTable = computed(() => !!activeStats.value)
+
+const statsDisplay = computed(() => activeStats.value ? buildPlayerStatsRows(activeStats.value) : [])
 
 // ===== 图表数据 =====
 // 最近 20 局顺位：独立拉取玩家最近 20 局（不带筛选），按时间正序
@@ -529,10 +604,10 @@ const pieSegments = computed(() => {
     { key: 3, value: s.third_place_count || 0 },
     { key: 4, value: s.fourth_place_count || 0 }
   ]
-  const total = counts.reduce((a, c) => a + c.value, 0)
+  const total = rankedGames(s)
   const C = 2 * Math.PI * 40
   let acc = 0
-  return counts.map(c => {
+  return counts.map((c) => {
     const frac = total > 0 ? c.value / total : 0
     const len = frac * C
     const seg = {
@@ -542,17 +617,13 @@ const pieSegments = computed(() => {
       color: PIE_COLORS[c.key],
       dash: `${len} ${C - len}`,
       offset: -acc,
-      pct: total > 0 ? ` ${(frac * 100).toFixed(0)}%` : ''
+      pct: rankRatePieLabel(c.value, s)
     }
     acc += len
     return seg
   })
 })
-const pieTotal = computed(() => {
-  const s = activeStats.value
-  if (!s) return 0
-  return (s.first_place_count || 0) + (s.second_place_count || 0) + (s.third_place_count || 0) + (s.fourth_place_count || 0)
-})
+const pieTotal = computed(() => rankedGames(activeStats.value))
 
 const currentFanDict = computed(() => {
   if (!playerInfo.value || !currentRuleDef.value?.fanField) return null
@@ -570,6 +641,7 @@ const getFanValue = (fanKey) => activeStats.value?.fan_stats?.[fanKey] || 0
 const switchRule = (rule) => {
   currentRule.value = rule
   analyzedResult.value = null
+  rankStatsCache.value = {}
   onFilterChange()
 }
 
@@ -600,27 +672,12 @@ const selectTier = (t) => {
   onFilterChange()
 }
 
-// ===== 记录列表筛选 =====
-const filterPayload = () => {
-  const payload = {}
-  payload.rule = currentRule.value
-  if (length.value) payload.game_type = LENGTH_TO_GAME_TYPE[length.value]
-  if (dateRange.value && dateRange.value.length === 2) {
-    payload.date_from = dateRange.value[0] + 'T00:00:00'
-    const end = new Date(dateRange.value[1])
-    end.setDate(end.getDate() + 1)
-    payload.date_to = end.toISOString().slice(0, 19)
-  }
-  // tier 优先；范围兜底
-  if (tier.value) payload.tier = tier.value
-  else if (scope.value === 'custom') payload.tier = 'custom'
-  else if (scope.value === 'rank') payload.tier = 'rank'
-  return payload
-}
+// ===== 记录列表筛选（filterPayload / buildFilterKey 见上方） =====
 
 const loadRecords = async () => {
   const userId = playerInfo.value?.user_id
   if (!userId) return
+  const seq = searchSeq
   const params = {
     limit: page.size,
     offset: (page.current - 1) * page.size,
@@ -628,6 +685,7 @@ const loadRecords = async () => {
   }
   try {
     const resp = await axios.get(`/api/player/records/${userId}`, { params })
+    if (seq !== searchSeq || playerInfo.value?.user_id !== userId) return
     if (resp.data.success) {
       const d = resp.data.data
       gameRecords.value = d.items || []
@@ -648,8 +706,10 @@ const loadRecords = async () => {
 const loadRecentRanks = async () => {
   const userId = playerInfo.value?.user_id
   if (!userId) return
+  const seq = searchSeq
   try {
     const resp = await axios.get(`/api/player/records/${userId}`, { params: { limit: 20, offset: 0 } })
+    if (seq !== searchSeq || playerInfo.value?.user_id !== userId) return
     if (resp.data.success) {
       recentRecords.value = resp.data.data?.items || []
     } else {
@@ -686,10 +746,84 @@ const hasPrestoredStats = (info) => {
   })
 }
 
+const scopeCountsPayload = () => {
+  const payload = { rule: currentRule.value }
+  if (length.value) payload.game_type = LENGTH_TO_GAME_TYPE[length.value]
+  if (dateRange.value && dateRange.value.length === 2) {
+    payload.date_from = dateRange.value[0] + 'T00:00:00'
+    const end = new Date(dateRange.value[1])
+    end.setDate(end.getDate() + 1)
+    payload.date_to = end.toISOString().slice(0, 19)
+  }
+  return payload
+}
+
+const fetchRankStatsIntoCache = async (opts = {}) => {
+  const userId = opts.userId ?? playerInfo.value?.user_id
+  if (!userId) return
+  const key = buildFilterKey({ ...opts, userId })
+  if (rankStatsCache.value[key]) return
+  try {
+    const resp = await axios.get(`/api/player/rank-stats/${userId}`, {
+      params: buildFilterPayload(opts),
+    })
+    if (playerInfo.value?.user_id !== userId) return
+    if (resp.data.success) {
+      rankStatsCache.value = { ...rankStatsCache.value, [key]: resp.data.data }
+    }
+  } catch (_) { /* 静默 */ }
+}
+
+const prefetchRankStats = () => {
+  if (!playerInfo.value?.user_id) return Promise.resolve()
+  return Promise.all([
+    fetchRankStatsIntoCache({ scope: 'all', tier: null, length: null, date: null }),
+    fetchRankStatsIntoCache({ scope: 'rank', tier: null, length: null, date: null }),
+    fetchRankStatsIntoCache({ scope: 'custom', tier: null, length: null, date: null }),
+  ])
+}
+
+const loadRankStats = async () => {
+  const userId = playerInfo.value?.user_id
+  if (!userId || analyzedStats.value) return
+  const key = filterKey.value
+  if (rankStatsCache.value[key]) return
+  const seq = ++rankStatsSeq
+  try {
+    const resp = await axios.get(`/api/player/rank-stats/${userId}`, {
+      params: filterPayload(),
+    })
+    if (seq !== rankStatsSeq || playerInfo.value?.user_id !== userId) return
+    if (resp.data.success) {
+      rankStatsCache.value = { ...rankStatsCache.value, [key]: resp.data.data }
+    }
+  } catch (_) { /* 静默 */ }
+}
+
+const loadScopeCounts = async () => {
+  const userId = playerInfo.value?.user_id
+  if (!userId) {
+    scopeCountsFromApi.value = null
+    return
+  }
+  const seq = rankStatsSeq
+  try {
+    const resp = await axios.get(`/api/player/scope-counts/${userId}`, { params: scopeCountsPayload() })
+    if (seq !== rankStatsSeq || playerInfo.value?.user_id !== userId) return
+    scopeCountsFromApi.value = resp.data.success ? resp.data.data : null
+  } catch (_) {
+    if (playerInfo.value?.user_id === userId) scopeCountsFromApi.value = null
+  }
+}
+
 const onFilterChange = () => {
   page.current = 1
   selectedIds.value = []
-  if (playerInfo.value) loadRecords()
+  if (playerInfo.value) {
+    loadRecords()
+    loadRankStats()
+    loadScopeCounts()
+  }
 }
 
 const onSizeChange = (size) => {
@@ -727,10 +861,16 @@ const formatDate = (dateString) => {
 const runDailyAnalysis = async () => {
   const userId = playerInfo.value?.user_id
   if (!userId) return
+  const quotaLine = IS_DEV_CLIENT
+    ? '开发模式不限分析次数；单次最多 500 局。'
+    : `每个 IP 每天 ${ANALYZE_DAILY_MAX} 次分析机会，凌晨 4 点刷新；单次最多 500 局。`
+  const dialogTitle = IS_DEV_CLIENT
+    ? '每日分析'
+    : `每日分析（今日最多 ${ANALYZE_DAILY_MAX} 次）`
   try {
     await ElMessageBox.confirm(
-      '将下载当前筛选下的牌谱并在本地分析。\n\n每个 IP 每天仅 1 次分析机会，凌晨 4 点刷新；单次最多 500 局。请确认筛选条件后再开始。',
-      '每日分析（今日仅 1 次）',
+      `将下载当前筛选下的牌谱并在本地分析。\n\n${quotaLine}请确认筛选条件后再开始。`,
+      dialogTitle,
       { confirmButtonText: '开始分析', cancelButtonText: '取消', type: 'warning' }
     )
   } catch (_) {
@@ -764,7 +904,7 @@ const runDailyAnalysis = async () => {
       body: JSON.stringify({ user_id: userId, ...filterPayload() })
     })
     if (resp.status === 429) {
-      ElMessage.error('今日分析次数已用完（每个 IP 每天仅 1 次，凌晨 4 点刷新）')
+      ElMessage.error(`今日分析次数已用完（每个 IP 每天 ${ANALYZE_DAILY_MAX} 次，凌晨 4 点刷新）`)
       analyzing.value = false
       return
     }
@@ -780,8 +920,7 @@ const runDailyAnalysis = async () => {
       analyzing.value = false
       return
     }
-    const records = items.map(x => x.record)
-    const stats = analyzeRecords(records, userId)
+    const stats = analyzeRecords(items, userId)
     analyzedResult.value = { filterKey: filterKey.value, stats }
     ElMessage.success(`已本地分析 ${items.length} 局牌谱`)
   } catch (e) {
@@ -892,6 +1031,14 @@ const searchPlayer = async (rawKey, isManual = true) => {
   loading.value = true
   searched.value = true
   const searchToken = ++searchSeq
+  playerInfo.value = null
+  rankStatsCache.value = {}
+  scopeCountsFromApi.value = null
+  rankStatsSeq += 1
+  gameRecords.value = []
+  recentRecords.value = []
+  recordsTotal.value = 0
+  analyzedResult.value = null
   try {
     const infoResp = await axios.get(`/api/player/info/${encodeURIComponent(raw)}`)
     if (searchToken !== searchSeq) return
@@ -903,11 +1050,12 @@ const searchPlayer = async (rawKey, isManual = true) => {
       length.value = null
       tier.value = null
       dateRange.value = null
-      analyzedResult.value = null
       page.current = 1
       page.size = 20
       selectedIds.value = []
       await loadRecords()
+      if (searchToken !== searchSeq) return
+      await Promise.all([loadScopeCounts(), prefetchRankStats(), loadRankStats()])
       if (searchToken !== searchSeq) return
       if (hasPrestoredStats(playerInfo.value)) {
         loadRecentRanks()
@@ -957,6 +1105,8 @@ const resetForm = () => {
   tier.value = null
   dateRange.value = null
   analyzedResult.value = null
+  rankStatsCache.value = {}
+  scopeCountsFromApi.value = null
   selectedIds.value = []
 }
 
@@ -1114,6 +1264,11 @@ onMounted(() => {
   padding: 1px 6px;
   margin-top: 6px;
 }
+.no-prestored.compact {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eef0f3;
+}
 .no-prestored {
   display: flex;
   flex-direction: column;
@@ -1189,7 +1344,7 @@ onMounted(() => {
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #475569; }
 .legend-dot { width: 8px; height: 8px; flex-shrink: 0; }
 .legend-label { flex: 1; white-space: nowrap; }
-.legend-value { font-weight: 700; color: #1e293b; font-family: 'Consolas', 'Menlo', monospace; white-space: nowrap; }
+.legend-pct { font-weight: 700; color: #1e293b; font-family: 'Consolas', 'Menlo', monospace; white-space: nowrap; flex-shrink: 0; }
 
 @media (max-width: 720px) {
   .charts-panel { flex-wrap: wrap; }

@@ -3,6 +3,9 @@
 开局 ask 时冻结 _tactical_action_snapshot（只读）；主询问阶段的 pass 不记入 passed，
 低优先级鸣牌申请后仍从完整快照重算更高优先级竞争者并再次询问（含主阶段已 pass 者）。
 仅在当前打断窗口内 pass 的玩家在本轮申请等待中不再重复询问；切换到新的低优先级申请时清空。
+
+国标（tactical_commit_lock=True）：玩家成功提交非 pass 鸣牌后本张弃牌区间内不可改选其他鸣牌；
+grace 多轮抢断时已承诺者不再作为竞争者。川麻 / 青雀不启用承诺锁。
 """
 from __future__ import annotations
 
@@ -26,6 +29,28 @@ def is_chi_action(action_type: str) -> bool:
     return action_type in _CHI_ACTIONS
 
 
+def tactical_commit_lock_enabled(gs) -> bool:
+    return bool(getattr(gs, "tactical_commit_lock", False))
+
+
+def tactical_mark_player_committed(gs, player_index: int) -> None:
+    """国标：玩家已成功提交非 pass 鸣牌，本张弃牌区间内不可改选。"""
+    if not tactical_commit_lock_enabled(gs):
+        return
+    committed = getattr(gs, "_tactical_committed_players", None)
+    if committed is None:
+        gs._tactical_committed_players = {player_index}
+    else:
+        committed.add(player_index)
+
+
+def tactical_player_is_committed(gs, player_index: int) -> bool:
+    if not tactical_commit_lock_enabled(gs):
+        return False
+    committed = getattr(gs, "_tactical_committed_players", None)
+    return committed is not None and player_index in committed
+
+
 def init_tactical_round_state(gs) -> None:
     """wait_action 主循环开始前：冻结本张弃牌的鸣牌选项快照。"""
     if (
@@ -36,14 +61,17 @@ def init_tactical_round_state(gs) -> None:
             pid: list(alist) for pid, alist in gs.action_dict.items()
         }
         gs._tactical_passed_players = set()
+        gs._tactical_committed_players = set()
     else:
         gs._tactical_action_snapshot = None
         gs._tactical_passed_players = set()
+        gs._tactical_committed_players = set()
 
 
 def clear_tactical_round_state(gs) -> None:
     gs._tactical_action_snapshot = None
     gs._tactical_passed_players = set()
+    gs._tactical_committed_players = set()
 
 
 def tactical_opening_snapshot(gs):
@@ -75,6 +103,8 @@ def get_higher_priority_snapshot(gs, action_type, player_index):
     source = tactical_opening_snapshot(gs) or gs.action_dict
     for pid in range(4):
         if pid == player_index or tactical_player_has_passed(gs, pid):
+            continue
+        if tactical_player_is_committed(gs, pid):
             continue
         filtered = [
             a for a in source.get(pid, [])
@@ -146,6 +176,7 @@ async def tactical_grace_phase(
 
         if pre_submitted is not None:
             _, action_type, player_index, action_data = pre_submitted
+            tactical_mark_player_committed(gs, player_index)
             logger.info(
                 "战术鸣牌打捞到更高优先级抢断 action_type=%s player_index=%s",
                 action_type,
@@ -224,6 +255,7 @@ async def tactical_grace_phase(
             return action_type, player_index, action_data, True
 
         _, action_type, player_index, action_data = new_claim
+        tactical_mark_player_committed(gs, player_index)
 
 
 async def apply_tactical_claim_if_needed(

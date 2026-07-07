@@ -15,7 +15,7 @@
             :name="t.value"
           >
             <div v-if="activeTierTotals" class="stats-grid">
-              <div v-for="row in buildStatsRows(activeTierTotals)" :key="row.label" class="stats-cell">
+              <div v-for="row in buildPlatformStatsRows(activeTierTotals)" :key="row.label" class="stats-cell">
                 <span class="stats-label">{{ row.label }}</span>
                 <span class="stats-value">{{ row.value }}</span>
               </div>
@@ -85,7 +85,7 @@ import axios from 'axios'
 import * as echarts from 'echarts'
 import { GUOBIAO_FAN_DICT } from '@/constants/guobiaoFanDict'
 import {
-  buildStatsRows,
+  buildPlatformStatsRows,
   buildAllFanEntries,
   buildSceneDailyChartOption,
   buildSceneDailyTable,

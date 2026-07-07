@@ -100,8 +100,8 @@ public static partial class HepaiRevealDirector {
         HepaiWinTilePresentMode mode;
         if (huClass == "hu_self") {
             mode = HepaiWinTilePresentMode.SichuanZimoToBuhuaFaceDown;
-        } else if (multiRon || isQianggang) {
-            // 一炮多响 / 抢杠和：透明克隆，保留河牌或加杠牌直至最后回收
+        } else if (multiRon) {
+            // 一炮多响：透明克隆，保留河牌/加杠牌直至最后回收
             mode = HepaiWinTilePresentMode.SichuanRonMultiToBuhua;
         } else {
             mode = HepaiWinTilePresentMode.SichuanRonSingleToBuhua;
