@@ -47,6 +47,7 @@ public class NetworkManager : MonoBehaviour {
 
     /// <summary>最近一次 ping/pong 测得的延迟（毫秒）。-1 表示未测得，>=0 为有效值。</summary>
     public int LatencyMs => _latencyMs;
+    public bool IsWebSocketOpen => websocket != null && websocket.State == WebSocketState.Open;
     /// <summary>延迟变更事件。每次收到 pong 或 ping 超时时触发，参数为最新延迟（毫秒）。</summary>
     public event Action<int> OnLatencyChanged;
 

@@ -105,6 +105,7 @@ public partial class Game3DManager : MonoBehaviour {
         }
         if (SetType == "Discard") {
             lastCutJiagang3DObject = cardObj;
+            RegisterLastDiscard(PlayerPosition, cardObj, tileId);
         }
         // 立直横置标记写入 Tile3D，归还对象池时会被清掉
         Tile3D tile3D = cardObj.GetComponent<Tile3D>();
@@ -120,19 +121,17 @@ public partial class Game3DManager : MonoBehaviour {
             Card3DHoverManager.Instance.SetCardGrayOverlay(cardObj, Card3DHoverManager.Instance.MoqieOverlayColor, Card3DHoverManager.Instance.MoqieOverlayIntensity);
         }
 
-        Vector3 startPosition = lastRemove3DPosition;
+        Vector3 startPosition = GetLastRemovePos(PlayerPosition);
         if (PlayerPosition == "self") {
             startPosition = selfPosPanel.outputPos != null ? selfPosPanel.outputPos.position : selfPosPanel.cardsPosition.position;
         }
 
         if (SetType == "Discard") {
-            _currentDiscardMoveObject = cardObj;
-            _currentDiscardMoveTargetPosition = currentPosition;
-            _currentDiscardMoveTargetRotation = rotation;
-            _currentDiscardMoveCoroutine = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
-            yield return _currentDiscardMoveCoroutine;
-            _currentDiscardMoveCoroutine = null;
-            _currentDiscardMoveObject = null;
+            StopDiscardMoveCoroutine(PlayerPosition);
+            Coroutine move = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
+            _discardMoveCoroutinesByPlayer[PlayerPosition] = move;
+            yield return move;
+            if (_discardMoveCoroutinesByPlayer.TryGetValue(PlayerPosition, out Coroutine current) && current == move) _discardMoveCoroutinesByPlayer[PlayerPosition] = null;
         }
         else {
             yield return StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
@@ -230,7 +229,7 @@ public partial class Game3DManager : MonoBehaviour {
             return;
         }
 
-        Vector3 startPosition = lastRemove3DPosition;
+        Vector3 startPosition = GetLastRemovePos(PlayerPosition);
         if (PlayerPosition == "self") {
             startPosition = selfPosPanel.outputPos != null ? selfPosPanel.outputPos.position : selfPosPanel.cardsPosition.position;
         }

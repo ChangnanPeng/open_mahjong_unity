@@ -20,6 +20,68 @@ public partial class Game3DManager : MonoBehaviour {
 
     private GameObject lastCutJiagang3DObject; // 最后一张切牌或加杠牌的3D对象（荣和/抢杠倒牌演出用）
 
+    private readonly Dictionary<string, Coroutine> _discardMoveCoroutinesByPlayer = new Dictionary<string, Coroutine>();
+    private readonly Dictionary<string, Vector3> _lastRemovePosByPlayer = new Dictionary<string, Vector3> {
+        { "self", Vector3.zero }, { "left", Vector3.zero }, { "top", Vector3.zero }, { "right", Vector3.zero },
+    };
+    private readonly Dictionary<string, GameObject> _lastDiscardObjByPlayer = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, int> _lastDiscardTileIdByPlayer = new Dictionary<string, int>();
+
+    private void RegisterLastDiscard(string playerPosition, GameObject obj, int tileId) {
+        if (string.IsNullOrEmpty(playerPosition)) return;
+        _lastDiscardObjByPlayer[playerPosition] = obj;
+        _lastDiscardTileIdByPlayer[playerPosition] = tileId;
+    }
+    private void ClearLastDiscard(string playerPosition) {
+        if (!string.IsNullOrEmpty(playerPosition)) _lastDiscardObjByPlayer[playerPosition] = null;
+    }
+    private static bool TilesMatchForDiscardLookup(int registeredTileId, int expectedTileId) {
+        return expectedTileId <= 0 || registeredTileId == expectedTileId ||
+            GameRecordMeldCodec.NormalizeMeldsLookupTileId(registeredTileId) == GameRecordMeldCodec.NormalizeMeldsLookupTileId(expectedTileId);
+    }
+    private GameObject ResolveLastDiscardObject(string discarderPos, int expectedTileId) {
+        if (string.IsNullOrEmpty(discarderPos) || !_lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject obj)
+            || obj == null || !obj.activeInHierarchy || !_lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int tile)
+            || !TilesMatchForDiscardLookup(tile, expectedTileId)) return null;
+        return obj;
+    }
+    private GameObject FindJiagangTileObject(string playerPosition, int expectedTileId) {
+        PosPanel3D panel = GetPosPanel(playerPosition);
+        if (panel?.combination3DObjects == null) return null;
+        GameObject match = null;
+        foreach (Transform parent in panel.combination3DObjects) {
+            if (parent == null) continue;
+            for (int i = 0; i < parent.childCount; i++) {
+                Tile3D tile = parent.GetChild(i).GetComponent<Tile3D>();
+                if (tile != null && TilesMatchForDiscardLookup(tile.GetTileId(), expectedTileId)) match = tile.gameObject;
+            }
+        }
+        return match;
+    }
+    private GameObject TryResolveJiagangSourceObject(string playerPosition, int expectedTileId) {
+        GameObject obj = FindJiagangTileObject(playerPosition, expectedTileId);
+        if (obj != null) return obj;
+        Tile3D tile = lastCutJiagang3DObject != null ? lastCutJiagang3DObject.GetComponent<Tile3D>() : null;
+        return tile != null && lastCutJiagang3DObject.activeInHierarchy && TilesMatchForDiscardLookup(tile.GetTileId(), expectedTileId)
+            ? lastCutJiagang3DObject : null;
+    }
+    public void RunMeldRebuildImmediate(string playerIndex, string actionType, int[] combinationMask) {
+        RunCoroutineImmediate(ActionAnimationCoroutine(playerIndex, actionType, combinationMask, false));
+    }
+    private static void RunCoroutineImmediate(IEnumerator routine) {
+        if (routine == null) return;
+        var stack = new Stack<IEnumerator>(); stack.Push(routine);
+        while (stack.Count > 0) { var current = stack.Peek(); if (!current.MoveNext()) { stack.Pop(); } else if (current.Current is IEnumerator nested) { stack.Push(nested); } }
+    }
+    private void OnLastDiscardTaken(string discarderPos) { StopDiscardMoveCoroutine(discarderPos); ClearLastDiscard(discarderPos); }
+    private void SetLastRemovePos(string playerPosition, Vector3 pos) { if (!string.IsNullOrEmpty(playerPosition)) _lastRemovePosByPlayer[playerPosition] = pos; }
+    private Vector3 GetLastRemovePos(string playerPosition) => !string.IsNullOrEmpty(playerPosition) && _lastRemovePosByPlayer.TryGetValue(playerPosition, out Vector3 pos) ? pos : Vector3.zero;
+    private void StopDiscardMoveCoroutine(string playerPosition) {
+        if (!string.IsNullOrEmpty(playerPosition) && _discardMoveCoroutinesByPlayer.TryGetValue(playerPosition, out Coroutine coroutine) && coroutine != null) StopCoroutine(coroutine);
+        if (!string.IsNullOrEmpty(playerPosition)) _discardMoveCoroutinesByPlayer[playerPosition] = null;
+    }
+    private void StopAllDiscardMoveCoroutines() { foreach (var pair in _discardMoveCoroutinesByPlayer) if (pair.Value != null) StopCoroutine(pair.Value); _discardMoveCoroutinesByPlayer.Clear(); }
+
     private Coroutine _currentDiscardMoveCoroutine; // 当前出牌飞行动画协程，鸣牌时需终止
     private GameObject _currentDiscardMoveObject;
     private Vector3 _currentDiscardMoveTargetPosition;
@@ -349,10 +411,10 @@ public partial class Game3DManager : MonoBehaviour {
                 yield break;
             }
             if (IsSelfCardsPosition(panel.cardsPosition)) {
-                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true);
+                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true, PlayerPosition);
             }
             else {
-                yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true);
+                yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true, PlayerPosition);
             }
             if (playCutPhysicsSound) {
                 SoundManager.Instance.PlayPhysicsSound("cut");
@@ -372,10 +434,10 @@ public partial class Game3DManager : MonoBehaviour {
                 yield break;
             }
             if (IsSelfCardsPosition(panel.cardsPosition)) {
-                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true);
+                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true, PlayerPosition);
             }
             else {
-                yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true);
+                yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, cut_class, tileId, null, skipRearrange: true, PlayerPosition);
             }
             yield return Set3DTileCoroutine(tileId, panel.buhuaPosition, "Buhua", PlayerPosition);
             // 摸补：摸牌区删花后保留主列与摸牌区间距，不收拢；手补仍收拢主列
@@ -395,10 +457,10 @@ public partial class Game3DManager : MonoBehaviour {
             bool meldCutClass = actionType == "jiagang" && cut_class;
             int meldDiscardId = actionType == "jiagang" && tileId >= 2 ? tileId : -1;
             if (IsSelfCardsPosition(panel.cardsPosition)) {
-                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, removeCount, meldCutClass, meldDiscardId, combination_mask, skipRearrange: true);
+                yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, removeCount, meldCutClass, meldDiscardId, combination_mask, skipRearrange: true, PlayerPosition);
             }
             else {
-                yield return RemoveHandCardsCoroutine(panel.cardsPosition, removeCount, meldCutClass, meldDiscardId, combination_mask, skipRearrange: true);
+                yield return RemoveHandCardsCoroutine(panel.cardsPosition, removeCount, meldCutClass, meldDiscardId, combination_mask, skipRearrange: true, PlayerPosition);
             }
             yield return Rearrange3DCardsWithAnimation(panel.cardsPosition);
         }
@@ -636,11 +698,7 @@ public partial class Game3DManager : MonoBehaviour {
     /// 清空本对象上所有正在执行的协程（用于牌谱重新推理手牌前，避免旧动画与重建画面冲突）
     /// </summary>
     public void StopAllRunningAnimations() {
-        if (_currentDiscardMoveCoroutine != null) {
-            StopCoroutine(_currentDiscardMoveCoroutine);
-            _currentDiscardMoveCoroutine = null;
-        }
-        _currentDiscardMoveObject = null;
+        StopAllDiscardMoveCoroutines();
         lastCutJiagang3DObject = null;
         StopAllHandAnimationQueues();
         StopAllCoroutines();
