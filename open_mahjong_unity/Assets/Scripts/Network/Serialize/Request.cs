@@ -24,6 +24,7 @@ public class CreateGBRoomRequest { // 创建国标房间请求
     public bool tourist_limit; // 游客限制
     public bool allow_spectator; // 允许观战
     public bool tactical_call; // 战术鸣牌（国标/青雀）
+    public string hand_end_mode; // first_win / second_win / third_win
 }
 
 public class CreateRiichiRoomRequest { // 创建立直麻将房间请求

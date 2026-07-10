@@ -233,6 +233,10 @@ public partial class NormalGameStateManager {
         roomType = gameInfo.room_type;
         roomRule = gameInfo.room_rule;
         subRule = gameInfo.sub_rule;
+        handEndMode = gameInfo.hand_flow?.mode ?? gameInfo.hand_end_mode ?? "first_win";
+        winnerTarget = gameInfo.hand_flow?.winner_target ?? gameInfo.winner_target ?? ((gameInfo.blood_battle ?? false) ? 3 : 1);
+        handFlow = gameInfo.hand_flow;
+        presentationProfile = gameInfo.presentation_profile;
         hepaiLimit = gameInfo.hepai_limit > 0 ? gameInfo.hepai_limit : 8; // 起和番限制，国标提示用
         roomStepTime = gameInfo.step_time; // 存储步时
         roomRoundTime = gameInfo.round_time; // 存储局时

@@ -33,6 +33,7 @@ public class CreatePanel : MonoBehaviour {
     private const string CfgHepaiWay       = "hepai_way";        // 和牌方式下拉索引
     private const string CfgTacticalCall   = "tactical_call";    // 战术鸣牌（国标 / 青雀 / 四川）
     private const string CfgBloodBattle    = "blood_battle";     // 血战到底（四川）
+    private const string CfgHandEndMode    = "hand_end_mode";    // 公共和牌终局流程
 
     /// <summary>
     /// 每条规则需要显示的全部配置项与默认值。
@@ -114,6 +115,7 @@ public class CreatePanel : MonoBehaviour {
             { CfgRandomSeed,     false },
             { CfgTouristLimit,   false },
             { CfgAllowSpectator, false },
+            { CfgHandEndMode,    2 }, // 0=和牌即止 1=二人和牌 2=三人和牌
         } },
     };
 
@@ -156,6 +158,8 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private TMP_Dropdown HepaiWayDropdown;
     [SerializeField] private GameObject CuoheTypePanel;
     [SerializeField] private TMP_Dropdown CuoheTypeDropdown;
+    private GameObject NewRuleHandEndModePanel;
+    private TMP_Dropdown NewRuleHandEndModeDropdown;
 
     [Header("输入字段")]
     [SerializeField] private TMP_InputField roomNameInput;
@@ -195,6 +199,7 @@ public class CreatePanel : MonoBehaviour {
         EnsureRiichiOptionToggles();
         EnsureCuoheTypePanel();
         InitCuoheTypeDropdown();
+        EnsureNewRuleHandEndModePanel();
         InitSubRuleDropdown();
         ApplyRuleDefaults(_ruleState);
         RefreshVisibility();
@@ -260,6 +265,7 @@ public class CreatePanel : MonoBehaviour {
             case CfgHepaiWay:       HepaiWayDropdown.value = (int)value; break;
             case CfgTacticalCall:   TacticalCallToggle.isOn = (bool)value; break;
             case CfgBloodBattle:    if (BloodBattleToggle != null) BloodBattleToggle.isOn = (bool)value; break;
+            case CfgHandEndMode:     if (NewRuleHandEndModeDropdown != null) NewRuleHandEndModeDropdown.value = (int)value; break;
         }
     }
 
@@ -299,6 +305,7 @@ public class CreatePanel : MonoBehaviour {
         HepaiWayPanel.SetActive(visible.ContainsKey(CfgHepaiWay));
         TacticalCallToggle.gameObject.SetActive(visible.ContainsKey(CfgTacticalCall));
         if (BloodBattleToggle != null) BloodBattleToggle.gameObject.SetActive(visible.ContainsKey(CfgBloodBattle));
+        if (NewRuleHandEndModePanel != null) NewRuleHandEndModePanel.SetActive(visible.ContainsKey(CfgHandEndMode));
         RefreshCuoheTypePanelVisibility();
     }
 
@@ -465,6 +472,44 @@ public class CreatePanel : MonoBehaviour {
         if (_ruleState == "new_rule") {
             CreateNewRuleRoom();
         }
+    }
+
+    /// <summary>
+    /// Runtime-cloned common flow selector. It is intentionally modeled as a
+    /// hand-flow option rather than a new-rule-only blood-battle switch so the
+    /// same control can later be enabled for Guobiao or other rule profiles.
+    /// </summary>
+    private void EnsureNewRuleHandEndModePanel() {
+        if (NewRuleHandEndModePanel != null && NewRuleHandEndModeDropdown != null) return;
+        if (HepaiWayPanel == null) return;
+
+        NewRuleHandEndModePanel = Instantiate(HepaiWayPanel, HepaiWayPanel.transform.parent);
+        NewRuleHandEndModePanel.name = "HandEndModePanel";
+        NewRuleHandEndModeDropdown = NewRuleHandEndModePanel.GetComponentInChildren<TMP_Dropdown>(true);
+        foreach (TMP_Text label in NewRuleHandEndModePanel.GetComponentsInChildren<TMP_Text>(true)) {
+            if (label.GetComponentInParent<TMP_Dropdown>() != null) continue;
+            label.text = "终局流程";
+            break;
+        }
+        if (NewRuleHandEndModeDropdown != null) {
+            NewRuleHandEndModeDropdown.ClearOptions();
+            NewRuleHandEndModeDropdown.AddOptions(new List<string> {
+                "和牌即止（普通）",
+                "二人和牌",
+                "三人和牌（血战到底）",
+            });
+            NewRuleHandEndModeDropdown.value = 2;
+            NewRuleHandEndModeDropdown.RefreshShownValue();
+        }
+        NewRuleHandEndModePanel.SetActive(false);
+    }
+
+    private string GetSelectedHandEndMode() {
+        return (NewRuleHandEndModeDropdown != null ? NewRuleHandEndModeDropdown.value : 2) switch {
+            0 => "first_win",
+            1 => "second_win",
+            _ => "third_win",
+        };
     }
 
     private void CreateRiichiRoom() {
@@ -638,7 +683,7 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private void CreateNewRuleRoom() {
-        var config = new Qingque_Create_RoomConfig {
+        var config = new NewRule_Create_RoomConfig {
             RoomName = roomNameInput.text.Trim(),
             GameRound = GetSelectedGameTime(),
             Password = passwordToggle.isOn ? passwordInput.text.Trim() : "",
@@ -651,6 +696,7 @@ public class CreatePanel : MonoBehaviour {
             TouristLimit = TouristLimitToggle.isOn,
             AllowSpectator = false,
             TacticalCall = false,
+            HandEndMode = GetSelectedHandEndMode(),
         };
 
         if (!config.Validate(out string error, passwordToggle.isOn, SetRandomSeedToggle.isOn)) {

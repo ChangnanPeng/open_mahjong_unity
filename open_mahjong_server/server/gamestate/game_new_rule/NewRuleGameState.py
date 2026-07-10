@@ -5,10 +5,15 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from .action_check import NewRuleActionPolicy
 from .init_tiles import init_new_rule_tiles
+from .settlement import NewRuleSettlementPolicy
 from ..public.hand_slot_utils import has_draw_slot, pick_timeout_discard_tile
+from ..public.presentation_profile import PresentationProfile
 from ..public.random_seed_manager import setup_random_seed_system
+from ..public.rule_composition import RuleComposition
 from ..public.round_end_timing import liuju_ready_wait_seconds
+from ..public.win_continuation import WinContinuationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,25 @@ class NewRuleGameState:
         self.room_rule = room_data.get("room_rule", "new_rule")
         self.room_type = room_data.get("room_type", "custom")
         self.sub_rule = room_data.get("sub_rule", "new_rule/standard")
+        self.win_continuation = WinContinuationPolicy.from_room_data(room_data)
+        self.hand_end_mode = self.win_continuation.mode.value
+        self.winner_target = self.win_continuation.winner_target
+        self.action_policy = NewRuleActionPolicy()
+        self.settlement_policy = NewRuleSettlementPolicy()
+        self.presentation_profile = PresentationProfile.for_win_continuation(
+            self.win_continuation,
+            score_display_multiplier=6,
+            draw_slot_win_tile=True,
+            complete_discard_before_ron=True,
+            concealed_win_tile=True,
+            preserve_win_animation_on_resume=True,
+        )
+        self.rule_composition = RuleComposition(
+            actions=self.action_policy,
+            settlement=self.settlement_policy,
+            hand_flow=self.win_continuation,
+            presentation=self.presentation_profile,
+        )
         self.room_random_seed = room_data.get("random_seed", 0)
         self.master_seed, self.salt, self.commitment, self.isPlayerSetRandomSeed = setup_random_seed_system(
             self.room_random_seed if self.room_random_seed else None
@@ -517,6 +541,8 @@ class NewRuleGameState:
         init_game_record(self)
         self.game_record["game_title"]["sub_rule"] = self.sub_rule
         self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
+        self.game_record["game_title"]["hand_end_mode"] = self.hand_end_mode
+        self.game_record["game_title"]["winner_target"] = self.winner_target
 
     def start_round_recording(self) -> None:
         from ..public.game_record_manager import init_game_round
@@ -998,30 +1024,26 @@ class NewRuleGameState:
 
     def begin_hand_action(self, player_index: Optional[int] = None, *, is_get_gang_tile: bool = False) -> dict:
         """Refresh waiting cache and return actions after a draw or supplement draw."""
-        from .action_check import check_action_hand_action, refresh_waiting_tiles
-
         player_index = self.current_player_index if player_index is None else player_index
         self.current_player_index = player_index
         self.hand_action_is_gang_draw[player_index] = bool(is_get_gang_tile)
-        refresh_waiting_tiles(self, player_index, exclude_last_tile=True)
+        self.action_policy.refresh_waiting_tiles(self, player_index, exclude_last_tile=True)
         self.game_status = "waiting_hand_action"
         return {
             "status": self.game_status,
             "player": player_index,
-            "actions": check_action_hand_action(self, player_index, is_get_gang_tile=is_get_gang_tile),
+            "actions": self.action_policy.check_hand_action(self, player_index, is_get_gang_tile=is_get_gang_tile),
         }
 
     def begin_only_cut(self, player_index: int) -> dict:
         """Return the forced-discard action window after chi or peng."""
-        from .action_check import check_only_cut
-
         self.current_player_index = player_index
         self.hand_action_is_gang_draw[player_index] = False
         self.game_status = "onlycut_after_action"
         return {
             "status": self.game_status,
             "player": player_index,
-            "actions": check_only_cut(self, player_index),
+            "actions": self.action_policy.check_only_cut(self, player_index),
         }
 
     def apply_turn_action(
@@ -1033,8 +1055,6 @@ class NewRuleGameState:
         settlement: Optional[dict] = None,
     ) -> dict:
         """Apply one selected self/turn action and return the next response window."""
-        from .action_check import check_action_after_cut, check_action_jiagang, refresh_waiting_tiles
-
         if action == "cut":
             if tile is None:
                 raise ValueError("Discard action requires a tile.")
@@ -1042,13 +1062,13 @@ class NewRuleGameState:
             cut_tile = self.record_discard(player_index, tile)
             for other in self.player_list:
                 if other.player_index != player_index and not other.is_hu:
-                    refresh_waiting_tiles(self, other.player_index)
+                    self.action_policy.refresh_waiting_tiles(self, other.player_index)
             self.game_status = "waiting_action_after_cut"
             return {
                 "status": self.game_status,
                 "player": player_index,
                 "tile": cut_tile,
-                "actions": check_action_after_cut(self, cut_tile),
+                "actions": self.action_policy.check_after_cut(self, cut_tile),
             }
 
         if action == "hu_self":
@@ -1080,13 +1100,13 @@ class NewRuleGameState:
             result = self.attempt_added_kong(player_index, tile)
             for other in self.player_list:
                 if other.player_index != player_index and not other.is_hu:
-                    refresh_waiting_tiles(self, other.player_index)
+                    self.action_policy.refresh_waiting_tiles(self, other.player_index)
             return {
                 "status": self.game_status,
                 "player": player_index,
                 "tile": tile,
                 "result": result,
-                "actions": check_action_jiagang(self, tile),
+                "actions": self.action_policy.check_jiagang(self, tile),
             }
 
         raise ValueError(f"Unsupported turn action: {action}")
@@ -1099,55 +1119,14 @@ class NewRuleGameState:
         *,
         payer_index: Optional[int] = None,
     ) -> dict:
-        """Calculate deferred scoring details for a confirmed win."""
-        from ...game_calculation.new_rule import HandContext, score_hand
-
-        player = self.player_list[winner_index]
-        hand_tiles = list(player.hand_tiles)
-        if source != "self_draw":
-            hand_tiles.append(tile)
-        context = self._settlement_context(winner_index, source, hand_tiles, tile)
-        if self.calculation_service is not None and hasattr(self.calculation_service, "NewRule_hepai_detail"):
-            detail = self.calculation_service.NewRule_hepai_detail(
-                hand_tiles,
-                player.combination_tiles,
-                [],
-                tile,
-                context,
-            )
-        else:
-            result = score_hand(
-                HandContext(
-                    hand_tiles=hand_tiles,
-                    meld_codes=player.combination_tiles,
-                    winning_tile=tile,
-                    win_source=source,
-                    pre_win_tiles=context["pre_win_tiles"],
-                    heavenly_win=context["heavenly_win"],
-                    earthly_win=context["earthly_win"],
-                    haitei=context["haitei"],
-                    houtei=context["houtei"],
-                    rinshan=context["rinshan"],
-                    chankan=context["chankan"],
-                )
-            )
-            detail = {
-                "is_win": result.is_win,
-                "points": result.points,
-                "raw_points": result.raw_points,
-                "fan_ids": list(result.fan_ids),
-                "fan_names": list(result.fan_names),
-            }
-        if not detail["is_win"]:
-            raise ValueError(f"Confirmed win for player {winner_index} is not a valid new-rule hand.")
-        return {
-            "is_win": detail["is_win"],
-            "points": detail["points"],
-            "raw_points": detail["raw_points"],
-            "fan_ids": list(detail["fan_ids"]),
-            "fan_names": list(detail["fan_names"]),
-            "score_changes": self._score_changes_for_win(winner_index, source, detail["points"], payer_index),
-        }
+        """Compatibility facade; calculation lives in the settlement policy."""
+        return self.settlement_policy.build(
+            self,
+            winner_index,
+            source,
+            tile,
+            payer_index=payer_index,
+        )
 
     def _score_changes_for_win(
         self,
@@ -1156,34 +1135,14 @@ class NewRuleGameState:
         points: int,
         payer_index: Optional[int] = None,
     ) -> list[int]:
-        changes = [0 for _ in self.player_list]
-        if points <= 0:
-            return changes
-        if source == "self_draw":
-            payers = [
-                player.player_index
-                for player in self.player_list
-                if player.player_index != winner_index and not player.is_hu
-            ]
-            if not payers:
-                return changes
-            if len(payers) == 3:
-                payment = points * 2
-            elif len(payers) == 2:
-                payment = points * 3
-            else:
-                payment = points * 6
-            for payer in payers:
-                changes[payer] -= payment
-                changes[winner_index] += payment
-            return changes
-
-        if payer_index is None:
-            raise ValueError(f"{source} win needs a payer index for score changes.")
-        payment = points * 6
-        changes[payer_index] -= payment
-        changes[winner_index] += payment
-        return changes
+        """Compatibility facade; payment rules live in the settlement policy."""
+        return self.settlement_policy.score_changes(
+            self,
+            winner_index,
+            source,
+            points,
+            payer_index,
+        )
 
     def continue_after_discard_responses(
         self,
@@ -1238,12 +1197,7 @@ class NewRuleGameState:
         return window
 
     def next_active_index(self, from_index: int) -> Optional[int]:
-        idx = from_index
-        for _ in range(4):
-            idx = (idx + 1) % 4
-            if not self.player_list[idx].is_hu:
-                return idx
-        return None
+        return self.win_continuation.next_active_index(self.player_list, from_index)
 
     def mark_player_hu(self, player_index: int, settlement: Optional[dict] = None) -> None:
         player = self.player_list[player_index]
@@ -1273,7 +1227,11 @@ class NewRuleGameState:
         self.deferred_scores_applied = True
 
     def should_end_hand(self) -> bool:
-        return self.hu_count >= 3 or len(self.tiles_list) <= self.dead_wall_count
+        return self.win_continuation.should_end(
+            self.hu_count,
+            len(self.tiles_list),
+            self.dead_wall_count,
+        )
 
     @property
     def hu_count(self) -> int:
@@ -1388,6 +1346,7 @@ class NewRuleGameState:
         settlements = settlements or {}
         winners: list[int] = []
         passed: list[int] = []
+        winner_slots = self.win_continuation.winner_slots_remaining(self.hu_count)
 
         for player_index in self._response_order_after(discarder_index, responses):
             action = responses[player_index]
@@ -1397,6 +1356,8 @@ class NewRuleGameState:
                 self.record_discard_win_pass(player_index, tile)
                 passed.append(player_index)
             elif action == "hu":
+                if len(winners) >= winner_slots:
+                    continue
                 if tile not in self.player_list[player_index].waiting_tiles:
                     raise ValueError(f"Player {player_index} is not waiting on tile {tile}.")
                 self.record_discard_win(
@@ -1533,6 +1494,7 @@ class NewRuleGameState:
         settlements = settlements or {}
         winners: list[int] = []
         passed: list[int] = []
+        winner_slots = self.win_continuation.winner_slots_remaining(self.hu_count)
 
         for player_index in self._response_order_after(kong_player_index, responses):
             action = responses[player_index]
@@ -1543,6 +1505,8 @@ class NewRuleGameState:
                     self.add_discard_win_lockout(player_index, tile)
                 passed.append(player_index)
             elif action == "hu":
+                if len(winners) >= winner_slots:
+                    continue
                 if tile not in self.player_list[player_index].waiting_tiles:
                     raise ValueError(f"Player {player_index} is not waiting on added-kong tile {tile}.")
                 if not self.can_win_by_discard(player_index, tile):

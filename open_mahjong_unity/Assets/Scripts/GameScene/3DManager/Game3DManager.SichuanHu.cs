@@ -222,18 +222,18 @@ public partial class Game3DManager {
 
         }
 
-        bool isNewRule = gsm != null && gsm.IsNewRule();
-        if (isNewRule) {
+        bool usesDrawSlotWinTile = gsm != null && gsm.UsesDrawSlotWinTile();
+        if (usesDrawSlotWinTile) {
             SuppressNextDrawForPlayer(playerPosition);
             yield return null;
         }
 
-        GameObject handTile = isNewRule
+        GameObject handTile = usesDrawSlotWinTile
             ? TryTakeDrawSlotHandTileObject(panel.cardsPosition, playerPosition)
             : TryTakeLastHandTileObject(panel.cardsPosition);
 
 
-        if (isNewRule && handTile != null) {
+        if (usesDrawSlotWinTile && handTile != null) {
             ClearSuppressedDrawForPlayer(playerPosition);
         }
 
@@ -242,7 +242,7 @@ public partial class Game3DManager {
             Debug.LogWarning($"[SichuanHu] 他家自摸取末张手牌失败 winner={playerPosition}，fallback spawn");
 
             Vector3 fallbackStart = GetOtherPlayerDrawSlotPose(panel, playerPosition);
-            if (isNewRule) {
+            if (usesDrawSlotWinTile) {
                 SuppressNextDrawForPlayer(playerPosition);
             }
             handTile = SpawnSichuanZimoTileFromOutput(playerPosition, 0, fallbackStart, panel.buhuaPosition);
@@ -470,7 +470,7 @@ public partial class Game3DManager {
 
     private void CompleteCurrentDiscardMoveBeforeRon() {
 
-        if (NormalGameStateManager.Instance == null || !NormalGameStateManager.Instance.IsNewRule()) return;
+        if (NormalGameStateManager.Instance == null || !NormalGameStateManager.Instance.CompletesDiscardBeforeRon()) return;
 
         if (_currentDiscardMoveCoroutine == null) return;
 
@@ -529,7 +529,7 @@ public partial class Game3DManager {
 
         cardObj.transform.SetPositionAndRotation(startPos, startRot);
 
-        if (faceDown && NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsNewRule()) {
+        if (faceDown && NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesConcealedWinTile()) {
 
             ApplyConcealedFaceDownLikeMeld(cardObj, tileId, dimmed);
 

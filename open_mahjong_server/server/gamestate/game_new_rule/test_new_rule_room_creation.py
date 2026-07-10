@@ -277,10 +277,33 @@ def test_room_manager_creates_hidden_new_rule_room() -> None:
         assert room_info["max_player"] == 4
         assert room_info["player_list"] == [101]
         assert room_info["random_seed"] == 0
+        assert room_info["hand_end_mode"] == "third_win"
         assert room_info["is_player_set_random_seed"] is False
         assert player.current_room_id == room_info["room_id"]
         assert room_info["room_id"] in server.room_manager.rooms
         assert any(payload["type"] == "room/refresh_room_info" for payload in websocket.sent)
+
+    asyncio.run(scenario())
+
+
+def test_room_router_persists_second_winner_flow_option() -> None:
+    async def scenario() -> None:
+        server, websocket, _player = _server()
+        message = _create_message()
+        message["hand_end_mode"] = "second_win"
+
+        await handle_room_message(server, "conn-101", message, websocket)
+
+        assert websocket.sent[-1]["success"] is True
+        room_id = websocket.sent[-1]["room_info"]["room_id"]
+        room_info = server.room_manager.rooms[room_id]
+        assert room_info["hand_end_mode"] == "second_win"
+
+        game = NewRuleGameState(room_data={
+            **room_info,
+            "player_list": [101, 102, 103, 104],
+        })
+        assert game.winner_target == 2
 
     asyncio.run(scenario())
 
@@ -2433,6 +2456,7 @@ def test_hidden_new_rule_room_scripted_added_kong_robbed_by_messages() -> None:
 def run() -> None:
     tests = [
         test_room_manager_creates_hidden_new_rule_room,
+        test_room_router_persists_second_winner_flow_option,
         test_hidden_new_rule_room_is_filtered_from_public_room_list,
         test_hidden_new_rule_room_rejects_public_join_by_room_id,
         test_hidden_new_rule_room_bot_changes_require_host,

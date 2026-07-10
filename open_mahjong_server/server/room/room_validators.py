@@ -162,6 +162,7 @@ class NewRuleRoomValidator(BaseModel):
     show_moqie_hint: bool = False
     tactical_call: bool = False
     claim_protection: bool = True
+    hand_end_mode: str = "third_win"
 
     @validator('room_name')
     def validate_room_name(cls, v):
@@ -193,6 +194,16 @@ class NewRuleRoomValidator(BaseModel):
             return parse_user_master_seed(v)
         except ValueError as e:
             raise ValueError(str(e)) from e
+
+    @validator('hand_end_mode')
+    def validate_hand_end_mode(cls, v):
+        from ..gamestate.public.win_continuation import HandEndMode
+
+        try:
+            return HandEndMode(v).value
+        except ValueError as e:
+            allowed = ', '.join(mode.value for mode in HandEndMode)
+            raise ValueError(f'hand_end_mode must be one of: {allowed}') from e
 
 
 class MMCValidator(BaseModel):

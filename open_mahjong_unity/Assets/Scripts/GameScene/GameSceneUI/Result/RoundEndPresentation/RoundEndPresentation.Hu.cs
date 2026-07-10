@@ -29,7 +29,7 @@ public partial class RoundEndPresentation {
         bool recycleDiscard, bool isQianggang, bool endgameScoreOnly) {
         bool selfWon = NormalGameStateManager.Instance.indexToPosition[hepai_player_index] == "self";
         bool isBloodBattleStyleRule = NormalGameStateManager.Instance != null
-            && (NormalGameStateManager.Instance.IsSichuanRule() || NormalGameStateManager.Instance.IsNewRule());
+            && NormalGameStateManager.Instance.UsesWinnerExitFlow();
         bool isMidGameSichuanHu = deferScoreSettlement && isBloodBattleStyleRule && !endgameScoreOnly;
         // 终局 settle_hu：仅分数面板，不重复 3D 和牌动画（reveal_hu 已亮牌）
         bool isEndgameScoreOnly = endgameScoreOnly;

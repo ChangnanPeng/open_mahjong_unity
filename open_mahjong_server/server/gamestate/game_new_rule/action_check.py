@@ -146,3 +146,13 @@ def _has_added_kong(hand_tiles: list[int], combination_tiles: list[str]) -> bool
 
 def _is_suited(tile: int) -> bool:
     return 11 <= tile <= 39 and tile % 10 != 0
+
+
+class NewRuleActionPolicy:
+    """Replaceable legal-action module used by the new-rule composition."""
+
+    check_hand_action = staticmethod(check_action_hand_action)
+    check_after_cut = staticmethod(check_action_after_cut)
+    check_jiagang = staticmethod(check_action_jiagang)
+    check_only_cut = staticmethod(check_only_cut)
+    refresh_waiting_tiles = staticmethod(refresh_waiting_tiles)

@@ -22,7 +22,7 @@ public partial class RoundEndPresentation {
         int[][] hepaiPlayerCombinationMask,
         Dictionary<int, int> scoreChanges,
         bool isFinalPanel) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsNewRule()) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesWinnerResultSequence()) {
             Debug.Log($"[NewRuleEndgameQueue] enqueue settle_hu player={hepaiPlayerIndex}, hu_class={huClass}, fan_count={(huFan == null ? 0 : huFan.Length)}, final={isFinalPanel}");
         }
         EnqueueSichuanEndgameStep(CoSichuanSettleHuStep(
@@ -67,7 +67,7 @@ public partial class RoundEndPresentation {
         int[][] hepaiPlayerCombinationMask,
         Dictionary<int, int> scoreChanges,
         bool isFinalPanel) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsNewRule()) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesWinnerResultSequence()) {
             Debug.Log($"[NewRuleEndgameQueue] begin settle_hu panel player={hepaiPlayerIndex}, final={isFinalPanel}");
         }
         BeginSichuanEndgamePanel();
@@ -75,7 +75,7 @@ public partial class RoundEndPresentation {
             hepaiPlayerIndex, player_to_score, huScore, huFan, huClass,
             hepaiPlayerHand, hepaiPlayerCombinationMask, scoreChanges);
         yield return CoFadeInSichuanEndgamePanel();
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsNewRule()) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.ScoreDisplayMultiplier() != 1) {
             yield return EndResultPanel.Instance.CoPlayNewRuleSettleHuRoutine(huScore, huFan, isFinalPanel);
             Debug.Log($"[NewRuleEndgameQueue] end settle_hu panel player={hepaiPlayerIndex}, final={isFinalPanel}");
         } else {

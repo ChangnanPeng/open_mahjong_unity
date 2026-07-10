@@ -516,7 +516,8 @@ class RoomManager:
                                   password: str, roundTimerValue: int, stepTimerValue: int,
                                   tips: bool, random_seed: int = 0, sub_rule: str = "new_rule/standard",
                                   tourist_limit: bool = False, allow_spectator: bool = False,
-                                  tactical_call: bool = False, claim_protection: bool = True) -> Response:
+                                  tactical_call: bool = False, claim_protection: bool = True,
+                                  hand_end_mode: str = "third_win") -> Response:
         try:
             if player_id not in self.game_server.players:
                 return Response(type="tips", success=False, message="please login first")
@@ -544,6 +545,7 @@ class RoomManager:
                 "random_seed": random_seed,
                 "tactical_call": tactical_call,
                 "claim_protection": claim_protection,
+                "hand_end_mode": hand_end_mode,
             }
 
             try:

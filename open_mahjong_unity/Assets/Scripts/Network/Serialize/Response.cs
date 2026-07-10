@@ -194,6 +194,25 @@ public class PlayerInfo { // 房间信息中单个玩家信息
     public bool? is_hu;                 // 四川麻将·血战到底：该玩家本盘是否已和牌退场
 }
 
+[System.Serializable]
+public class HandFlowInfo {
+    public string mode;
+    public int winner_target;
+    public bool winners_exit_hand;
+}
+
+[System.Serializable]
+public class PresentationProfileInfo {
+    public bool winner_exit_animation;
+    public bool defer_win_details;
+    public string result_sequence;
+    public int score_display_multiplier = 1;
+    public bool draw_slot_win_tile;
+    public bool complete_discard_before_ron;
+    public bool concealed_win_tile;
+    public bool preserve_win_animation_on_resume;
+}
+
 public class GameInfo { // 游戏开始时传递房间信息
     public int room_id;                 // 房间ID
     public string gamestate_id;         // 游戏状态ID（用于发送游戏操作请求）
@@ -230,6 +249,10 @@ public class GameInfo { // 游戏开始时传递房间信息
     public int? dealer_index;           // 当前亲家索引
     public int? view_player_index;      // 实时观战视角座位（客户端作为 self 渲染）
     public bool? blood_battle;          // 四川麻将：是否开启血战到底
+    public string hand_end_mode;         // 公共和牌终局流程：first_win / second_win / third_win
+    public int? winner_target;           // 达到几家和牌后结束本局
+    public HandFlowInfo hand_flow;       // 可复用流程能力，不依赖具体规则名
+    public PresentationProfileInfo presentation_profile; // 客户端展示/动画能力
 }
 
 public class SwitchSeatInfo { // 换位信息

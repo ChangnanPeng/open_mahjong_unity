@@ -131,7 +131,7 @@ public partial class NormalGameStateManager {
 
     /// <summary>血战到底：标记本盘和牌后继续，等待服务端下一次行牌询问。</summary>
     public void MarkPendingSichuanContinue() {
-        if (!IsSichuanRule() && !IsNewRule()) return;
+        if (!UsesWinnerExitFlow()) return;
         pendingSichuanContinueAfterResult = true;
     }
 
@@ -185,7 +185,7 @@ public partial class NormalGameStateManager {
         // New rule mid-hand hu uses RoundEndPresentation only as the coroutine host
         // for the short 3D win-tile animation. The next ask can arrive before that
         // animation finishes; stopping the active sequence here cuts the tile flight.
-        if (IsNewRule()) {
+        if (PreservesWinAnimationOnResume()) {
             if (EndResultPanel.Instance != null) {
                 EndResultPanel.Instance.ClearEndResultPanel();
             }

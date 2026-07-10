@@ -982,7 +982,10 @@ public class EndResultPanel : MonoBehaviour {
             TotalFan.text = $"{huScore}番";
         }
 
-        TotalScore.text = $"{(isNewRule ? huScore * 6 : huScore)}点";
+        int scoreMultiplier = NormalGameStateManager.Instance != null
+            ? NormalGameStateManager.Instance.ScoreDisplayMultiplier()
+            : (isNewRule ? 6 : 1);
+        TotalScore.text = $"{huScore * scoreMultiplier}点";
 
         bool showLimit = isClassical && huScore >= 300;
         TotalLimitDisplay.gameObject.SetActive(showLimit);

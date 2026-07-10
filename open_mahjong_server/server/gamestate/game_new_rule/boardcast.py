@@ -132,7 +132,13 @@ def game_info_payload(game_state: Any, viewer_index: Optional[int], *, reveal_fi
         else None,
         "dealer_index": game_state.dealer_index,
         "view_player_index": viewer_index,
-        "blood_battle": True,
+        # blood_battle remains for old clients; new clients use the composable
+        # hand-flow and presentation profiles below.
+        "blood_battle": game_state.win_continuation.winners_exit_hand,
+        "hand_end_mode": game_state.hand_end_mode,
+        "winner_target": game_state.winner_target,
+        "hand_flow": game_state.win_continuation.to_payload(),
+        "presentation_profile": game_state.presentation_profile.to_payload(),
     }
 
 

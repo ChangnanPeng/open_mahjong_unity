@@ -233,7 +233,7 @@ public class RoomNetworkManager : MonoBehaviour {
         }
     }
 
-    public async void Create_NewRule_Room(Qingque_Create_RoomConfig config) {
+    public async void Create_NewRule_Room(NewRule_Create_RoomConfig config) {
         if (BlockRoomEntryRequest()) return;
         try {
             if (!TryResolveRandomSeed(config.RandomSeed, out string randomSeed, out string seedError)) {
@@ -256,9 +256,10 @@ public class RoomNetworkManager : MonoBehaviour {
                 hepai_limit = 0,
                 tourist_limit = config.TouristLimit,
                 allow_spectator = false,
-                tactical_call = false
+                tactical_call = false,
+                hand_end_mode = config.HandEndMode
             };
-            Debug.Log($"Send create new-rule room: {config.RoomName}, {config.GameRound}, {config.SubRule}, RandomSeed: {randomSeed}");
+            Debug.Log($"Send create new-rule room: {config.RoomName}, {config.GameRound}, {config.SubRule}, handEndMode={config.HandEndMode}, RandomSeed: {randomSeed}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
             NetworkManager.Instance.CreateRoomResponse.Invoke(false, e.Message);

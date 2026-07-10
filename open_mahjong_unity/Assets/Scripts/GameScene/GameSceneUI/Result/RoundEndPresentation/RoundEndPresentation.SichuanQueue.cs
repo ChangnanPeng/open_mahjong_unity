@@ -28,7 +28,7 @@ public partial class RoundEndPresentation {
 
     public void EnqueueSichuanEndgameStep(IEnumerator step) {
         if (step == null) return;
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsNewRule()) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesWinnerResultSequence()) {
             _sichuanEndgameStepQueue.Enqueue(step);
             Debug.Log($"[NewRuleEndgameQueue] enqueue step, queued={_sichuanEndgameStepQueue.Count}, running={_sichuanEndgameRunner != null}");
             if (_sichuanEndgameRunner == null) {

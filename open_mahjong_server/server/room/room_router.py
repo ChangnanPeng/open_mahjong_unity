@@ -224,6 +224,7 @@ async def handle_create_NewRule_room(game_server, Connect_id: str, message: dict
         message.get("allow_spectator", False),
         message.get("tactical_call", False),
         message.get("claim_protection", True),
+        message.get("hand_end_mode", "third_win"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
