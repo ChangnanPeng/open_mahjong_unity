@@ -423,6 +423,17 @@ public class StickerInfo {
     public string sticker;
 }
 
+public class VoteInfo {
+    public string phase;
+    public string vote_type;
+    public int agree;
+    public int refuse;
+    public int total;
+    public int countdown;
+    public Dictionary<string, string> votes;
+    public string reason;
+}
+
 public class Response { // 所有后端的返回数据都由Response类接收
     // 消息头
     public string type; // 消息类型
@@ -454,6 +465,7 @@ public class Response { // 所有后端的返回数据都由Response类接收
     public ServerStatsInfo server_stats; // 返回服务器统计信息
     public SpectatorInfo[] spectator_list; // 返回观战列表
     public Dictionary<string, QueueStatusEntry> queue_status; // 匹配队列状态
+    public VoteInfo vote_info; // 房间对局投票暂停/结束状态同步
     public long client_ts; // pong 消息回传：客户端发送 ping 的时间戳（毫秒）
     // 好友 / 关注 / 实时观战
     public FriendInfo[] friend_list;             // 关注列表
