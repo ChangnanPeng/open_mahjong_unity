@@ -11,6 +11,7 @@ public partial class Game3DManager {
         RemoveCards,
         Rearrange,
         DrawCard,
+        DiscardTile,
     }
 
     private sealed class HandAnimOp {
@@ -20,6 +21,8 @@ public partial class Game3DManager {
         public int RemoveCount;
         public bool CutClass;
         public int[] CombinationMask;
+        public bool IsRiichi;
+        public bool PlayCutPhysicsSound;
     }
 
     private static readonly string[] HandAnimPlayerPositions = { "self", "left", "top", "right" };
@@ -116,6 +119,16 @@ public partial class Game3DManager {
         _handAnimProcessors[playerPosition] = StartCoroutine(RunHandAnimQueue(playerPosition));
     }
 
+    private bool HasPendingHandAnimWork(string playerPosition) {
+        if (!IsHandAnimPlayer(playerPosition)) {
+            return false;
+        }
+        if (_handAnimQueues.TryGetValue(playerPosition, out Queue<HandAnimOp> queue) && queue.Count > 0) {
+            return true;
+        }
+        return _handAnimProcessors.TryGetValue(playerPosition, out Coroutine running) && running != null;
+    }
+
     private IEnumerator RunHandAnimQueue(string playerPosition) {
         Queue<HandAnimOp> queue = _handAnimQueues[playerPosition];
         while (queue.Count > 0) {
@@ -144,16 +157,42 @@ public partial class Game3DManager {
                 }
                 yield return Get3DTileCoroutine(op.PlayerPosition, "get", op.TileId);
                 break;
+            case HandAnimOpKind.DiscardTile:
+                yield return DiscardTileFromQueue(panel, op);
+                break;
         }
     }
 
     private IEnumerator RemoveHandCardsFromQueue(Transform cardPosition, HandAnimOp op) {
         if (IsSelfCardsPosition(cardPosition)) {
-            yield return RemoveSelfHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true);
+            yield return RemoveSelfHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true, op.PlayerPosition);
         }
         else {
-            yield return RemoveHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true);
+            yield return RemoveHandCardsCoroutine(cardPosition, op.RemoveCount, op.CutClass, op.TileId, op.CombinationMask, skipRearrange: true, op.PlayerPosition);
         }
+    }
+
+    private IEnumerator DiscardTileFromQueue(PosPanel3D panel, HandAnimOp op) {
+        if (IsRecordShowCardsModeActive() && op.PlayerPosition != "self") {
+            yield return RecordDiscardShowCardsCoroutine(op.PlayerPosition, op.TileId, op.CutClass, op.IsRiichi);
+            yield break;
+        }
+
+        if (IsSelfCardsPosition(panel.cardsPosition)) {
+            yield return RemoveSelfHandCardsCoroutine(panel.cardsPosition, 1, op.CutClass, op.TileId, null, skipRearrange: true, op.PlayerPosition);
+        }
+        else {
+            yield return RemoveHandCardsCoroutine(panel.cardsPosition, 1, op.CutClass, op.TileId, null, skipRearrange: true, op.PlayerPosition);
+        }
+        if (op.PlayCutPhysicsSound) {
+            SoundManager.Instance.PlayPhysicsSound("cut");
+        }
+        bool moqieGrayOnDiscard = ShouldApplyMoqieDiscardGray(op.CutClass);
+        yield return Set3DTileCoroutine(op.TileId, panel.discardsPosition, "Discard", op.PlayerPosition, moqieGrayOnDiscard, isRiichi: op.IsRiichi);
+        if (op.PlayerPosition != "self" && DiscardSettlePauseSec > 0f) {
+            yield return new WaitForSeconds(DiscardSettlePauseSec);
+        }
+        yield return Rearrange3DCardsWithAnimation(panel.cardsPosition);
     }
 
     private void EnqueueAnkanHandWork(string playerPosition, int[] combinationMask, bool isMoGang = false, int angangTileId = 0) {
@@ -188,6 +227,17 @@ public partial class Game3DManager {
         });
     }
 
+    private void EnqueueDiscardHandWork(string playerPosition, int tileId, bool cutClass, bool isRiichi, bool playCutPhysicsSound) {
+        EnqueueHandAnimOp(playerPosition, new HandAnimOp {
+            Kind = HandAnimOpKind.DiscardTile,
+            TileId = tileId,
+            RemoveCount = 1,
+            CutClass = cutClass,
+            IsRiichi = isRiichi,
+            PlayCutPhysicsSound = playCutPhysicsSound,
+        });
+    }
+
     private void EnqueueJiagangHandWork(string playerPosition, int jiagangTileId, bool isMoGang) {
         EnqueueHandAnimOp(playerPosition, new HandAnimOp {
             Kind = HandAnimOpKind.RemoveCards,
@@ -200,28 +250,53 @@ public partial class Game3DManager {
         });
     }
 
-    /// <summary>吃碰明杠等：被鸣牌来自河牌时回收 lastCutJiagang3DObject（加杠/暗杠除外）。</summary>
-    private void TryReturnLastCutTileForMeld(string actionType) {
-        if (lastCutJiagang3DObject == null || actionType == "jiagang" || actionType == "angang") {
+    /// <summary>
+    /// 吃碰明杠等：仅回收 RegisterLastDiscard 登记的河牌切子（加杠/暗杠除外）。
+    /// 认不到登记对象则打 Warning 并放弃，不扫描河牌末张。
+    /// </summary>
+    private void TryReturnLastCutTileForMeld(string actionType, string discarderPosOverride = null, int claimedTileOverride = 0) {
+        if (actionType == "jiagang" || actionType == "angang") {
             return;
         }
-        if (_currentDiscardMoveCoroutine != null) {
-            StopCoroutine(_currentDiscardMoveCoroutine);
-            _currentDiscardMoveCoroutine = null;
+        string discarderPos = discarderPosOverride;
+        int claimedTile = claimedTileOverride;
+
+        if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
+            discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
+            if (string.IsNullOrEmpty(discarderPos)) {
+                discarderPos = NormalGameStateManager.Instance.lastDiscardPlayerPosition;
+            }
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
+            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
         }
-        MahjongObjectPool.Instance.Return(-1, lastCutJiagang3DObject);
-        lastCutJiagang3DObject = null;
+
+        GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
+        if (obj == null) {
+            int regTile = !string.IsNullOrEmpty(discarderPos)
+                && _lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int t) ? t : 0;
+            Debug.LogWarning(
+                $"TryReturnLastCutTileForMeld: 未认到登记弃牌，放弃河牌回收 action={actionType}, "
+                + $"discarder={discarderPos}, claimed={claimedTile}, regTile={regTile}");
+            return;
+        }
+
+        // 停掉该打牌者的飞牌协程并清登记，避免被认走的牌仍在飞行/落到河里或被重复认走。
+        OnLastDiscardTaken(discarderPos);
+        MahjongObjectPool.Instance.Return(-1, obj);
+        if (lastCutJiagang3DObject == obj) {
+            lastCutJiagang3DObject = null;
+        }
     }
 
     /// <summary>吃碰明杠等：回收河牌切子并启动副露动画（不进入暗杠手牌队列）。</summary>
-    private void StartMeldPresentation(string actionType, string playerPosition, int[] combinationMask) {
-        TryReturnLastCutTileForMeld(actionType);
+    private void StartMeldPresentation(string actionType, string playerPosition, int[] combinationMask, string discarderPosOverride = null, int claimedTileOverride = 0) {
+        TryReturnLastCutTileForMeld(actionType, discarderPosOverride, claimedTileOverride);
         StartCoroutine(ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true));
     }
 
     private IEnumerator RecordDiscardShowCardsCoroutine(string playerPosition, int tileId, bool fromDrawSlot, bool isRiichi) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot);
+        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot, playerPosition);
         if (fromDrawSlot) {
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
@@ -232,7 +307,7 @@ public partial class Game3DManager {
 
     private IEnumerator RecordBuhuaShowCardsCoroutine(string playerPosition, int tileId, bool fromDrawSlot) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot);
+        yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, tileId, fromDrawSlot, playerPosition);
         if (fromDrawSlot) {
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
@@ -247,14 +322,18 @@ public partial class Game3DManager {
         string actionType,
         int[] combinationMask,
         bool removeDrawSlotFirst = false,
-        int drawSlotTileId = 0) {
+        int drawSlotTileId = 0,
+        string discarderPos = null,
+        int claimedTile = 0) {
         PosPanel3D panel = GetPosPanel(playerPosition);
-        TryReturnLastCutTileForMeld(actionType);
+        // 透传 discarder+tile：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
+        // 必须显式传入才能正确认走「该家最新弃牌」并停掉其飞牌协程，避免被鸣牌仍落到河里。
+        TryReturnLastCutTileForMeld(actionType, discarderPos, claimedTile);
         if (removeDrawSlotFirst) {
-            yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true);
+            yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true, playerPosition);
             ClearRecordPlayerDrawSlotState(playerPosition);
         }
-        yield return RemoveRecordShowHandCardsByMaskCoroutine(panel.ShowCardsPosition, combinationMask);
+        yield return RemoveRecordShowHandCardsByMaskCoroutine(panel.ShowCardsPosition, combinationMask, playerPosition);
         yield return ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true);
         ClearRecordPlayerDrawSlotState(playerPosition);
         yield return RearrangeRecordShowMergeAllWithAnimation(panel.ShowCardsPosition, playerPosition);
@@ -297,7 +376,7 @@ public partial class Game3DManager {
             EnqueueJiagangHandWork(playerPosition, jiagangTileId, isMoGang);
             return true;
         }
-        if (actionType == "GetCard" && _ankanPendingDrawByPlayer[playerPosition]) {
+        if (actionType == "GetCard" && (_ankanPendingDrawByPlayer[playerPosition] || HasPendingHandAnimWork(playerPosition))) {
             if (IsRecordShowCardsModeActive() && playerPosition != "self") {
                 StartCoroutine(RecordShowCardGetCoroutine(playerPosition, tileId));
                 _ankanPendingDrawByPlayer[playerPosition] = false;

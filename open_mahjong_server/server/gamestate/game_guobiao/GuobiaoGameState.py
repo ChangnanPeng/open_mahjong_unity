@@ -23,8 +23,15 @@ from ..public.next_game_round import next_game_round_switchseat
 from ..public.round_end_timing import liuju_ready_wait_seconds
 from ..public.ready_phase import run_hu_result_ready_phase as run_synced_hu_ready_phase
 from ..public.spectator_rules import too_many_ai_for_spectator
-from ..public.hand_slot_utils import has_draw_slot, resolve_is_mo_buhua
-from ..public.game_record_manager import init_game_record,init_game_round,player_action_record_buhua,player_action_record_deal,player_action_record_cut,player_action_record_angang,player_action_record_jiagang,player_action_record_chipenggang,player_action_record_hu,player_action_record_liuju,player_action_record_round_end,end_game_record,build_score_changes_by_seat,build_score_changes_dict,capture_player_entry_order
+from ..public.hand_slot_utils import has_draw_slot
+from ..public.vote_manager import vote_checkpoint
+from .guobiao_debug import (
+    GUOBIAO_DEBUG_SCENARIO,
+    apply_debug_player_seating,
+    get_debug_buhua_start_index,
+)
+from .buhua_broadcast import HAND_SETTLE_GAP_SEC, perform_buhua_and_broadcast
+from ..public.game_record_manager import init_game_record,init_game_round,player_action_record_deal,player_action_record_cut,player_action_record_angang,player_action_record_jiagang,player_action_record_chipenggang,player_action_record_hu,player_action_record_liuju,player_action_record_round_end,end_game_record,build_score_changes_by_seat,build_score_changes_dict,capture_player_entry_order
 from ...game_calculation.game_calculation_service import GameCalculationService
 from ...database.db_manager import DatabaseManager
 from ..public.random_seed_manager import setup_random_seed_system
@@ -45,6 +52,7 @@ class RecordCounter:
         self.cuohe_times = 0 # 错和次数
         self.win_turn = 0 # 总和牌巡目
         self.win_score = 0 # 总和牌番数
+        self.round_score_total = 0 # 各小局净得分累计（局均点分子）
 
 # 玩家类
 class GuobiaoPlayer:
@@ -141,6 +149,9 @@ class GuobiaoGameState:
         self.room_rule = room_data["room_rule"]
         self.room_type = room_data["room_type"]
         self.sub_rule = room_data.get("sub_rule", "guobiao/standard") # 子规则
+        # 排位场次等级(beginner/intermediate/advanced/mcrpl)与比赛场 event_id，默认 None
+        self.match_tier = room_data.get("match_tier")
+        self.event_id = room_data.get("event_id")
 
         self.room_random_seed = room_data.get("random_seed", 0) # 随机种子（默认为0）
         self.open_cuohe = room_data.get("open_cuohe", False) # 是否开启错和（默认为False）
@@ -148,12 +159,13 @@ class GuobiaoGameState:
         self.show_moqie_hint = room_data.get("show_moqie_hint", False) # 是否显示手摸切灰显（默认为False）
         self.hepai_limit = room_data.get("hepai_limit", 8) # 起和番限制（默认8）
         self.tactical_call = room_data.get("tactical_call", False) # 战术鸣牌：吃牌固定申请-打断；碰/和/杠/加杠仅在有更高优先级竞争者时询问
+        self.tactical_commit_lock = self.tactical_call # 国标：选定鸣牌后不可改选（川麻等规则不启用）
         self.claim_protection = room_data.get("claim_protection", True) # 鸣牌保护：无鸣牌权玩家延迟看到切牌/鸣牌（默认开启）
         # 战术鸣牌 / 鸣牌保护的时间参数（暂在此写死，后续接入外部设置）：
         self.tactical_pre_grace_delay = room_data.get("tactical_pre_grace_delay", 0.5) # 战术鸣牌：申请广播后、进入打断窗口前的固定停顿（秒）
         self.tactical_grace_seconds = room_data.get("tactical_grace_seconds", 5.0)     # 战术鸣牌：每次申请后的打断窗口时长（秒）
-        self.claim_protect_delay = room_data.get("claim_protect_delay", 1.5)           # 鸣牌保护：受保护观众看到出牌的最大延迟（秒）
-        self.claim_meld_followup_gap = room_data.get("claim_meld_followup_gap", 0.5)   # 鸣牌保护：出牌与紧随其后的鸣牌/和牌之间的间隔（秒）
+        self.claim_protect_delay = room_data.get("claim_protect_delay", 1.3)           # 鸣牌保护：受保护观众看到出牌的最大延迟（秒）
+        self.claim_meld_followup_gap = room_data.get("claim_meld_followup_gap", 0.8)   # 鸣牌保护：出牌与紧随其后的鸣牌/和牌之间的间隔（秒）
         self.allow_spectator_config = room_data.get("allow_spectator", True) # 允许观战配置
         self.match_queue_type = room_data.get("match_queue_type", None) # 排位匹配队列类型
         
@@ -200,7 +212,10 @@ class GuobiaoGameState:
         init_claim_protection_state(self)
 
         # 如果您在管理自己规则内的分支，请不要将Debug = True 的配置上传到公共代码仓库 这一项单元配置不会得到review和测试
+        # debug_scenario 见 guobiao_debug.py：tactical_claim（战鸣测试）| buhua_8flowers（seat1 单花补花测试）
         self.Debug = False
+        self.debug_scenario = GUOBIAO_DEBUG_SCENARIO
+        self.pending_kan_hand_settle_delay = False
         if self.Debug:
             # 调试牌例番数较低，便于验证荣和按钮
             self.hepai_limit = 1
@@ -390,6 +405,7 @@ class GuobiaoGameState:
         else:
             # 测试
             self.master_seed, self.salt, self.commitment, self.isPlayerSetRandomSeed = setup_random_seed_system()
+            apply_debug_player_seating(self)
             capture_player_entry_order(self)
             # 测试时不打乱玩家顺序
             for index, player in enumerate[GuobiaoPlayer](self.player_list):
@@ -401,6 +417,10 @@ class GuobiaoGameState:
         # 牌谱/观战用：子规则与起和限制写入 game_title，客户端据此做番表显示
         self.game_record["game_title"]["sub_rule"] = self.sub_rule
         self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
+        if self.match_tier is not None:
+            self.game_record["game_title"]["match_tier"] = self.match_tier
+        if self.event_id is not None:
+            self.game_record["game_title"]["event_id"] = self.event_id
         # 游戏主循环
         while self.current_round <= self.max_round * 4:
 
@@ -423,7 +443,9 @@ class GuobiaoGameState:
 
             # 遍历每个玩家,直到玩家选择pass或没有新的补花行为
             self.game_status = "waiting_buhua_round"
-            for i in range(0,4): # 按索引顺序遍历
+            buhua_start = get_debug_buhua_start_index(self) if self.Debug else 0
+            for offset in range(4):
+                i = (buhua_start + offset) % 4
                 self.current_player_index = i
                 action_anymore = True
                 while action_anymore: # 如果单个玩家可以补花
@@ -433,26 +455,12 @@ class GuobiaoGameState:
                         await self.broadcast_ask_hand_action() # 广播补花信息
                         # 如果玩家选择补花 则广播一次摸牌信息
                         if await self.wait_action():
-                            player = self.player_list[self.current_player_index]
-                            hand = player.hand_tiles
-                            max_tile = max(hand)
-                            is_mo_buhua = resolve_is_mo_buhua(hand, max_tile, draw_slot=has_draw_slot(player))
-                            hand.remove(max_tile)
-                            player.huapai_list.append(max_tile)
-                            player.get_gang_tile(self.tiles_list, self)
-                            deal_tile = player.hand_tiles[-1]
-                            player_action_record_buhua(
-                                self, max_tile=max_tile, action_player=self.current_player_index, is_mo_buhua=is_mo_buhua,
-                            )
-                            player_action_record_deal(
-                                self, deal_tile=deal_tile, deal_type="bd", action_player=self.current_player_index,
-                            )
-                            await self.broadcast_do_action(
-                                action_list=["buhua", "deal_buhua_tile"],
-                                action_player=self.current_player_index,
-                                buhua_tile=max_tile,
-                                deal_tile=deal_tile,
-                                is_mo_buhua=is_mo_buhua,
+                            await perform_buhua_and_broadcast(
+                                self,
+                                self.current_player_index,
+                                refresh_waiting=False,
+                                huapai_before_draw=True,
+                                instant=True,
                             )
                         # 如果玩家选择pass 则下一轮循环
                         else:
@@ -463,7 +471,7 @@ class GuobiaoGameState:
 
             # 初始行为
             self.game_status = "waiting_hand_action" # 初始行动
-            self.current_player_index = 0 # 初始玩家索引
+            self.current_player_index = get_debug_buhua_start_index(self) if self.Debug else 0
 
             self.refresh_waiting_tiles(self.current_player_index, is_first_action=True) # 检查手牌等待牌
             logger.info(f"第一位行动玩家{self.current_player_index}的手牌等待牌为{self.player_list[self.current_player_index].waiting_tiles}")
@@ -473,6 +481,7 @@ class GuobiaoGameState:
 
             # 游戏主循环
             while self.game_status != "END":
+                await vote_checkpoint(self)
                 match self.game_status:
 
                     # 普通摸牌操作：切换到下一个玩家进行摸牌
@@ -496,6 +505,9 @@ class GuobiaoGameState:
 
                     # 杠后摸牌操作：当前玩家进行摸牌
                     case "deal_card_after_gang": # 杠后发牌历时行为
+                        if self.pending_kan_hand_settle_delay:
+                            await asyncio.sleep(HAND_SETTLE_GAP_SEC)
+                            self.pending_kan_hand_settle_delay = False
                         self.refresh_waiting_tiles(self.current_player_index) # 摸牌前更新听牌
                         self.player_list[self.current_player_index].get_gang_tile(self.tiles_list, self) # 倒序摸牌
                         # 牌谱记录摸牌
@@ -511,27 +523,11 @@ class GuobiaoGameState:
                     
                     # 补花摸牌操作：当前玩家进行摸牌
                     case "deal_card_after_buhua": # 补花后发牌历时行为
-                        player = self.player_list[self.current_player_index]
-                        hand = player.hand_tiles
-                        max_tile = max(hand)
-                        is_mo_buhua = resolve_is_mo_buhua(hand, max_tile, draw_slot=has_draw_slot(player))
-                        hand.remove(max_tile)
-                        self.refresh_waiting_tiles(self.current_player_index)
-                        player.get_gang_tile(self.tiles_list, self)
-                        player.huapai_list.append(max_tile)
-                        deal_tile = player.hand_tiles[-1]
-                        player_action_record_buhua(
-                            self, max_tile=max_tile, action_player=self.current_player_index, is_mo_buhua=is_mo_buhua,
-                        )
-                        player_action_record_deal(
-                            self, deal_tile=deal_tile, deal_type="bd", action_player=self.current_player_index,
-                        )
-                        await self.broadcast_do_action(
-                            action_list=["buhua", "deal_buhua_tile"],
-                            action_player=self.current_player_index,
-                            buhua_tile=max_tile,
-                            deal_tile=deal_tile,
-                            is_mo_buhua=is_mo_buhua,
+                        await perform_buhua_and_broadcast(
+                            self,
+                            self.current_player_index,
+                            refresh_waiting=True,
+                            huapai_before_draw=False,
                         )
                         self.action_dict = check_action_hand_action(self,self.current_player_index) # 允许可执行的手牌操作
                         self.game_status = "waiting_hand_action" # 切换到摸牌后状态
@@ -769,6 +765,7 @@ class GuobiaoGameState:
             # 计算每个玩家本局的分数变化并记录
             for player in self.player_list:
                 score_change = player.score - scores_before[player.original_player_index]
+                player.record_counter.round_score_total += score_change
                 # 格式化为 +00、-00 或 0
                 if score_change > 0:
                     score_change_str = f"+{score_change:02d}"
@@ -893,14 +890,14 @@ class GuobiaoGameState:
                 game_id,
                 self.player_list,
                 self.room_type,
-                self.max_round,
+                match_type,
                 total_rounds
             )
             self.db_manager.store_guobiao_fan_stats(
                 game_id,
                 self.player_list,
                 self.room_type,
-                self.max_round
+                match_type
             )
 
         # 结束游戏生命周期：使用统一的清理方法。

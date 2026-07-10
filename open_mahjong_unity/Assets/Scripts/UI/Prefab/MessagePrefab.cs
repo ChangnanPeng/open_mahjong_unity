@@ -30,10 +30,17 @@ public class MessagePrefab : MonoBehaviour {
             YesButton.onClick.AddListener(() => ReconnectClick("yes"));
             BackButton.onClick.AddListener(() => ReconnectClick("no"));
         } else if (type == "error_version") {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            YesButtonText.text = "去下载";
+            BackButtonText.text = "关闭";
+            YesButton.onClick.AddListener(OpenMobileDownloadPage);
+            BackButton.onClick.AddListener(CloseMessage);
+#else
             YesButtonText.text = "好的";
             BackButtonText.text = "关闭";
             YesButton.onClick.AddListener(CloseMessage);
             BackButton.onClick.AddListener(CloseMessage);
+#endif
         } else if (type == "login_kickout") {
             YesButtonText.text = "重新登陆";
             BackButtonText.text = "关闭";
@@ -44,6 +51,11 @@ public class MessagePrefab : MonoBehaviour {
             BackButtonText.text = "关闭";
             YesButton.onClick.AddListener(DisconnectReconnectClick);
             BackButton.onClick.AddListener(DisconnectCloseClick);
+        } else if (type == "logout_confirm") {
+            YesButtonText.text = "是";
+            BackButtonText.text = "否";
+            YesButton.onClick.AddListener(DisconnectReconnectClick);
+            BackButton.onClick.AddListener(CloseMessage);
         } else {
             YesButtonText.text = "好的";
             BackButtonText.text = "关闭";
@@ -82,6 +94,11 @@ public class MessagePrefab : MonoBehaviour {
 
     private void DisconnectCloseClick() {
         AppSession.QuitOrReconnectOnDisconnectClose();
+        CloseMessage();
+    }
+
+    private void OpenMobileDownloadPage() {
+        Application.OpenURL(ConfigManager.mobileDownloadUrl);
         CloseMessage();
     }
 }

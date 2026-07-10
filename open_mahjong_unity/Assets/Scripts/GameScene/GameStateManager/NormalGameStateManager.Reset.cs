@@ -11,11 +11,15 @@ public partial class NormalGameStateManager {
         lastCutCardID = 0;
         currentAskCutTileId = 0;
         lastDiscardPlayerPosition = null;
+        currentMeldDiscarderPos = null;
+        currentMeldClaimedTileId = 0;
         CurrentPlayer = null;
         lastAskHandPlayerIndex = -1;
         lastDealTileType = null;
+        lastDealTileId = 0;
         selfRiichiCandidateCuts.Clear();
         selfForbiddenCutTiles.Clear();
+        selfForcedCutTiles.Clear();
         chiCandidates.Clear();
         IsQiangGangAsk = false;
         pendingAskFromJiagang = false;

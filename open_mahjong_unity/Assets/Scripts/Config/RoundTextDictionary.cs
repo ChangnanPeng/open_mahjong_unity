@@ -39,6 +39,13 @@ public static class RoundTextDictionary {
         {13, "第十三副"}, {14, "第十四副"}, {15, "第十五副"}, {16, "第十六副"},
     };
 
+    public static readonly Dictionary<int, string> CurrentRoundTextChangsha = new Dictionary<int, string>() {
+        {1, "第1局"}, {2, "第2局"}, {3, "第3局"}, {4, "第4局"},
+        {5, "第5局"}, {6, "第6局"}, {7, "第7局"}, {8, "第8局"},
+        {9, "第9局"}, {10, "第10局"}, {11, "第11局"}, {12, "第12局"},
+        {13, "第13局"}, {14, "第14局"}, {15, "第15局"}, {16, "第16局"},
+    };
+
     /// <summary>局数（当前第几局）显示名</summary>
     public static string GetRoundName(string rule, int currentRound) {
         if (!string.IsNullOrEmpty(rule)) {
@@ -51,6 +58,7 @@ public static class RoundTextDictionary {
         else if (rule == "riichi") roundMap = CurrentRoundTextRiichi;
         else if (rule == "classical") roundMap = CurrentRoundTextClassical;
         else if (rule == "sichuan") roundMap = CurrentRoundTextSichuan;
+        else if (rule == "changsha") roundMap = CurrentRoundTextChangsha;
         else if (rule == "new_rule") roundMap = CurrentRoundTextQingque;
         if (roundMap != null && roundMap.TryGetValue(currentRound, out string roundName)) {
             return roundName;
@@ -66,12 +74,32 @@ public static class RoundTextDictionary {
         { 4, "全庄战" },
     };
 
+    public static readonly Dictionary<int, string> MaxRoundTextChangsha = new Dictionary<int, string> {
+        { 1, "4局" }, { 2, "8局" }, { 4, "16局" },
+    };
+
     public static string GetMaxRoundText(int game_round) {
         return MaxRoundText.TryGetValue(game_round, out string text) ? text : $"未知({game_round})";
     }
 
+    public static string GetMaxRoundText(string rule, int gameRound) {
+        string baseRule = rule;
+        int slash = !string.IsNullOrEmpty(baseRule) ? baseRule.IndexOf('/') : -1;
+        if (slash >= 0) baseRule = baseRule.Substring(0, slash);
+        if (baseRule == "changsha") {
+            return MaxRoundTextChangsha.TryGetValue(gameRound, out string changshaText)
+                ? changshaText
+                : $"未知({gameRound})";
+        }
+        return GetMaxRoundText(gameRound);
+    }
+
     /// <summary>根据服务端 match_type（如 1/4、2/4、4/4）返回局数显示名（东风战/东南战/全庄战等）</summary>
     public static string GetMatchTypeDisplay(string match_type) {
+        return GetMatchTypeDisplay(null, match_type);
+    }
+
+    public static string GetMatchTypeDisplay(string rule, string match_type) {
         if (string.IsNullOrEmpty(match_type)) return "";
         string normalized = match_type;
         if (normalized.EndsWith("_rank")) {
@@ -80,6 +108,6 @@ public static class RoundTextDictionary {
         int slash = normalized.IndexOf('/');
         if (slash < 0 || !int.TryParse(normalized.Substring(0, slash), out int rounds))
             return "";
-        return GetMaxRoundText(rounds);
+        return GetMaxRoundText(rule, rounds);
     }
 }

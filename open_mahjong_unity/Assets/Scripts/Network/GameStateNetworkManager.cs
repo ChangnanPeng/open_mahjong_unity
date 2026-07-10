@@ -36,6 +36,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_start":
             case "gamestate/riichi/game_start":
             case "gamestate/sichuan/game_start":
+            case "gamestate/changsha/game_start":
             case "gamestate/new_rule/game_start":
                 HandleGameStart(response);
                 break;
@@ -44,6 +45,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/broadcast_hand_action":
             case "gamestate/riichi/broadcast_hand_action":
             case "gamestate/sichuan/broadcast_hand_action":
+            case "gamestate/changsha/broadcast_hand_action":
             case "gamestate/new_rule/broadcast_hand_action":
                 HandleBroadcastHandAction(response);
                 break;
@@ -52,6 +54,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ask_other_action":
             case "gamestate/riichi/ask_other_action":
             case "gamestate/sichuan/ask_other_action":
+            case "gamestate/changsha/ask_other_action":
             case "gamestate/new_rule/ask_other_action":
                 HandleAskOtherAction(response);
                 break;
@@ -60,6 +63,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/do_action":
             case "gamestate/riichi/do_action":
             case "gamestate/sichuan/do_action":
+            case "gamestate/changsha/do_action":
             case "gamestate/new_rule/do_action":
                 HandleDoAction(response);
                 break;
@@ -68,6 +72,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/show_result":
             case "gamestate/riichi/show_result":
             case "gamestate/sichuan/show_result":
+            case "gamestate/changsha/show_result":
             case "gamestate/new_rule/show_result":
                 HandleShowResult(response);
                 break;
@@ -76,6 +81,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/game_end":
             case "gamestate/riichi/game_end":
             case "gamestate/sichuan/game_end":
+            case "gamestate/changsha/game_end":
             case "gamestate/new_rule/game_end":
                 HandleGameEnd(response);
                 break;
@@ -105,6 +111,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/classical/ready_status":
             case "gamestate/riichi/ready_status":
             case "gamestate/sichuan/ready_status":
+            case "gamestate/changsha/ready_status":
             case "gamestate/new_rule/ready_status":
                 HandleReadyStatus(response);
                 break;

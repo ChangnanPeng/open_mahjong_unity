@@ -29,6 +29,7 @@ public partial class GameCanvas : MonoBehaviour {
         public ActionButtonColorPreset chi = new ActionButtonColorPreset();
         public ActionButtonColorPreset peng = new ActionButtonColorPreset();
         public ActionButtonColorPreset gang = new ActionButtonColorPreset();
+        public ActionButtonColorPreset buzhang = new ActionButtonColorPreset();
         public ActionButtonColorPreset angang = new ActionButtonColorPreset();
         public ActionButtonColorPreset jiagang = new ActionButtonColorPreset();
         public ActionButtonColorPreset hu = new ActionButtonColorPreset();
@@ -49,7 +50,18 @@ public partial class GameCanvas : MonoBehaviour {
         if (button != null && preset != null) {
             button.colors = preset.ToColorBlock();
         }
+        ConfigureActionButtonText(actionButton.TextObject);
         return actionButton;
+    }
+
+    private static void ConfigureActionButtonText(TMP_Text text) {
+        if (text == null) return;
+        text.enableAutoSizing = true;
+        text.fontSizeMax = Mathf.Max(text.fontSize, 36f);
+        text.fontSizeMin = 18f;
+        text.enableWordWrapping = false;
+        text.overflowMode = TextOverflowModes.Truncate;
+        text.alignment = TextAlignmentOptions.Center;
     }
 
     private ActionButtonColorPreset GetActionButtonColorPreset(string action) {
@@ -65,6 +77,8 @@ public partial class GameCanvas : MonoBehaviour {
                 return actionButtonColorPresets.peng;
             case "gang":
                 return actionButtonColorPresets.gang;
+            case "buzhang":
+                return actionButtonColorPresets.buzhang;
             case "angang":
                 return actionButtonColorPresets.angang;
             case "jiagang":
@@ -75,6 +89,7 @@ public partial class GameCanvas : MonoBehaviour {
             case "hu_third":
                 return actionButtonColorPresets.hu;
             case "hu_self":
+            case "initial_hu":
                 return actionButtonColorPresets.huSelf;
             case "buhua":
                 return actionButtonColorPresets.buhua;
@@ -87,6 +102,11 @@ public partial class GameCanvas : MonoBehaviour {
             default:
                 return actionButtonColorPresets.fallback;
         }
+    }
+
+    private static bool IsChangshaActionContext() {
+        return NormalGameStateManager.Instance != null
+            && NormalGameStateManager.Instance.roomRule == "changsha";
     }
 
     /// <summary>按当前开关与预设，刷新 ActionButtonContainer 内已有按钮配色。</summary>
@@ -107,10 +127,13 @@ public partial class GameCanvas : MonoBehaviour {
 
     // 显示可用行动按钮
     public void SetActionButton(List<string> action_list){
+        bool isSeaBottomAsk = action_list.Contains("sea_bottom");
         // 用于跟踪吃牌按钮
         ActionButton chiButton = null;
         // 用于跟踪暗杠按钮
         ActionButton angangButton = null;
+        // 用于跟踪补张按钮
+        ActionButton buzhangButton = null;
         // 用于跟踪加杠按钮
         ActionButton jiagangButton = null;
 
@@ -138,7 +161,7 @@ public partial class GameCanvas : MonoBehaviour {
                 Debug.Log($"杠牌");
                 ActionButton ActionButtonObj = CreateActionButton(colorPreset);
                 TMP_Text buttonText = ActionButtonObj.TextObject;
-                buttonText.text = "杠";
+                buttonText.text = IsChangshaActionContext() ? "开杠" : "杠";
                 Debug.Log($"杠牌按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }
@@ -150,6 +173,22 @@ public partial class GameCanvas : MonoBehaviour {
                 TMP_Text buttonText = ActionButtonObj.TextObject;
                 buttonText.text = huSelfText;
                 Debug.Log($"{huSelfText}按钮: {ActionButtonObj}");
+                ActionButtonObj.actionTypeList.Add(action_list[i]);
+            }
+            else if (action_list[i] == "initial_hu"){
+                Debug.Log($"起手胡");
+                ActionButton ActionButtonObj = CreateActionButton(colorPreset);
+                TMP_Text buttonText = ActionButtonObj.TextObject;
+                buttonText.text = "起手胡";
+                Debug.Log($"起手胡按钮: {ActionButtonObj}");
+                ActionButtonObj.actionTypeList.Add(action_list[i]);
+            }
+            else if (action_list[i] == "sea_bottom"){
+                Debug.Log($"要海底");
+                ActionButton ActionButtonObj = CreateActionButton(colorPreset);
+                TMP_Text buttonText = ActionButtonObj.TextObject;
+                buttonText.text = "要海底";
+                Debug.Log($"要海底按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }
             else if (action_list[i] == "hu" || action_list[i] == "hu_first" || action_list[i] == "hu_second" || action_list[i] == "hu_third"){
@@ -175,18 +214,29 @@ public partial class GameCanvas : MonoBehaviour {
                 if (angangButton == null) {
                     angangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = angangButton.TextObject;
-                    buttonText.text = "暗杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "暗杠";
                     Debug.Log($"暗杠按钮: {angangButton}");
                 }
                 angangButton.actionTypeList.Add(action_list[i]);
                 Debug.Log($"添加暗杠选项: {action_list[i]}");
+            }
+            // 补张
+            else if (action_list[i] == "buzhang"){
+                if (buzhangButton == null) {
+                    buzhangButton = CreateActionButton(colorPreset);
+                    TMP_Text buttonText = buzhangButton.TextObject;
+                    buttonText.text = "补张";
+                    Debug.Log($"补张按钮: {buzhangButton}");
+                }
+                buzhangButton.actionTypeList.Add(action_list[i]);
+                Debug.Log($"添加补张选项: {action_list[i]}");
             }
             // 加杠
             else if (action_list[i] == "jiagang"){
                 if (jiagangButton == null) {
                     jiagangButton = CreateActionButton(colorPreset);
                     TMP_Text buttonText = jiagangButton.TextObject;
-                    buttonText.text = "加杠";
+                    buttonText.text = IsChangshaActionContext() ? "开杠" : "加杠";
                     Debug.Log($"加杠按钮: {jiagangButton}");
                 }
                 jiagangButton.actionTypeList.Add(action_list[i]);
@@ -223,7 +273,7 @@ public partial class GameCanvas : MonoBehaviour {
                 Debug.Log($"取消");
                 ActionButton ActionButtonObj = CreateActionButton(colorPreset);
                 TMP_Text buttonText = ActionButtonObj.TextObject;
-                buttonText.text = "取消";
+                buttonText.text = isSeaBottomAsk ? "不要" : "取消";
                 Debug.Log($"取消按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
             }

@@ -71,6 +71,10 @@ public partial class NormalGameStateManager : MonoBehaviour{
     private bool pendingAskFromJiagang;
     /// <summary>上一张切牌玩家座位（荣和倒牌从河牌抓取时使用）。</summary>
     public string lastDiscardPlayerPosition;
+    /// <summary>本次鸣牌（吃/碰/明杠）真正认走的打牌者座位，由 action_tick 回查得到，供 3D 回收河牌使用。乱序下比 lastDiscardPlayerPosition 可靠。</summary>
+    public string currentMeldDiscarderPos;
+    /// <summary>本次鸣牌真正认走的被鸣牌张 id，由 action_tick 回查得到。</summary>
+    public int currentMeldClaimedTileId;
     public string CurrentPlayer; // 当前玩家字符串
     /// <summary>上次 ask_hand_action 的 player_index；-1 表示本局尚未 ask，首次 ask 不收拢手牌。</summary>
     private int lastAskHandPlayerIndex = -1;
@@ -114,6 +118,8 @@ public partial class NormalGameStateManager : MonoBehaviour{
 
     // 上次摸牌类型
     public string lastDealTileType; // 上次摸牌类型
+    /// <summary>自家最近一次摸入的牌 id（deal_tile/deal_gang_tile/deal_buhua_tile）；切牌后清零。</summary>
+    public int lastDealTileId;
 
     // 立直麻将专属字段
     public int honba; // 本场棒数
@@ -128,6 +134,8 @@ public partial class NormalGameStateManager : MonoBehaviour{
     public Dictionary<int, int[]> selfRiichiCandidateCuts = new Dictionary<int, int[]>();
     /// <summary>立直麻将：当前自家本巡食替禁切牌列表（吃来源 + 两面搭子的筋）。</summary>
     public HashSet<int> selfForbiddenCutTiles = new HashSet<int>();
+    /// <summary>强制出牌列表：长沙海底/开杠补张只能打这些摸入牌。</summary>
+    public HashSet<int> selfForcedCutTiles = new HashSet<int>();
     /// <summary>当前一轮询问切牌后操作下发的吃牌候选（立直麻将赤宝牌场景）。</summary>
     public Dictionary<string, int[][]> chiCandidates = new Dictionary<string, int[][]>();
 

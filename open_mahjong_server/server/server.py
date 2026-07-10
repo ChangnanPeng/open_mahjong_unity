@@ -94,6 +94,66 @@ async def _daily_ip_limit_reset_loop() -> None:
         logging.info("IP 注册限流缓存已清空（Asia/Shanghai 04:00）")
 
 
+# 每日全站统计：在线人数采样（60s，持久化到 daily_online_cache）+ 04:00 聚合
+
+
+async def _online_sampler_loop() -> None:
+    """每 60s 采样当前在线连接数，UPSERT(GREATEST) 当日峰值到 daily_online_cache。
+
+    持久化峰值，保证服务端在凌晨 3-4 点关闭、5 点重启后仍可据此正确重写当日 max_online。
+    """
+    while True:
+        try:
+            current = len(game_server.players) if game_server else 0
+            from .database.daily_aggregator import current_stat_date
+            stat_today = current_stat_date()
+            conn = db_manager._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO daily_online_cache (stat_date, max_online, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (stat_date) DO UPDATE SET
+                    max_online = GREATEST(daily_online_cache.max_online, EXCLUDED.max_online),
+                    updated_at = CURRENT_TIMESTAMP
+            """, (stat_today, current))
+            conn.commit()
+            cursor.close()
+            db_manager._put_connection(conn)
+        except Exception as e:
+            logging.warning("在线采样失败: %s", e)
+        await asyncio.sleep(60)
+
+
+async def _daily_stats_loop() -> None:
+    """每天 04:00 (Asia/Shanghai) 聚合昨日 daily_stats 与 scene_daily_stats。
+
+    max_online 从 daily_online_cache 读取（持久化峰值），无需依赖内存。
+    """
+    tz = ZoneInfo("Asia/Shanghai")
+    while True:
+        now = datetime.now(tz)
+        next_reset = now.replace(hour=4, minute=0, second=0, microsecond=0)
+        if now >= next_reset:
+            next_reset += timedelta(days=1)
+        await asyncio.sleep((next_reset - now).total_seconds())
+        try:
+            from .database.daily_aggregator import run_daily_aggregation, current_stat_date
+            yesterday = current_stat_date() - timedelta(days=1)
+            run_daily_aggregation(db_manager, yesterday)
+            logging.info("每日统计已聚合 %s", yesterday)
+        except Exception as e:
+            logging.error("每日统计聚合失败: %s", e, exc_info=True)
+
+
+async def _daily_stats_startup_restore() -> None:
+    """启动时在后台增量回补未合并的 metrics，并补齐缺失日的聚合。"""
+    try:
+        from .database.daily_aggregator import run_startup_stats_restore
+        await asyncio.to_thread(run_startup_stats_restore, db_manager)
+    except Exception as e:
+        logging.error("每日统计启动维护失败: %s", e, exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时执行
@@ -105,10 +165,19 @@ async def lifespan(app: FastAPI):
     if Config.auto_create_chatserver:
         await chat_server.start_chat_server()
     reset_task = asyncio.create_task(_daily_ip_limit_reset_loop())
+    sampler_task = asyncio.create_task(_online_sampler_loop())
+    stats_task = asyncio.create_task(_daily_stats_loop())
+    restore_task = asyncio.create_task(_daily_stats_startup_restore())
     yield
     reset_task.cancel()
+    sampler_task.cancel()
+    stats_task.cancel()
+    restore_task.cancel()
     try:
         await reset_task
+        await sampler_task
+        await stats_task
+        await restore_task
     except asyncio.CancelledError:
         pass
     # 关闭时执行（如果需要清理资源，在这里添加）
@@ -247,6 +316,10 @@ class GameServer:
     async def create_Qingque_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True) -> Response:
         return await self.room_manager.create_Qingque_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, False, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection)
 
+    # 创建长沙麻将房间
+    async def create_Changsha_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, open_kong_replacement_count: int = 2, initial_hu_si_xi: bool = True, initial_hu_ban_ban_hu: bool = True, initial_hu_que_yi_se: bool = True, initial_hu_liu_liu_shun: bool = True, initial_hu_san_tong: bool = True, bird_count: int = 2, dealer_bird: bool = True) -> Response:
+        return await self.room_manager.create_Changsha_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, open_kong_replacement_count, initial_hu_si_xi, initial_hu_ban_ban_hu, initial_hu_que_yi_se, initial_hu_liu_liu_shun, initial_hu_san_tong, bird_count, dealer_bird)
+
     # 创建古典麻将房间
     async def create_Classical_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True) -> Response:
         return await self.room_manager.create_Classical_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator)
@@ -341,9 +414,11 @@ game_server = GameServer()
 from .webapi.calc import register_calc_routes
 from .webapi.admin_message import register_admin_message_routes
 from .webapi.admin_user import register_admin_user_routes
+from .webapi.admin_game import register_admin_game_routes
 register_calc_routes(app, game_server)
 register_admin_message_routes(app, game_server)
 register_admin_user_routes(app, game_server)
+register_admin_game_routes(app, game_server)
 
 @app.websocket("/game/{Connect_id}")
 async def message_input(websocket: WebSocket, Connect_id: str):

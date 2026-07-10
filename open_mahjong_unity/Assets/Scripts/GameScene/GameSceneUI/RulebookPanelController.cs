@@ -55,6 +55,7 @@ public class RulebookPanelController : MonoBehaviour {
             case "classical": return "classical";
             case "riichi": return "riichi";
             case "sichuan": return "sichuan";
+            case "changsha": return "changsha";
             default: return "guobiao";
         }
     }
@@ -70,6 +71,7 @@ public class RulebookPanelController : MonoBehaviour {
             case "classical": return "古典麻将";
             case "riichi": return "立直麻将";
             case "sichuan": return "四川麻将";
+            case "changsha": return "长沙麻将";
             default: return "麻将";
         }
     }

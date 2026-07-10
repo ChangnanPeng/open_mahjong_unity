@@ -2,14 +2,15 @@ using UnityEngine;
 
 public partial class NormalGameStateManager {
     // 切换玩家状态
-    public void SwitchCurrentPlayer(string GetCardPlayer, string SwitchType, int remaining_time, int askHandPlayerIndex = -1) {
+    public void SwitchCurrentPlayer(string GetCardPlayer, string SwitchType, int remaining_time, int askHandPlayerIndex = -1, bool isTacticalRecheck = false) {
 
         // 询问手牌操作
         if (SwitchType == "askHandAction"){
             // 仅行动者换人时收拢：首次 ask、同玩家连补花后的再次 ask 均不收拢，保留摸牌区以区分手切/摸切
             bool shouldConsolidateHands = lastAskHandPlayerIndex >= 0 && askHandPlayerIndex != lastAskHandPlayerIndex;
             if (shouldConsolidateHands) {
-                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards();
+                // 3D：跳过当前行动者，避免刚摸牌的家被收拢进主列（2D 侧轮到自己本就不 ReSetHandCards）
+                Game3DManager.Instance.CheckAndRearrangeAllPlayersHandCards(GetCardPlayer);
             }
             // 如果行动者是自己
             if (GetCardPlayer == "self"){
@@ -22,7 +23,7 @@ public partial class NormalGameStateManager {
                 if (AutoAction.Instance != null) {
                     AutoAction.Instance.SetAutoCutLocked(IsSelfRiichi());
                 }
-                // 如果开启自动自摸、自动补花或者自动出牌，则启动协程
+                // 手牌询问：自动自摸 / 自动补花 / 自动出牌 任一开启则启动协程
                 if (AutoAction.Instance != null && (AutoAction.Instance.ShouldAutoWinTsumo() || AutoAction.Instance.IsAutoBuhua || AutoAction.Instance.IsAutoCut)){
                     StartWaitAutoAction("AutoHandAction");
                 }
@@ -52,9 +53,10 @@ public partial class NormalGameStateManager {
         else if (SwitchType == "askMingPaiAction"){
             GameCanvas.Instance.ClearActionButton();
             GameCanvas.Instance.SetActionButton(allowActionList);
-            GameCanvas.Instance.LoadingRemianTime(remaining_time,roomStepTime);
-            // 如果开启自动过牌或自动荣和，则启动协程
-            if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.ShouldAutoWinRon() || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.IsAutoPassChi || AutoAction.Instance.IsAutoPassPeng || AutoAction.Instance.IsAutoPassGang){
+            // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
+            GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
+            // 鸣牌询问：自动过牌 / 自动胡牌 / 不点和 / 牌张设置 / 任一鸣牌过滤项 开启则启动协程
+            if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.IsNoRon || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
                 StartWaitAutoAction("AutoMingPaiAction");
             }
             IsSelfActionRequired = true;
@@ -81,6 +83,7 @@ public partial class NormalGameStateManager {
                 if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
                 selfRiichiCandidateCuts.Clear();
                 selfForbiddenCutTiles.Clear();
+                selfForcedCutTiles.Clear();
                 // 立刻恢复手牌正常颜色，避免用户看到禁切灰色滞留到下一轮询问
                 GameCanvas.Instance.RefreshHandTileSelectability();
                 // 在自己执行操作以后计算听牌提示，如果有提示就显示右侧提示块
@@ -104,6 +107,7 @@ public partial class NormalGameStateManager {
             allowActionList.Clear();
             selfRiichiCandidateCuts.Clear();
             selfForbiddenCutTiles.Clear();
+            selfForcedCutTiles.Clear();
             if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);
@@ -117,6 +121,7 @@ public partial class NormalGameStateManager {
             // 清空操作按钮
             GameCanvas.Instance.ClearActionButton();
             if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+            selfForcedCutTiles.Clear();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);
         }

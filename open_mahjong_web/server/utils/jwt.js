@@ -16,8 +16,11 @@ function base64UrlDecode(str) {
 
 function signToken(payload, secret, expiresInSec) {
   const header = base64UrlEncode({ alg: 'HS256', typ: 'JWT' });
-  const exp = Math.floor(Date.now() / 1000) + expiresInSec;
-  const body = base64UrlEncode({ ...payload, exp });
+  const bodyPayload = { ...payload };
+  if (expiresInSec != null && expiresInSec > 0) {
+    bodyPayload.exp = Math.floor(Date.now() / 1000) + expiresInSec;
+  }
+  const body = base64UrlEncode(bodyPayload);
   const sig = crypto
     .createHmac('sha256', secret)
     .update(`${header}.${body}`)
@@ -50,7 +53,7 @@ function verifyToken(token, secret) {
     return null;
   }
   const payload = base64UrlDecode(body);
-  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) {
+  if (payload.exp != null && payload.exp < Math.floor(Date.now() / 1000)) {
     return null;
   }
   return payload;

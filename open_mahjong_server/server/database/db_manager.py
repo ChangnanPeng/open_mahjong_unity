@@ -130,15 +130,24 @@ class DatabaseManager:
                     cursor.execute("ROLLBACK TO SAVEPOINT sp_add_original_player_index;")
                 else:
                     raise
-            # 从牌谱 JSON 回填 room_type
-            cursor.execute("""
-                UPDATE game_player_records gpr
-                SET room_type = gr.record->'game_title'->>'room_type'
-                FROM game_records gr
-                WHERE gpr.game_id = gr.game_id
-                  AND (gpr.room_type IS NULL OR gpr.room_type = '')
-                  AND gr.record->'game_title'->>'room_type' IS NOT NULL;
-            """)
+            # 迁移：追加 match_tier（排位场次等级 beginner/intermediate/advanced/mcrpl）
+            cursor.execute("SAVEPOINT sp_add_match_tier;")
+            try:
+                cursor.execute("ALTER TABLE game_player_records ADD COLUMN match_tier VARCHAR(24) NULL;")
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_add_match_tier;")
+                else:
+                    raise
+            # 迁移：追加 event_id（比赛场 room_type='events' 的比赛唯一 id）
+            cursor.execute("SAVEPOINT sp_add_event_id;")
+            try:
+                cursor.execute("ALTER TABLE game_player_records ADD COLUMN event_id VARCHAR(64) NULL;")
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_add_event_id;")
+                else:
+                    raise
             # 迁移：若表中曾有 mode 列，将 mode 拷贝到 match_type 后丢弃 mode
             cursor.execute("""
                 SELECT 1 FROM information_schema.columns
@@ -175,6 +184,7 @@ class DatabaseManager:
                     fourth_place_count INT NOT NULL DEFAULT 0,
                     fulu_round_count INT NOT NULL DEFAULT 0,
                     cuohe_count INT NOT NULL DEFAULT 0,
+                    total_round_score INT NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (user_id, rule, mode)
@@ -710,10 +720,173 @@ class DatabaseManager:
                 else:
                     raise
 
+            # 迁移：国标 history_stats 增加累计小局净得分（局均点分子）
+            cursor.execute("SAVEPOINT sp_round_score_guobiao_history_stats;")
+            try:
+                cursor.execute(
+                    "ALTER TABLE guobiao_history_stats "
+                    "ADD COLUMN total_round_score INT NOT NULL DEFAULT 0;"
+                )
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_round_score_guobiao_history_stats;")
+                else:
+                    raise
+
+            # ===== 每日统计相关表 =====
+            # 每玩家每局原始指标：供每天 4 点聚合，避免重解牌谱 JSON
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS game_player_metrics (
+                    id BIGSERIAL PRIMARY KEY,
+                    game_id VARCHAR(16) NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    username VARCHAR(255) NOT NULL,
+                    rule VARCHAR(10) NOT NULL,
+                    sub_rule VARCHAR(32) NULL,
+                    room_type VARCHAR(16) NULL,
+                    match_tier VARCHAR(24) NULL,
+                    event_id VARCHAR(64) NULL,
+                    game_type VARCHAR(16) NULL,
+                    match_type VARCHAR(24) NULL,
+                    score INT NOT NULL DEFAULT 0,
+                    rank INT NOT NULL,
+                    total_rounds INT NOT NULL DEFAULT 0,
+                    win_count INT NOT NULL DEFAULT 0,
+                    self_draw_count INT NOT NULL DEFAULT 0,
+                    deal_in_count INT NOT NULL DEFAULT 0,
+                    total_fan_score INT NOT NULL DEFAULT 0,
+                    total_win_turn INT NOT NULL DEFAULT 0,
+                    total_fangchong_score INT NOT NULL DEFAULT 0,
+                    first_place_count INT NOT NULL DEFAULT 0,
+                    second_place_count INT NOT NULL DEFAULT 0,
+                    third_place_count INT NOT NULL DEFAULT 0,
+                    fourth_place_count INT NOT NULL DEFAULT 0,
+                    fulu_round_count INT NOT NULL DEFAULT 0,
+                    cuohe_count INT NOT NULL DEFAULT 0,
+                    total_round_score INT NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_game_player_metrics_created_at "
+                "ON game_player_metrics (created_at);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_game_player_metrics_scene "
+                "ON game_player_metrics (room_type, match_tier, event_id, game_type);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_game_player_metrics_ladder_day "
+                "ON game_player_metrics (created_at, match_tier) "
+                "WHERE room_type = 'match' AND match_tier IN "
+                "('beginner', 'intermediate', 'advanced', 'mcrpl');"
+            )
+
+            # 每日全站统计：对局数 / 日活 / 活跃用户 / 最大在线
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_stats (
+                    stat_date DATE PRIMARY KEY,
+                    game_count INT NOT NULL DEFAULT 0,
+                    dau INT NOT NULL DEFAULT 0,
+                    active_users INT NOT NULL DEFAULT 0,
+                    max_online INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("SAVEPOINT sp_add_daily_stats_dau;")
+            try:
+                cursor.execute(
+                    "ALTER TABLE daily_stats ADD COLUMN dau INT NOT NULL DEFAULT 0;"
+                )
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_add_daily_stats_dau;")
+                else:
+                    raise
+
+            # 每日登录用户（注册用户日活，登录时 UPSERT，不受 IP 记录 20 条裁剪影响）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_login_users (
+                    stat_date DATE NOT NULL,
+                    user_id   BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    PRIMARY KEY (stat_date, user_id)
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_daily_login_users_stat_date
+                ON daily_login_users(stat_date);
+            """)
+            cursor.execute("""
+                INSERT INTO daily_login_users (stat_date, user_id)
+                SELECT DISTINCT
+                    ((logged_at AT TIME ZONE 'Asia/Shanghai') - interval '4 hours')::date,
+                    user_id
+                FROM user_login_ips
+                WHERE user_id > 10000000
+                ON CONFLICT (stat_date, user_id) DO NOTHING
+            """)
+
+            # 当日在线峰值缓存：每 60s 由采样器 UPSERT(GREATEST) 持久化，
+            # 服务端在凌晨 3-4 点关闭、5 点重启后仍可据此正确重写当日 daily_stats。
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_online_cache (
+                    stat_date DATE PRIMARY KEY,
+                    max_online INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # 每日场次统计：与 guobiao_history_stats 相同的指标列，按 (日期, 场次, 规则, 局制) 聚合
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scene_daily_stats (
+                    id BIGSERIAL PRIMARY KEY,
+                    stat_date DATE NOT NULL,
+                    room_type VARCHAR(16) NULL,
+                    match_tier VARCHAR(24) NULL,
+                    event_id VARCHAR(64) NULL,
+                    rule VARCHAR(10) NOT NULL,
+                    game_type VARCHAR(16) NULL,
+                    total_games INT NOT NULL DEFAULT 0,
+                    total_rounds INT NOT NULL DEFAULT 0,
+                    win_count INT NOT NULL DEFAULT 0,
+                    self_draw_count INT NOT NULL DEFAULT 0,
+                    deal_in_count INT NOT NULL DEFAULT 0,
+                    total_fan_score INT NOT NULL DEFAULT 0,
+                    total_win_turn INT NOT NULL DEFAULT 0,
+                    total_fangchong_score INT NOT NULL DEFAULT 0,
+                    first_place_count INT NOT NULL DEFAULT 0,
+                    second_place_count INT NOT NULL DEFAULT 0,
+                    third_place_count INT NOT NULL DEFAULT 0,
+                    fourth_place_count INT NOT NULL DEFAULT 0,
+                    fulu_round_count INT NOT NULL DEFAULT 0,
+                    cuohe_count INT NOT NULL DEFAULT 0,
+                    total_round_score INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (stat_date, room_type, match_tier, event_id, rule, game_type)
+                );
+            """)
+
+            # 天梯场次番种按日累计（04:00 聚合时 DELETE+INSERT，可安全重跑）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scene_tier_fan_daily (
+                    stat_date DATE NOT NULL,
+                    match_tier VARCHAR(24) NOT NULL,
+                    rule VARCHAR(10) NOT NULL DEFAULT 'guobiao',
+                    fan_field VARCHAR(32) NOT NULL,
+                    fan_count INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (stat_date, match_tier, rule, fan_field)
+                );
+            """)
+
             conn.commit() # 提交
             logger.info('数据表初始化成功')
             print('数据表初始化成功')
             self._get_pool()
+
+            # 清理远古数据：删除 room_type 不属于 match/custom/events 的对局记录
+            # （早期数据可能 room_type 为 NULL 或非法值），重建统计前先清掉避免污染。
+            self._cleanup_legacy_room_type_records()
 
         except Exception as e:
             logger.error(f'数据表初始化失败: {e}', exc_info=True)
@@ -724,7 +897,45 @@ class DatabaseManager:
             if conn:
                 cursor.close()
                 conn.close()
-    
+
+    def _cleanup_legacy_room_type_records(self) -> None:
+        """清理远古数据：删除 room_type 不属于 match/custom/events 的对局。
+
+        删除 game_records（级联到 game_player_records），并清理 game_player_metrics
+        中对应 game_id 的残留。每次 init 执行一次，无遗留时无副作用。
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT DISTINCT game_id FROM game_player_records
+                WHERE room_type IS NULL OR room_type NOT IN ('match','custom','events')
+            """)
+            legacy_game_ids = [r[0] for r in cursor.fetchall()]
+            if not legacy_game_ids:
+                return
+            logger.info("清理远古 room_type 数据：game_id 数=%d", len(legacy_game_ids))
+            # game_player_metrics 无 FK，需显式删
+            cursor.execute(
+                "DELETE FROM game_player_metrics WHERE game_id = ANY(%s::varchar[])",
+                (legacy_game_ids,),
+            )
+            # 删 game_records 级联到 game_player_records
+            cursor.execute(
+                "DELETE FROM game_records WHERE game_id = ANY(%s::varchar[])",
+                (legacy_game_ids,),
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f"清理远古 room_type 数据失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                self._put_connection(conn)
+
     # 获取用户名
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """
@@ -799,6 +1010,16 @@ class DatabaseManager:
                 "INSERT INTO user_login_ips (user_id, ip_address) VALUES (%s, %s)",
                 (user_id, ip),
             )
+            if user_id > 10000000:
+                from .daily_aggregator import current_stat_date
+                cursor.execute(
+                    """
+                    INSERT INTO daily_login_users (stat_date, user_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (stat_date, user_id) DO NOTHING
+                    """,
+                    (current_stat_date(), user_id),
+                )
             cursor.execute(
                 """
                 DELETE FROM user_login_ips
@@ -2007,6 +2228,11 @@ DatabaseManager.store_classical_fan_stats = store_classical_fan_stats
 from .sichuan.store_sichuan import store_sichuan_game_record
 
 DatabaseManager.store_sichuan_game_record = store_sichuan_game_record
+
+# 挂载长沙麻将相关方法到 DatabaseManager 类（牌谱写通用表，无需专用统计表）
+from .changsha.store_changsha import store_changsha_game_record
+
+DatabaseManager.store_changsha_game_record = store_changsha_game_record
 
 from .riichi.store_riichi import store_riichi_game_record, store_riichi_game_stats, store_riichi_fan_stats
 from .riichi.get_riichi_stats import get_riichi_stats

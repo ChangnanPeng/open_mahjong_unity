@@ -20,6 +20,8 @@ try:
     from .sichuan.sichuan_hepai_check import Sichuan_Hepai_Check, sichuan_base_from_fan
     from .sichuan.sichuan_tingpai_check import Sichuan_Tingpai_Check
     from .new_rule import HandContext as NewRuleHandContext, score_hand as new_rule_score_hand, tingpai_check as new_rule_tingpai_check
+    from .changsha.changsha_hepai_check import Changsha_Hepai_Check, changsha_base_from_fans
+    from .changsha.changsha_tingpai_check import Changsha_Tingpai_Check
 except ImportError:
     from guobiao_hepai_check import Chinese_Hepai_Check, PlayerTiles  # type: ignore
     from guobiao_xiaolin_hepai_check import Xiaolin_Hepai_Check  # type: ignore
@@ -33,6 +35,8 @@ except ImportError:
     from sichuan.sichuan_hepai_check import Sichuan_Hepai_Check, sichuan_base_from_fan  # type: ignore
     from sichuan.sichuan_tingpai_check import Sichuan_Tingpai_Check  # type: ignore
     from new_rule import HandContext as NewRuleHandContext, score_hand as new_rule_score_hand, tingpai_check as new_rule_tingpai_check  # type: ignore
+    from changsha.changsha_hepai_check import Changsha_Hepai_Check, changsha_base_from_fans  # type: ignore
+    from changsha.changsha_tingpai_check import Changsha_Tingpai_Check  # type: ignore
 
 # Qingque13 C# 桥接模块
 try:
@@ -73,6 +77,8 @@ class GameCalculationService:
         self._riichi_tingpai_check = Riichi_Tingpai_Check()
         self._sichuan_hepai_check = Sichuan_Hepai_Check()
         self._sichuan_tingpai_check = Sichuan_Tingpai_Check()
+        self._changsha_hepai_check = Changsha_Hepai_Check()
+        self._changsha_tingpai_check = Changsha_Tingpai_Check()
 
     def Qingque_hepai_check(
         self,
@@ -353,6 +359,24 @@ class GameCalculationService:
         """查大叫：遍历听牌所有和牌张返回理论最大番（不计情境番）。返回 (最大番, 番名列表)。"""
         with self._lock:
             return self._sichuan_hepai_check.max_hepai_fan(hand_tile_list, combination_list, dingque_suit)
+
+    def Changsha_hepai_check(
+        self, hand_list: List[int], tiles_combination: List[str], way_to_hepai: List[str], get_tile: int,
+    ) -> Tuple[int, List[str]]:
+        """长沙麻将和牌检查。返回 (基础分口径, 番型列表)；不能和返回 (0, [])。"""
+        with self._lock:
+            return self._changsha_hepai_check.hepai_check(
+                hand_list, tiles_combination, way_to_hepai, get_tile
+            )
+
+    def Changsha_tingpai_check(self, hand_tile_list: List[int], combination_list: List[str]) -> Set[int]:
+        """长沙麻将听牌检查（小胡 258 将 + 大胡 + 七小对）。"""
+        with self._lock:
+            return self._changsha_tingpai_check.tingpai_check(hand_tile_list, combination_list)
+
+    def Changsha_base_from_fans(self, fan_list: List[str], dealer_related: bool = False) -> int:
+        """长沙基础付款：小胡 1/庄闲 2，大胡 6/庄闲 7，多个大胡相加。"""
+        return changsha_base_from_fans(fan_list, dealer_related)
 
     def Classical_fushu_check(
         self, hand_list: List[int], tiles_combination: List[str], way_to_hepai: List[str], get_tile: int

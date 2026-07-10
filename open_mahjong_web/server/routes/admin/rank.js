@@ -3,11 +3,40 @@ const router = express.Router();
 const pool = require('../../config/database');
 const { writeAudit } = require('../../utils/audit');
 const {
+  RANK_TABLE,
   RANK_NAME_TO_INDEX,
   LEADERBOARD_MIN_USER_ID,
   LEADERBOARD_LIMIT_DEFAULT,
   isValidRankName,
+  getScoreBounds,
+  getPromotionProgress,
+  validateRankScore,
 } = require('../../utils/rankNames');
+
+function buildRankDetail(row) {
+  const guobiao_rank = row.guobiao_rank;
+  const guobiao_score = parseFloat(row.guobiao_score);
+  return {
+    guobiao_rank,
+    guobiao_score,
+    updated_at: row.updated_at,
+    bounds: getScoreBounds(guobiao_rank),
+    progress: getPromotionProgress(guobiao_rank, guobiao_score),
+  };
+}
+
+router.get('/meta/table', (_req, res) => {
+  res.json({
+    success: true,
+    data: RANK_TABLE.map(({ name, startScore, promoteScore, canDemote }) => ({
+      name,
+      start_score: startScore,
+      promote_score: promoteScore,
+      can_demote: canDemote,
+      bounds: getScoreBounds(name),
+    })),
+  });
+});
 
 router.get('/leaderboard', async (req, res) => {
   try {
@@ -68,14 +97,9 @@ router.get('/:userId', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: '无段位数据' });
     }
-    const row = result.rows[0];
     res.json({
       success: true,
-      data: {
-        guobiao_rank: row.guobiao_rank,
-        guobiao_score: parseFloat(row.guobiao_score),
-        updated_at: row.updated_at,
-      },
+      data: buildRankDetail(result.rows[0]),
     });
   } catch (err) {
     console.error('admin get rank:', err);
@@ -93,10 +117,15 @@ router.put('/:userId', async (req, res) => {
     if (!isValidRankName(guobiao_rank)) {
       return res.status(400).json({ success: false, message: '无效的段位名称' });
     }
-    const score = parseFloat(guobiao_score);
-    if (Number.isNaN(score)) {
-      return res.status(400).json({ success: false, message: '无效的分数' });
+    const validation = validateRankScore(guobiao_rank, guobiao_score);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.message,
+        bounds: validation.bounds || getScoreBounds(guobiao_rank),
+      });
     }
+    const score = validation.normalizedScore;
 
     const beforeRes = await pool.query(
       `SELECT guobiao_rank, guobiao_score FROM rank_data WHERE user_id = $1`,
@@ -127,7 +156,12 @@ router.put('/:userId', async (req, res) => {
 
     res.json({
       success: true,
-      data: { guobiao_rank, guobiao_score: score },
+      data: {
+        guobiao_rank,
+        guobiao_score: score,
+        bounds: getScoreBounds(guobiao_rank),
+        progress: getPromotionProgress(guobiao_rank, score),
+      },
     });
   } catch (err) {
     console.error('admin update rank:', err);
@@ -167,7 +201,15 @@ router.post('/:userId/reset', async (req, res) => {
       reason: String(reason).trim(),
     });
 
-    res.json({ success: true, data: { guobiao_rank: '10级', guobiao_score: 0 } });
+    res.json({
+      success: true,
+      data: {
+        guobiao_rank: '10级',
+        guobiao_score: 0,
+        bounds: getScoreBounds('10级'),
+        progress: getPromotionProgress('10级', 0),
+      },
+    });
   } catch (err) {
     console.error('admin reset rank:', err);
     res.status(500).json({ success: false, message: '服务器内部错误' });

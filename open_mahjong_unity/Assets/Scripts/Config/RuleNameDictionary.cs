@@ -14,6 +14,8 @@ public static class RuleNameDictionary {
         { "guobiao/lanshi", "国标麻将(蓝十改)" },
         { "classical/standard", "古典麻雀" },
         { "sichuan/standard", "四川麻将(血战到底)" },
+        { "changsha", "长沙麻将" },
+        { "changsha/classic_double_bird", "长沙麻将(经典双鸟)" },
         { "riichi/standard", "立直麻将(标准)" },
         { "riichi/langyong", "浪涌麻将(日麻)" },
     };
@@ -27,6 +29,8 @@ public static class RuleNameDictionary {
         { "qingque/standard", "青雀" },
         { "classical/standard", "古典" },
         { "sichuan/standard", "四川" },
+        { "changsha", "长沙" },
+        { "changsha/classic_double_bird", "长沙" },
         { "riichi/standard", "立直" },
         { "riichi/langyong", "浪涌" },
     };

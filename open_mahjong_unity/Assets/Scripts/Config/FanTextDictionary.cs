@@ -29,6 +29,57 @@ public static class FanTextDictionary {
         {"连六*1", "1番"}, {"连六*2", "2番"}, {"连六*3", "3番"}, {"连六*4", "4番"},
     };
 
+    private static string FormatChangshaTileName(int tileId) {
+        int suit = tileId / 10;
+        int rank = tileId % 10;
+        string rankName = rank switch {
+            1 => "一",
+            2 => "二",
+            3 => "三",
+            4 => "四",
+            5 => "五",
+            6 => "六",
+            7 => "七",
+            8 => "八",
+            9 => "九",
+            _ => null,
+        };
+        string suitName = suit switch {
+            1 => "万",
+            2 => "筒",
+            3 => "条",
+            _ => null,
+        };
+        return rankName != null && suitName != null ? $"{rankName}{suitName}" : tileId.ToString();
+    }
+
+    private static string FormatChangshaBirdFanName(string fanName) {
+        if (string.IsNullOrEmpty(fanName)) return fanName;
+        string prefix = null;
+        string payload = null;
+        if (fanName.StartsWith("鸟牌:")) {
+            prefix = "鸟牌:";
+            payload = fanName.Substring("鸟牌:".Length);
+        } else if (fanName.StartsWith("中鸟:")) {
+            prefix = "中鸟:";
+            payload = fanName.Substring("中鸟:".Length);
+        }
+        if (prefix == null || string.IsNullOrEmpty(payload) || payload == "无") return fanName;
+
+        string[] parts = payload.Split(',');
+        for (int i = 0; i < parts.Length; i++) {
+            string item = parts[i].Trim();
+            int equalsIndex = item.IndexOf('=');
+            if (equalsIndex >= 0) item = item.Substring(0, equalsIndex);
+            if (int.TryParse(item, out int tileId)) {
+                parts[i] = FormatChangshaTileName(tileId);
+            } else {
+                parts[i] = item;
+            }
+        }
+        return prefix + string.Join(",", parts);
+    }
+
     /// <summary>
     /// 国标麻将（标准）番数英文显示，key 与 <see cref="FanToDisplayGuobiao"/> 一致。
     /// 暂未接入 UI，供后续多语言显示使用。
@@ -361,6 +412,22 @@ public static class FanTextDictionary {
         {"海底", "1番"},
     };
 
+    public static readonly Dictionary<string, string> FanToDisplayChangsha = new Dictionary<string, string> {
+        {"小胡", "基础"},
+        {"碰碰胡", "大胡"},
+        {"将将胡", "大胡"},
+        {"清一色", "大胡"},
+        {"全求人", "大胡"},
+        {"七小对", "大胡"},
+        {"豪华七小对", "大胡"},
+        {"天胡", "大胡"},
+        {"地胡", "大胡"},
+        {"海底", "大胡"},
+        {"杠上开花", "大胡"},
+        {"杠上炮", "大胡"},
+        {"抢杠胡", "大胡"},
+    };
+
     /// <summary>
     /// 古典规则：根据副种名称返回副数显示文本（如 "10副"），未命中时返回 "0副"。
     /// </summary>
@@ -398,6 +465,9 @@ public static class FanTextDictionary {
                 return displayName;
             }
         }
+        if (rule == "changsha/classic_double_bird") {
+            return FormatChangshaBirdFanName(fanName);
+        }
         return fanName;
     }
 
@@ -421,6 +491,16 @@ public static class FanTextDictionary {
         else if (rule == "classical/standard") map = FanToDisplayClassical;
         else if (rule == "sichuan/standard") map = FanToDisplaySichuan;
         else if (rule == "new_rule/standard") map = FanToDisplayNewRule;
+        else if (rule == "changsha/classic_double_bird") {
+            if (!string.IsNullOrEmpty(fanName)
+                && (fanName.StartsWith("鸟牌:")
+                    || fanName.StartsWith("中鸟:")
+                    || fanName.StartsWith("中鸟x")
+                    || fanName.StartsWith("扎鸟倍数:"))) {
+                return "结算";
+            }
+            map = FanToDisplayChangsha;
+        }
         else if (rule != null && rule.StartsWith("riichi")) {
             if (FanToDisplayRiichi.TryGetValue(fanName, out string riichiDisplay)) return riichiDisplay;
             if (FanToDisplayRiichiInactive.TryGetValue(fanName, out riichiDisplay)) return riichiDisplay;

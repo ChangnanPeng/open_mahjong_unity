@@ -557,6 +557,13 @@ public class NetworkManager : MonoBehaviour {
                 case "gamestate/sichuan/ready_status":
                 case "gamestate/sichuan/ask_dingque":
                 case "gamestate/sichuan/dingque_done":
+                case "gamestate/changsha/game_start":
+                case "gamestate/changsha/broadcast_hand_action":
+                case "gamestate/changsha/ask_other_action":
+                case "gamestate/changsha/do_action":
+                case "gamestate/changsha/show_result":
+                case "gamestate/changsha/game_end":
+                case "gamestate/changsha/ready_status":
                 case "gamestate/new_rule/game_start":
                 case "gamestate/new_rule/broadcast_hand_action":
                 case "gamestate/new_rule/ask_other_action":

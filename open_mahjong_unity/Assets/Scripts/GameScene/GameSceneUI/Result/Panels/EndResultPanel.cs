@@ -953,6 +953,7 @@ public class EndResultPanel : MonoBehaviour {
         bool isRiichi = rule != null && rule.StartsWith("riichi");
         bool isSichuan = rule != null && rule.StartsWith("sichuan");
         bool isNewRule = rule != null && rule.StartsWith("new_rule");
+        bool isChangsha = rule != null && rule.StartsWith("changsha");
 
         if (isRiichi && riichiExtras != null) {
             TotalFu.gameObject.SetActive(true);
@@ -978,6 +979,8 @@ public class EndResultPanel : MonoBehaviour {
             TotalFan.text = $"{ScoreHistorySettlementHelper.CalculateSichuanFanTotal(rule, huFan)}番";
         } else if (isNewRule) {
             TotalFan.text = $"{huScore}番";
+        } else if (isChangsha) {
+            TotalFan.text = $"{huScore}分";
         } else {
             TotalFan.text = $"{huScore}番";
         }
@@ -985,7 +988,9 @@ public class EndResultPanel : MonoBehaviour {
         int scoreMultiplier = NormalGameStateManager.Instance != null
             ? NormalGameStateManager.Instance.ScoreDisplayMultiplier()
             : (isNewRule ? 6 : 1);
-        TotalScore.text = $"{huScore * scoreMultiplier}点";
+        TotalScore.text = isChangsha
+            ? $"{huScore}分"
+            : $"{huScore * scoreMultiplier}点";
 
         bool showLimit = isClassical && huScore >= 300;
         TotalLimitDisplay.gameObject.SetActive(showLimit);

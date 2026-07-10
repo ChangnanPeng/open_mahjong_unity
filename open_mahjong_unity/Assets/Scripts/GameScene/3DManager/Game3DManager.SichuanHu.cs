@@ -317,7 +317,7 @@ public partial class Game3DManager {
 
         CompleteCurrentDiscardMoveBeforeRon();
 
-        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition);
+        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition, tileId);
 
         if (riverTile != null) {
 
@@ -693,40 +693,38 @@ public partial class Game3DManager {
 
 
 
+    /// <summary>预览用：仅认 RegisterLastDiscard 登记对象，不取河末张。</summary>
     private GameObject PeekLastDiscardObject(string discarderPos) {
-
-        if (string.IsNullOrEmpty(discarderPos)) {
-
-            return lastCutJiagang3DObject;
-
+        if (string.IsNullOrEmpty(discarderPos)) return null;
+        if (_lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
+            && regObj != null && regObj.activeInHierarchy) {
+            return regObj;
         }
-
-        PosPanel3D panel = GetPosPanel(discarderPos);
-
-        if (panel?.discardsPosition != null && panel.discardsPosition.childCount > 0) {
-
-            return panel.discardsPosition.GetChild(panel.discardsPosition.childCount - 1).gameObject;
-
-        }
-
-        return lastCutJiagang3DObject;
-
+        return null;
     }
 
 
 
-    private GameObject DetachLastDiscardFromRiver(string discarderPos) {
+    private GameObject DetachRonSourceObject(string discarderPos, int expectedTileId) {
 
-        GameObject obj = PeekLastDiscardObject(discarderPos);
+        GameObject obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
+        bool fromRegisteredRiver = obj != null;
+        if (obj == null) {
+            obj = TryResolveJiagangSourceObject(discarderPos, expectedTileId);
+        }
 
-        if (obj == null) return null;
+        if (obj == null) {
+            Debug.LogWarning(
+                $"DetachRonSourceObject: 未认到河牌/加杠牌，放弃取牌 discarder={discarderPos}, tile={expectedTileId}");
+            return null;
+        }
 
         obj.transform.SetParent(null, worldPositionStays: true);
 
-        if (lastCutJiagang3DObject == obj) {
-
+        if (fromRegisteredRiver) {
+            OnLastDiscardTaken(discarderPos);
+        } else if (lastCutJiagang3DObject == obj) {
             lastCutJiagang3DObject = null;
-
         }
 
         return obj;
@@ -735,9 +733,15 @@ public partial class Game3DManager {
 
 
 
+    private GameObject DetachLastDiscardFromRiver(string discarderPos, int expectedTileId = 0) {
+        return DetachRonSourceObject(discarderPos, expectedTileId);
+    }
+
+
+
     private void RecycleRiverDiscard(string discarderPos, int tileId) {
 
-        GameObject obj = DetachLastDiscardFromRiver(discarderPos);
+        GameObject obj = DetachRonSourceObject(discarderPos, tileId);
 
         if (obj == null) return;
 

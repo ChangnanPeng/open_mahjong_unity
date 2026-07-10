@@ -8,7 +8,12 @@ from .smart_bot_logic import first_dingque_tile
 
 logger = logging.getLogger(__name__)
 
-_PASS_WAIT_STATUSES = ("waiting_action_after_cut", "waiting_action_qianggang")
+_PASS_WAIT_STATUSES = (
+    "waiting_action_after_cut",
+    "waiting_action_qianggang",
+    "waiting_initial_hu",
+    "waiting_sea_bottom",
+)
 _BOT_DELAY = 0.5
 
 

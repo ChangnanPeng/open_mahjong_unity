@@ -308,7 +308,7 @@ async def wait_action(self):
                     self.player_list[player_index].hand_tiles.remove(tile_id-2)
                     self.player_list[player_index].combination_tiles.append(f"s{tile_id-1}")
                     combination_target = f"s{tile_id-1}"
-                    combination_mask = [1,tile_id,0,tile_id-1,0,tile_id-2]
+                    combination_mask = [1,tile_id,0,tile_id-2,0,tile_id-1] # 非吃牌张从小到大排序
                 elif action_type == "chi_mid": # [tile_id-1,tile_id,tile_id+1]
                     if (tile_id - 1) not in self.player_list[player_index].hand_tiles or (tile_id + 1) not in self.player_list[player_index].hand_tiles:
                         logger.error(

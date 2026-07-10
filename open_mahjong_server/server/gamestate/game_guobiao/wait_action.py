@@ -30,6 +30,7 @@ from ..public.claim_protection import (
 from ..public.tactical_claim import (
     init_tactical_round_state,
     apply_tactical_claim_if_needed,
+    tactical_mark_player_committed,
 )
 from .boardcast import _send_do_action_payload_to_viewer
 
@@ -116,6 +117,8 @@ async def wait_action(self):
                     self.player_list[temp_player_index].remaining_time -= (used_int_time - timeout_grace)
                
                 self.action_dict[temp_player_index] = [] # 从可执行操作列表中移除操作
+                if temp_action_type != "pass":
+                    tactical_mark_player_committed(self, temp_player_index)
                 # 主询问 pass 不记入战术 passed；低优先级鸣牌申请后仍从快照再问更高优先级（含已 pass 者）。
                 # 同一批完成任务中可能已有更高优先级操作清空等待列表，因此移除前先确认仍在等待。
                 if temp_player_index in self.waiting_players_list:
@@ -240,6 +243,7 @@ async def wait_action(self):
                                                   combination_target = f"G{normal_angang}",
                                                   is_mo_gang=is_mo_gang)
                     
+                    self.pending_kan_hand_settle_delay = not is_mo_gang
                     # 切换到杠后发牌历时行为
                     self.game_status = "deal_card_after_gang"
                 
@@ -293,6 +297,7 @@ async def wait_action(self):
                     if any(self.action_dict[i] for i in self.action_dict):
                         self.game_status = "waiting_action_qianggang" # 如果有则执行 等待抢杠行为 转移行为
                     else:
+                        self.pending_kan_hand_settle_delay = not is_mo_gang
                         self.game_status = "deal_card_after_gang" # 历时行为
                     return
                 
@@ -355,7 +360,7 @@ async def wait_action(self):
                     self.player_list[player_index].hand_tiles.remove(tile_id-2)
                     self.player_list[player_index].combination_tiles.append(f"s{tile_id-1}")
                     combination_target = f"s{tile_id-1}"
-                    combination_mask = [1,tile_id,0,tile_id-1,0,tile_id-2]
+                    combination_mask = [1,tile_id,0,tile_id-2,0,tile_id-1] # 非吃牌张从小到大排序
                 elif action_type == "chi_mid": # [tile_id-1,tile_id,tile_id+1]
                     if (tile_id - 1) not in self.player_list[player_index].hand_tiles or (tile_id + 1) not in self.player_list[player_index].hand_tiles:
                         logger.error(
@@ -459,10 +464,11 @@ async def wait_action(self):
                 
                 # 如果发生吃碰杠而不是和牌 则发生转移行为
                 if action_type == "chi_left" or action_type == "chi_mid" or action_type == "chi_right" or action_type == "peng" or action_type == "gang":
+                    discarder_index = self.current_player_index  # 转移前即为被认走的打牌者，供客户端精确移除其牌河弃牌
                     self.player_list[self.current_player_index].discard_tiles.pop(-1) # 删除弃牌堆的最后一张
                     self.player_list[self.current_player_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
                     self.player_list[player_index].combination_mask.append(combination_mask) # 添加组合掩码
-                    clear_draw_slot(self.player_list[player_index])
+                    clear_draw_slot(self.player_list[player_index]) # 清除摸牌区
                     self.current_player_index = player_index # 转移行为后 当前玩家索引变为操作玩家索引
                     flush_unexecuted_claim_applications(
                         self,
@@ -473,9 +479,11 @@ async def wait_action(self):
                     # 牌谱记录吃碰杠牌
                     player_action_record_chipenggang(self, action_type=action_type, mingpai_tile=tile_id,
                                                      action_player=player_index, combination_mask=combination_mask)
-                    # 广播吃碰杠动画
-                    await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target)
+                    # 广播吃碰杠动画：cut_from_player + cut_tile 显式下发被认走的打牌者与牌张，
+                    # 客户端不再依赖会被乱序覆盖的 lastDiscardPlayerPosition / currentAskCutTileId
+                    await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target,cut_from_player = discarder_index,cut_tile = tile_id)
                     if action_type == "gang":
+                        self.pending_kan_hand_settle_delay = True
                         self.game_status = "deal_card_after_gang" # 转移行为
                     else:
                         self.game_status = "onlycut_after_action" # 转移行为

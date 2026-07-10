@@ -5,6 +5,11 @@ using UnityEngine.UI;
 public partial class GameCanvas : MonoBehaviour {
     // 显示倒计时
     public void LoadingRemianTime(int remainingTime, int cuttime){
+        if (VotePanel.Instance != null && VotePanel.Instance.IsGameTimerSuppressed) {
+            StopTimeRunning();
+            return;
+        }
+
         // 停止可能正在运行的倒计时协程
         if (_countdownCoroutine != null)
             StopCoroutine(_countdownCoroutine);
@@ -14,6 +19,8 @@ public partial class GameCanvas : MonoBehaviour {
         _currentCutTime = cuttime;
         
         // 设置倒计时初始值
+        if (remianTimeText == null) return;
+        remianTimeText.color = Color.white;
         if (_currentCutTime > 0){
             remianTimeText.text = $"{_currentRemainingTime}+{_currentCutTime}";
         } else {
@@ -30,9 +37,18 @@ public partial class GameCanvas : MonoBehaviour {
         WaitForSeconds oneSecondWait = new WaitForSeconds(1.0f);
         
         while (_currentCutTime > 0 || _currentRemainingTime > 0){
+            if (VotePanel.Instance != null && VotePanel.Instance.IsGameTimerSuppressed) {
+                StopTimeRunning();
+                yield break;
+            }
 
             // 等待1秒
             yield return oneSecondWait;
+            if (VotePanel.Instance != null && VotePanel.Instance.IsGameTimerSuppressed) {
+                StopTimeRunning();
+                yield break;
+            }
+
             // 减少切牌时间
             if (_currentCutTime > 0){
                 _currentCutTime--;
@@ -41,6 +57,7 @@ public partial class GameCanvas : MonoBehaviour {
                 _currentRemainingTime--;
             }
             // 更新文本内容
+            if (remianTimeText == null) yield break;
             if (_currentCutTime > 0){
                 remianTimeText.text = $"{_currentRemainingTime}+{_currentCutTime}";
             } else {
@@ -66,6 +83,10 @@ public partial class GameCanvas : MonoBehaviour {
             StopCoroutine(_countdownCoroutine);
             _countdownCoroutine = null; // 设置为null以避免重复停止
         }
-        remianTimeText.text = $""; // 隐藏倒计时文本
+        _currentRemainingTime = 0;
+        _currentCutTime = 0;
+        if (remianTimeText == null) return;
+        remianTimeText.text = "";
+        remianTimeText.color = Color.white;
     }
 }

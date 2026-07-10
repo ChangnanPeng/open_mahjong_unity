@@ -143,6 +143,7 @@ public partial class GameCanvas : MonoBehaviour {
         playerLeftPanel?.Clear();
         playerTopPanel?.Clear();
         playerRightPanel?.Clear();
+        StopTimeRunning();
         ClearActionButton();
         // 退出前在 SetActive(false) 之前销毁残留的操作文本，避免「补花」等字卡死下次进入
         ClearActionDisplay();
@@ -504,6 +505,7 @@ public partial class GameCanvas : MonoBehaviour {
     /// - 处于立直选牌模式：仅 riichi_candidate_cuts 中存在的 tile_id 可点；
     /// - 自家已立直（tag_list 含 riichi/daburu_riichi）：仅最右摸入牌（currentGetTile=true）可点，其余全部置灰；
     /// - 四川定缺：手牌仍含定缺花色时仅定缺花色可点（须优先打出）；
+    /// - 强制出牌阶段：仅服务端指定的摸入牌可点；
     /// - 普通切牌阶段：按服务端下发的 forbidden_cut_tiles 禁点（食替）。
     /// </summary>
     public void RefreshHandTileSelectability() {
@@ -511,6 +513,10 @@ public partial class GameCanvas : MonoBehaviour {
         bool inRiichiCutMode = RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive;
         var candidates = NormalGameStateManager.Instance.selfRiichiCandidateCuts;
         var forbidden = NormalGameStateManager.Instance.selfForbiddenCutTiles;
+        var forced = NormalGameStateManager.Instance.selfForcedCutTiles;
+        bool hasForcedCut = forced != null
+            && forced.Count > 0
+            && NormalGameStateManager.Instance.allowActionList.Contains("cut");
         bool mustCutDingque = NormalGameStateManager.Instance.MustCutDingqueFirst();
         bool selfRiichi = false;
         var selfTags = NormalGameStateManager.Instance.player_to_info["self"].tag_list;
@@ -523,7 +529,9 @@ public partial class GameCanvas : MonoBehaviour {
             TileCard tc = handCardsContainer.GetChild(i).GetComponent<TileCard>();
             if (tc == null) continue;
             bool selectable;
-            if (inRiichiCutMode) {
+            if (hasForcedCut) {
+                selectable = tc.currentGetTile && forced.Contains(tc.tileId);
+            } else if (inRiichiCutMode) {
                 selectable = candidates.ContainsKey(tc.tileId);
             } else if (selfRiichi) {
                 selectable = tc.currentGetTile;

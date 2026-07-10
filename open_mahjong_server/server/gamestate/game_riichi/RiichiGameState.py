@@ -24,6 +24,7 @@ from .action_check import (
 )
 from .wait_action import wait_action, _commit_pending_riichi
 from ..public.spectator_rules import too_many_ai_for_spectator
+from ..public.vote_manager import vote_checkpoint
 from .init_tiles import init_riichi_tiles
 from .boardcast import (
     broadcast_game_start,
@@ -142,6 +143,8 @@ class RiichiPlayer:
         # 立直家本应横置的下一张弃牌待标记位：宣告立直时置 True；本次切完归 False；
         # 若立直宣告的横置弃牌被他家吃/碰则在 chi/peng/gang 处理处再次置 True，使下一张续横
         self.riichi_marker_pending: bool = False
+        # 立直宣告后供托尚未提交时若该张被鸣，提交时不再补一发
+        self.skip_ippatsu: bool = False
         self.has_draw_slot = False
 
     def get_tile(self, tiles_list, *, mark_draw_slot: bool = True):
@@ -192,6 +195,8 @@ class RiichiGameState:
         self.room_rule = room_data["room_rule"]
         self.room_type = room_data["room_type"]
         self.sub_rule = room_data.get("sub_rule") or "riichi/standard"
+        self.match_tier = room_data.get("match_tier")
+        self.event_id = room_data.get("event_id")
 
         self.room_random_seed = room_data.get("random_seed", 0)
         self.open_cuohe = room_data.get("open_cuohe", False)
@@ -278,8 +283,6 @@ class RiichiGameState:
         self._pending_four_kan_abort: bool = False
         # 错和：和牌番数低于 hepai_limit 时触发，向其余 3 家各赔 3000（合计 9000）并重打本局
         self._cuohe_triggered: bool = False
-        # 本局是否已因鸣牌（吃/碰/明杠/暗杠，不含加杠）作废一发；防止后续 _commit_pending_riichi 误补一发
-        self.ippatsu_voided: bool = False
 
         self.Debug = False
 
@@ -360,6 +363,10 @@ class RiichiGameState:
         init_game_record(self)
         self.game_record["game_title"]["sub_rule"] = self.sub_rule
         self.game_record["game_title"]["red_dora"] = self.red_dora
+        if self.match_tier is not None:
+            self.game_record["game_title"]["match_tier"] = self.match_tier
+        if self.event_id is not None:
+            self.game_record["game_title"]["event_id"] = self.event_id
         if not self._is_langyong():
             self.game_record["game_title"]["allow_kuikae"] = self.allow_kuikae
         self.game_record["game_title"]["hepai_way"] = self.hepai_way
@@ -379,7 +386,6 @@ class RiichiGameState:
             self._last_kan_type = None
             self._pending_four_kan_abort = False
             self._cuohe_triggered = False
-            self.ippatsu_voided = False
 
             await self.broadcast_game_start()
             await self._broadcast_langyong_tags_if_changed()
@@ -413,6 +419,7 @@ class RiichiGameState:
             await self.wait_action()
 
             while self.game_status != "END":
+                await vote_checkpoint(self)
                 match self.game_status:
                     case "deal_card":
                         if len(self.tiles_list) <= self.dead_wall_count:
@@ -610,6 +617,7 @@ class RiichiGameState:
                 p.chi_candidates = {}
                 p.kuikae_forbidden_tiles = []
                 p.riichi_marker_pending = False
+                p.skip_ippatsu = False
                 for tag in list(p.tag_list):
                     if tag in ("riichi", "daburu_riichi", "ippatsu", "furiten") or tag.startswith("langyong_"):
                         p.tag_list.remove(tag)

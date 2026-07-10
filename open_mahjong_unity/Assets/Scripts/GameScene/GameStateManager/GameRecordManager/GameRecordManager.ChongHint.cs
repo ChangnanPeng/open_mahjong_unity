@@ -8,17 +8,19 @@ public partial class GameRecordManager {
 
     private readonly HashSet<int> currentDangerTileIds = new HashSet<int>();
 
-    private int currentZimoDrawOriginalIndex = -1;
+    private readonly HashSet<int> currentZimoDrawOriginalIndices = new HashSet<int>();
 
+    internal int ConsumedFromFrontForChongHint => consumedFromFront;
 
+    internal int OriginalWallTileCountForChongHint => originalTilesList?.Count ?? 0;
 
-    internal List<int> GetCurrentTilesListForSim() => currentTilesList;
+    internal bool IsWaitingForDrawAfterCutForChongHint => waitingForDrawAfterCut;
 
-    internal List<int> GetCurrentOriginalIndicesForSim() => currentOriginalIndices;
+    internal int LastDiscardPlayerIndexForChongHint => lastDiscardPlayerIndex;
 
-    internal HashSet<int> GetConsumedBackIndicesForSim() => consumedBackIndices;
-
-    internal string GetBackwardTilesTypeForSim() => backwardTilesType;
+    internal bool IsOriginalWallIndexBackConsumed(int originalIndex) {
+        return consumedBackIndices != null && consumedBackIndices.Contains(originalIndex);
+    }
 
 
 
@@ -78,18 +80,10 @@ public partial class GameRecordManager {
 
 
 
-        currentZimoDrawOriginalIndex = -1;
+        currentZimoDrawOriginalIndices.Clear();
 
         if (ShouldApplyRecordChongHint() && IsTileListViewVisible()) {
-
-            if (RecordChongHintCalculator.TryPredictNextSelfDrawOriginalIndex(this, out int zimoIdx)
-
-                && !IsRiichiDeadWallBlockingZimoAt(zimoIdx, roomRule)) {
-
-                currentZimoDrawOriginalIndex = zimoIdx;
-
-            }
-
+            RecordChongHintCalculator.ComputeMoqieZimoDrawOriginalIndices(this, currentZimoDrawOriginalIndices);
         }
 
 
@@ -148,7 +142,7 @@ public partial class GameRecordManager {
 
         currentDangerTileIds.Clear();
 
-        currentZimoDrawOriginalIndex = -1;
+        currentZimoDrawOriginalIndices.Clear();
 
         if (Card3DHoverManager.Instance != null) {
 
@@ -192,6 +186,21 @@ public partial class GameRecordManager {
 
         }
 
+    }
+
+
+
+    /// <summary>
+    /// 仅重涂自家 2D 手牌的铳张遮罩（用当前已计算的危险牌集合按 self 重算），
+    /// 不清 3D 明牌、不重算全局危险牌。用于摸牌/初始化新张创建后补涂，
+    /// 避免 ChangeHandCards 异步队列导致新张在动画期间缺失铳张提示。
+    /// </summary>
+    public void ReapplySelf2DHandChongOverlay() {
+        if (!ShouldApplyRecordChongHint()) return;
+        if (GameCanvas.Instance == null || GameCanvas.Instance.HandCardsContainer == null) return;
+        TryGetActiveRecordRuleContext(out string roomRule, out _);
+        var hiddenHands = GetChongHintHiddenHandPositions();
+        ApplyChongToSelf2DHand(roomRule, hiddenHands);
     }
 
 

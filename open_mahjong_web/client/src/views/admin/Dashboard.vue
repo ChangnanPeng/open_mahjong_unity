@@ -6,6 +6,7 @@
         <el-card shadow="hover" class="stat-card">
           <div class="stat-label">{{ card.label }}</div>
           <div class="stat-value">{{ card.value }}</div>
+          <div v-if="card.hint" class="stat-hint">{{ card.hint }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -36,7 +37,7 @@ const cards = computed(() => {
   return [
     { label: '注册用户', value: s.registered_users },
     { label: '游客账号', value: s.tourist_users },
-    { label: '今日对局', value: s.games_today },
+    { label: '今日对局', value: s.games_today, hint: '凌晨4:00刷新' },
     { label: '排行榜人数', value: s.leaderboard_eligible },
     { label: '用户总数', value: s.total_users },
   ]
@@ -67,6 +68,11 @@ onMounted(async () => {
   font-size: 28px;
   font-weight: 600;
   margin-top: 8px;
+}
+.stat-hint {
+  color: #c0c4cc;
+  font-size: 12px;
+  margin-top: 6px;
 }
 .quick-card {
   margin-top: 8px;

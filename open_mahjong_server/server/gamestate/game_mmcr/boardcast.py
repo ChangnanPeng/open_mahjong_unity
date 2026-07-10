@@ -4,6 +4,7 @@ import logging
 import asyncio
 import time
 from ..public.ai.auto_cut_ai import auto_cut_action
+from ..public.offline import offline_auto_action
 from ..public.ai.smart_bot_ai import smart_bot_action
 from ..game_guobiao.combination_mask_view import (
     sanitize_angang_mask,
@@ -138,7 +139,7 @@ async def broadcast_ask_hand_action(self):
             if "offline" in current_player.tag_list:
                 logger.info(f"玩家 {current_player.username} 已掉线，跳过广播")
                 if self.action_dict.get(i, []):
-                    asyncio.create_task(auto_cut_action(self, i, self.action_dict[i], bot_ask_hand_game_status(self, i)))
+                    asyncio.create_task(offline_auto_action(self, i, self.action_dict[i], bot_ask_hand_game_status(self, i)))
                 continue
             
             # 机器人 user_id < 10 整段视为机器人，分发对应 AI
@@ -215,7 +216,7 @@ async def broadcast_ask_other_action(self, remaining_time_override: Optional[int
             if "offline" in current_player.tag_list:
                 logger.info(f"玩家 {current_player.username} 已掉线，跳过广播")
                 if self.action_dict.get(i, []):
-                    asyncio.create_task(auto_cut_action(self, i, self.action_dict[i], self.game_status))
+                    asyncio.create_task(offline_auto_action(self, i, self.action_dict[i], self.game_status))
                 continue
             
             # 机器人 user_id < 10 整段视为机器人，分发对应 AI
@@ -354,6 +355,7 @@ def _build_do_action_payload(
     is_claim=False,
     silent=False,
     is_mo_gang=None,
+    meld_reveal_delay=None,
 ):
     viewer_mask = combination_mask
     viewer_target = combination_target
@@ -377,6 +379,8 @@ def _build_do_action_payload(
         "is_claim": True if is_claim else None,
         "silent": True if silent else None,
         "is_mo_gang": is_mo_gang,
+        # 受保护观众鸣牌显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画，复现 claim_meld_followup_gap 间隔。
+        "meld_reveal_delay": meld_reveal_delay,
     }
 
 
@@ -460,8 +464,10 @@ async def broadcast_do_action(
 
             if protected and is_real_meld:
                 viewer_silent = silent if cut_already_revealed else False
+                viewer_reveal_delay = protected_meld_delay
             else:
                 viewer_silent = silent
+                viewer_reveal_delay = 0.0
 
             payload = _build_do_action_payload(
                 self,
@@ -478,17 +484,15 @@ async def broadcast_do_action(
                 is_claim=is_claim,
                 silent=viewer_silent,
                 is_mo_gang=is_mo_gang,
+                meld_reveal_delay=viewer_reveal_delay,
             )
 
             if protected and is_cut:
                 stash_protected_cut_payload(self, i, payload)
                 continue
 
-            if protected and is_real_meld and protected_meld_delay > 0:
-                schedule_protected_meld_send(
-                    self, i, payload, protected_meld_delay, _send_do_action_payload_to_viewer,
-                )
-                continue
+            # 实际鸣牌按序 await 发送（不再用追赶协程延迟，避免受保护观众收到 N+4 在 N+2 之前的乱序）；
+            # cut 已在 prepare_protected_meld_for_viewers 里 await flush 先发。
 
             if current_player.user_id in self.game_server.user_id_to_connection:
                 await _send_do_action_payload_to_viewer(self, i, payload)

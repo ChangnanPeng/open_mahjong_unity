@@ -38,7 +38,15 @@ public class WindowsManager : MonoBehaviour {
     public static WindowsManager Instance { get; private set; } // 单例
     
     private string currentWindow; // 当前所在窗口状态
+    /// <summary>最近一次所在的大厅顶栏标签；进入 game/recordscene 时不改写，退出时直接切回此处。</summary>
+    private string lastLobbyTab = "menu";
     private Coroutine _switchRoutine;
+
+    private static bool IsLobbyTab(string window) {
+        return window == "menu" || window == "room" || window == "record" || window == "player"
+            || window == "config" || window == "notice" || window == "aboutUs" || window == "sceneConfig"
+            || window == "spectator" || window == "match" || window == "friend";
+    }
 
     private void Awake() {
         if (Instance != null && Instance != this) {
@@ -100,6 +108,7 @@ public class WindowsManager : MonoBehaviour {
         ApplyColdBootHiddenState();
         EnsurePanelVisible(loginPanel);
         currentWindow = "login";
+        lastLobbyTab = "menu";
         HeaderPanel.Instance?.UpdateButtonState("login");
         Debug.Log("[WindowsManager] 已重置到登录界面");
     }
@@ -158,6 +167,23 @@ public class WindowsManager : MonoBehaviour {
         StartSwitchWindow(targetWindow, ensureHeader: true);
     }
 
+    /// <summary>
+    /// 离开 gamePanel 并切回进入对局/牌谱前所在的大厅标签（与游戏内「回到主菜单」同一套导航状态）。
+    /// </summary>
+    public void ExitGameToLastLobbyTab() {
+        ExitGameTo(lastLobbyTab);
+    }
+
+    /// <summary>进入 game/recordscene 前最后一次选中的顶栏标签，默认 menu。</summary>
+    public string GetLastLobbyTab() => lastLobbyTab;
+
+    /// <summary>离开房间后：若退出目标仍是房间页，改为主菜单，避免对局结束误回房间。</summary>
+    public void OnLeftRoom() {
+        if (lastLobbyTab == "room") {
+            lastLobbyTab = "menu";
+        }
+    }
+
     private void StartSwitchWindow(string targetWindow, bool ensureHeader) {
         if (_switchRoutine != null) {
             StopCoroutine(_switchRoutine);
@@ -175,6 +201,9 @@ public class WindowsManager : MonoBehaviour {
         ApplySwitchSequenceToSet(willActive, targetWindow, ensureHeader); // 计算切换后的目标激活集合
 
         ApplyHeaderPanelInstant(wasActive, willActive); // 顶部栏即时切换
+        if (IsLobbyTab(targetWindow)) {
+            lastLobbyTab = targetWindow;
+        }
         currentWindow = targetWindow; // 更新当前窗口状态
         HeaderPanel.Instance?.UpdateButtonState(targetWindow); // 即时刷新导航栏按钮
         if (targetWindow == "room"
@@ -197,14 +226,28 @@ public class WindowsManager : MonoBehaviour {
         WindowFadeTransition.PrepareFadeIn(fadeIn); // 统一淡入初态
         WindowFadeTransition.PrepareFadeOut(fadeOut); // 统一淡出初态
         if (fadeOut.Count == 0 && fadeIn.Count == 0) {
-            if (targetWindow == "menu") RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false); // 仅主界面刷新房间列表
+            RefreshLobbyDataOnSwitch(targetWindow);
             _switchRoutine = null; // 清理协程引用
             yield break;
         }
         float duration = windowFadeDuration <= 0f ? 0f : windowFadeDuration; // 渐变时长
         yield return WindowFadeTransition.Fade(fadeOut, fadeIn, duration); // 执行渐隐渐显
-        if (targetWindow == "menu") RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false); // 渐变完成后刷新列表
+        RefreshLobbyDataOnSwitch(targetWindow);
         _switchRoutine = null; // 协程结束
+    }
+
+    /// <summary>
+    /// 切换到大厅页后立即拉取一次最新数据（与轮询互补，重复进入同一页也会刷新）。
+    /// </summary>
+    private static void RefreshLobbyDataOnSwitch(string targetWindow) {
+        switch (targetWindow) {
+            case "menu":
+                RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false);
+                break;
+            case "match":
+                MatchNetworkManager.Instance?.RequestQueueStatusForMatchPanel();
+                break;
+        }
     }
 
     private void ApplyHeaderPanelInstant(HashSet<GameObject> was, HashSet<GameObject> will) {

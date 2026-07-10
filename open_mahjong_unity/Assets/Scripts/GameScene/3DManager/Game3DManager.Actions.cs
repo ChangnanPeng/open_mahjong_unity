@@ -81,7 +81,7 @@ public partial class Game3DManager : MonoBehaviour
                         Debug.LogError($"加杠位置未找到: lookupKey={lookupKey}, jiagangTileId={jiagangTileId}, riverTileId={riverTileId}");
                         continue;
                     }
-                    Quaternion TempRotation = Quaternion.Euler(0, 90, 0) * rotation; // 横
+                    Quaternion TempRotation = Quaternion.Euler(0, -90, 0) * rotation; // 横
                     TempPositionpoint += JiagangDirection * cardWidth; // 加杠向上一个宽度单位
                     // 从对象池获取麻将牌
                     cardObj = MahjongObjectPool.Instance.Spawn(jiagangTileId, TempPositionpoint, TempRotation);
@@ -101,7 +101,7 @@ public partial class Game3DManager : MonoBehaviour
                     // 加杠动画：将加杠牌移动到3个卡牌宽度以左，然后移回原位
                     if (doAnimation)
                     {
-                        StartCoroutine(MoveCardAnimation(cardObj, SetDirection, cardWidth));
+                        StartCoroutine(MoveCardAnimation(cardObj, SetDirection, cardWidth, playerIndex));
                     }
                     
                     // 每创建一张卡牌等待一帧，避免单帧创建太多对象
@@ -131,7 +131,7 @@ public partial class Game3DManager : MonoBehaviour
                 // 卡牌横置,放置角度叠加横置 指针增加一个高度单位
                 else if (SignDirectionList[i] == 1)
                 {
-                    TempRotation = Quaternion.Euler(0, 90, 0) * rotation; // 横
+                    TempRotation = Quaternion.Euler(0, -90, 0) * rotation; // 横
                     SetPositionpoint += SetDirection * cardHeight * 1.08f; // 指针移动
                     TempPositionpoint += SetDirection; // 保存当前放置位置（基础偏移）
                     // 沿 SetDirection 反向偏移 0.4 高度，沿 JiagangDirection 反向偏移 0.5 宽度
@@ -207,7 +207,7 @@ public partial class Game3DManager : MonoBehaviour
             // 组合牌动画：将父物体移动到3个卡牌宽度以左，然后移回原位
             if (doAnimation)
             {
-                StartCoroutine(MoveCardAnimation(SetParent.gameObject, SetDirection, cardWidth));
+                StartCoroutine(MoveCardAnimation(SetParent.gameObject, SetDirection, cardWidth, playerIndex));
             }
         }
     }
