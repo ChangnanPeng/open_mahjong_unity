@@ -71,10 +71,10 @@ def test_two_two_suit_triplets_can_repeat() -> None:
     assert result.fan_ids.count("two_suit_triplets") == 2, result
 
 
-def test_three_suit_number_row_high_pattern_suppresses_repeatable_low_pattern() -> None:
+def test_small_three_suit_triplets_and_disjoint_two_suit_triplets_both_score() -> None:
     result = score_hand(HandContext([11, 11, 11, 21, 21, 21, 12, 12, 12, 22, 22, 22, 31, 31]))
     assert_has(result, "small_three_suit_triplets")
-    assert_not_has(result, "two_suit_triplets")
+    assert result.fan_ids.count("two_suit_triplets") == 1, result
 
 
 def test_two_consecutive_triplets_can_repeat() -> None:
@@ -317,7 +317,7 @@ def run() -> None:
         test_dragon_row_upgrade,
         test_single_dragon_triplets,
         test_two_two_suit_triplets_can_repeat,
-        test_three_suit_number_row_high_pattern_suppresses_repeatable_low_pattern,
+        test_small_three_suit_triplets_and_disjoint_two_suit_triplets_both_score,
         test_two_consecutive_triplets_can_repeat,
         test_four_identical_cannot_be_standard_pair_or_triplet,
         test_kong_count_from_declared_melds,

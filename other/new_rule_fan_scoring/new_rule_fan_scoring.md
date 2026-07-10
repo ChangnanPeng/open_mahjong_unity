@@ -27,7 +27,9 @@ Per-fan detail notes: [new_rule_fan_details.md](new_rule_fan_details.md)
 Completed winning shapes may score 0 points if they match no fan in the table.
 Such hands are legal wins and exit the hand, but produce no point transfer.
 
-Each row only scores one pattern.
+For rows other than the three-suit-number row, each row only scores one pattern.
+
+The three-suit-number row (`二色同刻`, `小三色同刻`, `三色同顺`, `三色同刻`) is scored by resolved winning-structure units: a sequence, triplet, declared kong, or pair may participate in at most one pattern in this row. Score the highest total from non-overlapping patterns. This permits, for example, `小三色同刻` plus a disjoint `二色同刻`.
 
 When the winning pattern is worth `X` points, where `X` is capped at 20:
 
@@ -40,7 +42,7 @@ When the winning pattern is worth `X` points, where `X` is capped at 20:
 
 `中 / 发 / 白` means each individual dragon triplet is a separate 1-point pattern.
 
-Because each row only scores one pattern:
+Because the dragon row only scores one pattern:
 
 - One dragon triplet scores `中 / 发 / 白` as 1 point.
 - Two dragon triplets score `二元刻` as 3 points instead of scoring two separate 1-point patterns.

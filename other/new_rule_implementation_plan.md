@@ -126,7 +126,7 @@ cd C:\Users\changnan\Documents\open_mahjong_unity\open_mahjong_server
 - Current smoke tests pass: 34 tests.
 - Current coverage includes representative cases for every fan row, plus direct checks for lower-level patterns that would otherwise only be covered through higher-row upgrades: lower wind patterns, individual dragon triplets, all simples, closed hand, all triplets, and two concealed triplets.
 - Ambiguous decomposition coverage now checks that special shapes and standard decompositions are evaluated as separate candidates. In particular, a hand that can be read as both seven pairs and standard sequences must not combine `seven_pairs` with sequence-only fans from the standard candidate.
-- Row-rule coverage now checks that repeatable low-level exceptions such as `two_suit_triplets` are suppressed when a higher pattern from the same row applies.
+- Row-rule coverage checks that same-row patterns do not double-use resolved units. The three-suit-number row permits `small_three_suit_triplets` plus a disjoint `two_suit_triplets`; other rows retain their highest-pattern rule.
 - Tests mainly assert stable English fan IDs. Chinese names are still available in `ScoreResult.fan_names`, but English IDs make console encoding issues less disruptive.
 - The scoring implementation is wired into `GameCalculationService` through the new-rule service methods.
 

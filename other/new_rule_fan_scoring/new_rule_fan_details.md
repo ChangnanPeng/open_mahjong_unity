@@ -10,20 +10,20 @@ Each fan entry should eventually define:
 
 - Value: point value before win-payment multiplication.
 - Definition: exact hand condition.
-- Exclusions / row rule: what higher or same-row pattern replaces it. For all fan rows, when multiple patterns in the same row match, score only the highest-value matching pattern.
+- Exclusions / row rule: what higher or same-row pattern replaces it. Most fan rows score only the highest-value matching pattern; the three-suit-number row instead scores the highest total of non-overlapping patterns.
 - Edge cases: ambiguous situations to test.
 - Examples: sample hand shapes.
 - Implementation notes: calculation hints or pitfalls.
 
 ## Global Row Rule
 
-For every row in the fan table, if multiple patterns in the same row match the hand, score only the highest-value matching pattern from that row.
-
-Do not add lower-value row patterns as extra points when a higher-value row pattern applies.
+For every row except the three-suit-number row, if multiple patterns in the same row match the hand, score only the highest-value matching pattern from that row. Do not add lower-value row patterns as extra points when a higher-value row pattern applies.
 
 Example: in the wind row, a hand with two wind triplets and one wind pair scores `小三风`, not `小三风 + 二风刻`.
 
-Repeatable low-level exceptions such as `二色同刻` and `二连刻` only repeat when no higher pattern from the same row applies. If a higher same-row pattern applies, keep only the highest same-row pattern and suppress repeatable lower patterns from that row.
+For the three-suit-number row, score the highest total of patterns built from non-overlapping resolved units (sequence, triplet, declared kong, and pair). A unit cannot be reused by two patterns in that row. Thus `小三色同刻` may coexist with a disjoint `二色同刻`, and `二色同刻` may repeat when each occurrence uses different triplets/kongs. This is not a greedy “take the highest pattern first” rule.
+
+The consecutive-triplet row already permits multiple disjoint `二连刻` occurrences; higher consecutive-triplet patterns still replace the lower patterns formed from the same triplets.
 
 ## Wind Fan Design Notes
 
@@ -101,7 +101,8 @@ For this row:
 - `三色同顺` requires the same sequence in all three suits in one resolved winning decomposition. Exposed sequences count.
 - `三色同顺` cannot coexist with `二色同刻`, `小三色同刻`, or `三色同刻` in a legal winning hand because the three sequences already consume three meld slots, leaving too few meld slots for the triplet/kong patterns.
 - `三色同顺` also cannot coexist with `一气通贯` in a legal winning hand because the required meld counts would exceed four.
-- Special row-scoring exception: `二色同刻` may score multiple times for different numbers. This is an intentional exception to the usual "one pattern per row" rule and should be handled similarly to future repeated-count patterns such as `二连刻`.
+- Score the highest total of non-overlapping patterns in this row. A triplet/kong or pair used by `小三色同刻` cannot also be used by `二色同刻`; different unused triplets/kongs may form additional `二色同刻` occurrences.
+- Example: `222m 222p 22s 333m 333p` scores `小三色同刻` (using the 2s structures) plus `二色同刻` (using the 3s structures).
 
 ## Closed / Opening Win Fan Design Notes
 
@@ -272,10 +273,10 @@ For this row:
 
 - Value: 1 point.
 - Definition: For one number, two different suits each have a triplet or declared kong of that number.
-- Exclusions / row rule: Same row as `小三色同刻`, `三色同顺`, and `三色同刻`. For the same number, `小三色同刻` or `三色同刻` replaces `二色同刻`; however, `二色同刻` may score multiple times for different numbers.
+- Exclusions / row rule: Same row as `小三色同刻`, `三色同顺`, and `三色同刻`. It cannot reuse a triplet/kong or pair already assigned to another pattern in this row. For the same number, `小三色同刻` or `三色同刻` uses the relevant units instead; `二色同刻` may score from other unused numbers.
 - Edge cases: `七对子` does not qualify. Three identical concealed tiles only count if the resolved winning structure uses them as a triplet. Four identical concealed tiles that were not declared as a kong cannot be used.
 - Examples: `222m 222p 345s 678s 东东`; two scored instances such as `222m 222p 555m 555s 77p`.
-- Implementation notes: Iterate by number 1-9. For each number, count suits with triplet/declared-kong structures. If exactly two suits match and there is no same-number pair in the third suit, score one `二色同刻` for that number; multiple numbers may each score.
+- Implementation notes: Generate candidates by number 1-9 using resolved meld units, then choose the highest-total set whose units do not overlap. In the current four-meld structure, a `小三色同刻` at one number and a `二色同刻` at another number are the relevant coexistence case.
 
 ### 门前清
 
@@ -418,7 +419,7 @@ For this row:
 
 - Value: 3 points.
 - Definition: For one number, two different suits each have a triplet or declared kong of that number, and the third suit has the actual pair of that number.
-- Exclusions / row rule: Same row as `二色同刻`, `三色同顺`, and `三色同刻`. For the same number, replaces `二色同刻`; `三色同刻` replaces it.
+- Exclusions / row rule: Same row as `二色同刻`, `三色同顺`, and `三色同刻`. It consumes its two triplets/kongs and actual pair; those units cannot also score `二色同刻`. A disjoint `二色同刻` built from other triplets/kongs may also score.
 - Edge cases: The third-suit pair must be the pair in the resolved winning structure, not merely two loose matching tiles. `七对子` does not qualify. Undeclared four-of-a-kind cannot be split into standard components for this pattern.
 - Examples: `555m 555p 55s 123m 789p`.
 - Implementation notes: Iterate by number 1-9. Detect two suits with triplet/declared-kong structures and the remaining suit as the resolved pair.
