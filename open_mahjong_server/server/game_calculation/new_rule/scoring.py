@@ -120,7 +120,14 @@ def _apply_row_rules(occurrences: list[FanOccurrence]) -> list[FanOccurrence]:
         by_row.setdefault(definition.row, []).append(occ)
 
     kept: list[FanOccurrence] = []
-    for row_occ in by_row.values():
+    for row, row_occ in by_row.items():
+        # The three-suit-number row is evaluated from resolved meld units.
+        # Its detector emits no overlapping low/high occurrence for the same
+        # number, so occurrences that remain here consume disjoint units and
+        # may score together (for example 小三色同刻 at 2 plus 二色同刻 at 3).
+        if row == "three_suit_number":
+            kept.extend(row_occ)
+            continue
         non_repeatable = [occ for occ in row_occ if not FANS[occ.fan_id].repeatable]
         if non_repeatable:
             kept.append(max(non_repeatable, key=lambda occ: (FANS[occ.fan_id].value, FANS[occ.fan_id].name)))

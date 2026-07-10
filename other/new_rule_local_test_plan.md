@@ -128,8 +128,8 @@ Initial test groups:
 - Seven pairs, including repeated-pair shape.
 - Thirteen orphans, explicitly not mixed terminals.
 - True nine-gates pre-win shape.
-- Row maximum handling.
-- Special repeat exceptions: multiple `二色同刻`, multiple `二连刻`.
+- Row maximum handling, including non-overlapping-unit scoring for the three-suit-number row.
+- Three-suit-number regression: `小三色同刻` plus a disjoint `二色同刻`; multiple disjoint `二色同刻`; multiple disjoint `二连刻`.
 - Timing fans: haitei/houtei, rinshan/chankan.
 - Kong count row.
 

@@ -58,7 +58,7 @@ def test_service_detail_allows_zero_point_standard_win() -> None:
     assert detail["fan_ids"] == [], detail
 
 
-def test_service_detail_applies_repeatable_row_rule() -> None:
+def test_service_detail_scores_disjoint_three_suit_row_patterns() -> None:
     service = GameCalculationService()
     detail = service.NewRule_hepai_detail(
         [11, 11, 11, 21, 21, 21, 12, 12, 12, 22, 22, 22, 31, 31],
@@ -67,7 +67,7 @@ def test_service_detail_applies_repeatable_row_rule() -> None:
         31,
     )
     assert "small_three_suit_triplets" in detail["fan_ids"], detail
-    assert "two_suit_triplets" not in detail["fan_ids"], detail
+    assert detail["fan_ids"].count("two_suit_triplets") == 1, detail
 
 
 def run() -> None:
@@ -76,7 +76,7 @@ def run() -> None:
         test_service_detail_fan_ids_and_context,
         test_service_tingpai_check,
         test_service_detail_allows_zero_point_standard_win,
-        test_service_detail_applies_repeatable_row_rule,
+        test_service_detail_scores_disjoint_three_suit_row_patterns,
     ]
     for test in tests:
         test()
