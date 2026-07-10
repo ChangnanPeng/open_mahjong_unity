@@ -32,7 +32,7 @@ NewRuleActionPolicy
 | 二人和牌 | `second_win` | 累计两家和牌后 | 是 |
 | 三人和牌（血战到底） | `third_win` | 累计三家和牌后 | 是 |
 
-流程策略只给出本局还剩几个“和牌名额”，行动响应策略负责从同一张牌的候选人中选择谁占用名额。这样 `first_win` 和 `second_win` 不会因同一响应帧的一炮多响超过目标人数；而接受全部、座次截胡或三家和流局仍然属于**行动响应策略**，不藏进计分模块。当前 `new_rule` 依照既有物理座次响应顺序分配剩余名额；未来可以独立替换为国标或日麻的响应策略。
+流程策略只在一个完整响应批次结算后判断本局是否达到终止阈值，不限制同一次和牌事件的赢家数量。例如 `first_win` 遇到一炮双响时，两名确认和牌者都会结算和展示，然后本局结束；`second_win` 在已有一名赢家时遇到双响，也会接受两名新赢家。接受多响、座次截胡或三家和流局属于**行动响应策略**，不藏进流程或计分模块。
 
 ## 血战国标应如何组合
 
@@ -75,6 +75,7 @@ GuobiaoActionPolicy
     "winner_exit_animation": true,
     "defer_win_details": true,
     "result_sequence": "winner_sequence",
+    "win_tile_to_buhua": true,
     "score_display_multiplier": 6,
     "draw_slot_win_tile": true,
     "complete_discard_before_ron": true,

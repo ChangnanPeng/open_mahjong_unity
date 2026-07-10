@@ -166,6 +166,7 @@ public partial class NormalGameStateManager {
         lastDealTileType = null;
         selfRiichiCandidateCuts.Clear();
         selfForbiddenCutTiles.Clear();
+        selfForcedCutTiles.Clear();
         chiCandidates.Clear();
         IsQiangGangAsk = false;
         pendingAskFromJiagang = false;
@@ -319,6 +320,7 @@ public partial class NormalGameStateManager {
                 player_to_info["self"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["self"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["self"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["self"].score_history, player_to_info["self"].round_number_history);
                 player_to_info["self"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["self"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "right") {
@@ -338,6 +340,7 @@ public partial class NormalGameStateManager {
                 player_to_info["right"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["right"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["right"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["right"].score_history, player_to_info["right"].round_number_history);
                 player_to_info["right"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["right"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "top") {
@@ -357,6 +360,7 @@ public partial class NormalGameStateManager {
                 player_to_info["top"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["top"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["top"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["top"].score_history, player_to_info["top"].round_number_history);
                 player_to_info["top"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["top"].tag_list = player.tag_list; // 存储标签列表
             } else if (indexToPosition[player.player_index] == "left") {
@@ -376,6 +380,7 @@ public partial class NormalGameStateManager {
                 player_to_info["left"].voice_used = player.voice_used; // 存储使用的音色ID
                 player_to_info["left"].score_history = player.score_history.ToList(); // 存储分数历史变化列表
                 player_to_info["left"].round_number_history = player.round_number_history != null ? player.round_number_history.ToList() : new List<int>(); // 存储每手对应局数
+                ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["left"].score_history, player_to_info["left"].round_number_history);
                 player_to_info["left"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["left"].tag_list = player.tag_list; // 存储标签列表
             }

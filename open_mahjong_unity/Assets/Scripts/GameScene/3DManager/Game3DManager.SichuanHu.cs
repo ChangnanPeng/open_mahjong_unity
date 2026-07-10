@@ -315,9 +315,10 @@ public partial class Game3DManager {
         if (winnerPanel == null || winnerPanel.buhuaPosition == null) yield break;
 
 
-        CompleteCurrentDiscardMoveBeforeRon();
+        CompleteCurrentDiscardMoveBeforeRon(request.DiscardPlayerPosition);
 
-        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition, tileId);
+        GameObject riverTile = DetachLastDiscardFromRiver(
+            request.DiscardPlayerPosition, tileId, preferJiagang: request.IsQianggang);
 
         if (riverTile != null) {
 
@@ -354,9 +355,7 @@ public partial class Game3DManager {
         if (winnerPanel == null || winnerPanel.buhuaPosition == null) yield break;
 
 
-        if (request != null && request.IsQianggang) {
-            CompleteCurrentDiscardMoveBeforeRon();
-        }
+        CompleteCurrentDiscardMoveBeforeRon(request?.DiscardPlayerPosition);
 
         if (!TryGetWinTileSpawnPose(request, out Vector3 startPos, out Quaternion startRot)) {
 
@@ -468,23 +467,10 @@ public partial class Game3DManager {
 
     }
 
-    private void CompleteCurrentDiscardMoveBeforeRon() {
+    private void CompleteCurrentDiscardMoveBeforeRon(string discarderPosition) {
 
         if (NormalGameStateManager.Instance == null || !NormalGameStateManager.Instance.CompletesDiscardBeforeRon()) return;
-
-        if (_currentDiscardMoveCoroutine == null) return;
-
-        StopCoroutine(_currentDiscardMoveCoroutine);
-
-        _currentDiscardMoveCoroutine = null;
-
-        if (_currentDiscardMoveObject != null) {
-            _currentDiscardMoveObject.transform.SetPositionAndRotation(
-                _currentDiscardMoveTargetPosition,
-                _currentDiscardMoveTargetRotation);
-            _currentDiscardMoveObject = null;
-        }
-
+        CompleteDiscardMoveCoroutine(discarderPosition);
     }
 
 
@@ -705,11 +691,15 @@ public partial class Game3DManager {
 
 
 
-    private GameObject DetachRonSourceObject(string discarderPos, int expectedTileId) {
+    private GameObject DetachRonSourceObject(string discarderPos, int expectedTileId, bool preferJiagang = false) {
 
-        GameObject obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
-        bool fromRegisteredRiver = obj != null;
+        GameObject obj = preferJiagang ? TryResolveJiagangSourceObject(discarderPos, expectedTileId) : null;
+        bool fromRegisteredRiver = false;
         if (obj == null) {
+            obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
+            fromRegisteredRiver = obj != null;
+        }
+        if (obj == null && !preferJiagang) {
             obj = TryResolveJiagangSourceObject(discarderPos, expectedTileId);
         }
 
@@ -733,8 +723,9 @@ public partial class Game3DManager {
 
 
 
-    private GameObject DetachLastDiscardFromRiver(string discarderPos, int expectedTileId = 0) {
-        return DetachRonSourceObject(discarderPos, expectedTileId);
+    private GameObject DetachLastDiscardFromRiver(
+        string discarderPos, int expectedTileId = 0, bool preferJiagang = false) {
+        return DetachRonSourceObject(discarderPos, expectedTileId, preferJiagang);
     }
 
 

@@ -27,7 +27,7 @@ public partial class NormalGameStateManager {
 
         // 川麻
         bool deferScore = defer_score_settlement == true;
-        bool isMidGameSichuanHu = deferScore && UsesWinnerExitFlow() && IsHuClass(hu_class);
+        bool isMidGameSichuanHu = deferScore && (UsesWinnerExitFlow() || UsesBuhuaWinTilePresentation()) && IsHuClass(hu_class);
         bool isSichuanEndgameScoreStep = (IsSichuanRule() || UsesWinnerResultSequence()) && IsSichuanEndgameScoreStep(liuju_step);
         ApplySichuanGangRefundIfAny(gang_refund_changes, liuju_step);
         if (isSichuanEndgameScoreStep) {

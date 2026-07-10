@@ -121,6 +121,9 @@ class NewRuleGameState:
             complete_discard_before_ron=True,
             concealed_win_tile=True,
             preserve_win_animation_on_resume=True,
+            win_tile_to_buhua=True,
+            winner_result_sequence=True,
+            defer_win_details=True,
         )
         self.rule_composition = RuleComposition(
             actions=self.action_policy,
@@ -812,7 +815,7 @@ class NewRuleGameState:
             self.emit_visible_action_payloads(action_payload, reveal_final=next_window.get("status") == "END")
             if action == "hu_self":
                 settlement = self._latest_hu_settlement_for(player_index)
-                if settlement is not None and next_window.get("status") != "END":
+                if settlement is not None:
                     self.emit_mid_hand_hu_payloads(settlement)
                 if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
                     self.emit_visible_action_payloads(
@@ -864,7 +867,7 @@ class NewRuleGameState:
                     },
                     reveal_final=next_window.get("status") == "END",
                 )
-                if settlement is not None and next_window.get("status") != "END":
+                if settlement is not None:
                     recycle_discard = (not is_multi_ron) or (ron_i == len(winners) - 1)
                     self.emit_mid_hand_hu_payloads(
                         settlement,
@@ -917,7 +920,7 @@ class NewRuleGameState:
                         },
                         reveal_final=next_window.get("status") == "END",
                     )
-                    if settlement is not None and next_window.get("status") != "END":
+                    if settlement is not None:
                         recycle_discard = (not is_multi_ron) or (ron_i == len(winners) - 1)
                         self.emit_mid_hand_hu_payloads(
                             settlement,
@@ -1346,8 +1349,6 @@ class NewRuleGameState:
         settlements = settlements or {}
         winners: list[int] = []
         passed: list[int] = []
-        winner_slots = self.win_continuation.winner_slots_remaining(self.hu_count)
-
         for player_index in self._response_order_after(discarder_index, responses):
             action = responses[player_index]
             if player_index == discarder_index or self.player_list[player_index].is_hu:
@@ -1356,8 +1357,6 @@ class NewRuleGameState:
                 self.record_discard_win_pass(player_index, tile)
                 passed.append(player_index)
             elif action == "hu":
-                if len(winners) >= winner_slots:
-                    continue
                 if tile not in self.player_list[player_index].waiting_tiles:
                     raise ValueError(f"Player {player_index} is not waiting on tile {tile}.")
                 self.record_discard_win(
@@ -1494,8 +1493,6 @@ class NewRuleGameState:
         settlements = settlements or {}
         winners: list[int] = []
         passed: list[int] = []
-        winner_slots = self.win_continuation.winner_slots_remaining(self.hu_count)
-
         for player_index in self._response_order_after(kong_player_index, responses):
             action = responses[player_index]
             if player_index == kong_player_index or self.player_list[player_index].is_hu:
@@ -1505,8 +1502,6 @@ class NewRuleGameState:
                     self.add_discard_win_lockout(player_index, tile)
                 passed.append(player_index)
             elif action == "hu":
-                if len(winners) >= winner_slots:
-                    continue
                 if tile not in self.player_list[player_index].waiting_tiles:
                     raise ValueError(f"Player {player_index} is not waiting on added-kong tile {tile}.")
                 if not self.can_win_by_discard(player_index, tile):

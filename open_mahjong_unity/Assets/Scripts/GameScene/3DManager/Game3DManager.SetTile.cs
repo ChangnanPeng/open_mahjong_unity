@@ -65,9 +65,9 @@ public partial class Game3DManager : MonoBehaviour {
         }
 
         bool isRecordSet = SetType == "Record";
-        // 立直横置：基础姿势再绕世界 Y 轴顺时针 90°，使长边沿 widthdirection 排布
+        // 立直横置：基础姿势再绕世界 Y 轴逆时针 90°，使长边沿 widthdirection 排布
         if (isRiichi && SetType == "Discard") {
-            rotation = Quaternion.Euler(0, 90, 0) * rotation;
+            rotation = Quaternion.Euler(0, -90, 0) * rotation;
         }
         // 添加随机的 z 轴旋转（正负3度），模拟手牌排列的自然效果
         if (!isRecordSet) {
@@ -127,11 +127,17 @@ public partial class Game3DManager : MonoBehaviour {
         }
 
         if (SetType == "Discard") {
-            StopDiscardMoveCoroutine(PlayerPosition);
+            CompleteDiscardMoveCoroutine(PlayerPosition);
+            _discardMoveObjectsByPlayer[PlayerPosition] = cardObj;
+            _discardMoveTargetsByPlayer[PlayerPosition] = currentPosition;
+            _discardMoveRotationsByPlayer[PlayerPosition] = rotation;
             Coroutine move = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
             _discardMoveCoroutinesByPlayer[PlayerPosition] = move;
             yield return move;
-            if (_discardMoveCoroutinesByPlayer.TryGetValue(PlayerPosition, out Coroutine current) && current == move) _discardMoveCoroutinesByPlayer[PlayerPosition] = null;
+            if (_discardMoveCoroutinesByPlayer.TryGetValue(PlayerPosition, out Coroutine current) && current == move) {
+                _discardMoveCoroutinesByPlayer[PlayerPosition] = null;
+                _discardMoveObjectsByPlayer[PlayerPosition] = null;
+            }
         }
         else {
             yield return StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
@@ -170,7 +176,7 @@ public partial class Game3DManager : MonoBehaviour {
         }
         bool isDiscardLike = SetType == "Discard" || SetType == "DiscardWithoutAnimation";
         if (isRiichi && isDiscardLike) {
-            rotation = Quaternion.Euler(0, 90, 0) * rotation;
+            rotation = Quaternion.Euler(0, -90, 0) * rotation;
         }
         if (!isRecordSet) {
             Vector3 euler = rotation.eulerAngles;

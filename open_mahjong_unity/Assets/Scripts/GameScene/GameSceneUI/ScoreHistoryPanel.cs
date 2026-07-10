@@ -32,6 +32,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         { "riichi", RoundTextDictionary.CurrentRoundTextRiichi },
         { "classical", RoundTextDictionary.CurrentRoundTextClassical },
         { "sichuan", RoundTextDictionary.CurrentRoundTextSichuan },
+        { "changsha", RoundTextDictionary.CurrentRoundTextChangsha },
         { "new_rule", RoundTextDictionary.CurrentRoundTextQingque },
     };
 
@@ -288,7 +289,7 @@ public class ScoreHistoryPanel : MonoBehaviour
 
         int maxPlayedRoundNumber = 0;
         for (int i = 0; i < roundCount; i++) {
-            int roundNumber = i < roundNumbers.Count ? roundNumbers[i] : (i + 1);
+            int roundNumber = ScoreHistorySettlementHelper.ResolveRoundNumberForRow(i, scoreHistoryCount, roundNumbers);
             if (roundNumber > maxPlayedRoundNumber) maxPlayedRoundNumber = roundNumber;
             GameObject textObj = Instantiate(Tmp_Text_Prefab, RoundIndexContainer.transform);
             TMP_Text text = textObj.GetComponent<TMP_Text>();

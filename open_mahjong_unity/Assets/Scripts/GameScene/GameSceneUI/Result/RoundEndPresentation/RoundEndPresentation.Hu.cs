@@ -28,9 +28,10 @@ public partial class RoundEndPresentation {
         bool suppressHandReveal, int hepaiTile, bool multiRon, bool deferScoreSettlement, int? ronDiscarderIndex,
         bool recycleDiscard, bool isQianggang, bool endgameScoreOnly) {
         bool selfWon = NormalGameStateManager.Instance.indexToPosition[hepai_player_index] == "self";
-        bool isBloodBattleStyleRule = NormalGameStateManager.Instance != null
-            && NormalGameStateManager.Instance.UsesWinnerExitFlow();
-        bool isMidGameSichuanHu = deferScoreSettlement && isBloodBattleStyleRule && !endgameScoreOnly;
+        bool usesBuhuaWinTilePresentation = NormalGameStateManager.Instance != null
+            && (NormalGameStateManager.Instance.UsesWinnerExitFlow()
+                || NormalGameStateManager.Instance.UsesBuhuaWinTilePresentation());
+        bool isMidGameSichuanHu = deferScoreSettlement && usesBuhuaWinTilePresentation && !endgameScoreOnly;
         // 终局 settle_hu：仅分数面板，不重复 3D 和牌动画（reveal_hu 已亮牌）
         bool isEndgameScoreOnly = endgameScoreOnly;
         bool willRevealWinnerHand = playPresentationEffects && !isEndgameScoreOnly && !isMidGameSichuanHu

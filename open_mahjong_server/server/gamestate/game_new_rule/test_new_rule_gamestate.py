@@ -720,11 +720,16 @@ def test_apply_action_results_third_self_draw_win_with_zero_target_ends_hand() -
         and payload.get("do_action_info", {}).get("action_list") == ["deal_tile"]
         for payload in game.outbound_payloads
     )
-    assert not any(
-        payload.get("type") == "gamestate/new_rule/show_result"
-        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    terminal_tile_move_payloads = [
+        payload
         for payload in game.outbound_payloads
-    )
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert len(terminal_tile_move_payloads) == 1
+    assert terminal_tile_move_payloads[0]["show_result_info"]["hepai_player_index"] == 2
+    assert terminal_tile_move_payloads[0]["show_result_info"]["hu_class"] == "hu_self"
     final_payloads = [
         payload
         for payload in game.outbound_payloads
@@ -1050,7 +1055,7 @@ def test_apply_action_results_mid_multi_ron_marks_recycle_only_on_last_panel() -
     assert viewer0_payloads[delay_indexes[0]]["delay_seconds"] == 0.5
 
 
-def test_apply_action_results_terminal_discard_win_emits_only_final_settlement() -> None:
+def test_apply_action_results_terminal_discard_win_emits_tile_move_then_final_settlement() -> None:
     game = NewRuleGameState()
     game.initialize_round()
     for player in game.player_list:
@@ -1082,9 +1087,20 @@ def test_apply_action_results_terminal_discard_win_emits_only_final_settlement()
     assert game.player_list[3].is_hu
     assert game.deferred_hu_settlements[-1]["winner"] == 3
     assert game.deferred_hu_settlements[-1]["source"] == "discard"
+    terminal_tile_move_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert len(terminal_tile_move_payloads) == 1
+    assert terminal_tile_move_payloads[0]["show_result_info"]["hepai_player_index"] == 3
+    assert terminal_tile_move_payloads[0]["show_result_info"]["recycle_discard"] is True
     assert not any(
         payload.get("type") == "gamestate/new_rule/show_result"
         and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        and payload.get("show_result_info", {}).get("hepai_player_index") in (0, 1)
         for payload in game.outbound_payloads
     )
     final_payloads = [
@@ -1131,9 +1147,20 @@ def test_apply_action_results_terminal_multi_ron_emits_each_final_settlement() -
 
     assert next_window["status"] == "END"
     assert [settlement["winner"] for settlement in game.deferred_hu_settlements] == [0, 2, 3]
+    terminal_tile_move_payloads = [
+        payload
+        for payload in game.outbound_payloads
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in terminal_tile_move_payloads] == [2, 3]
+    assert [payload["show_result_info"]["multi_ron"] for payload in terminal_tile_move_payloads] == [True, True]
+    assert [payload["show_result_info"]["recycle_discard"] for payload in terminal_tile_move_payloads] == [False, True]
     assert not any(
         payload.get("type") == "gamestate/new_rule/show_result"
         and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+        and payload.get("show_result_info", {}).get("hepai_player_index") == 0
         for payload in game.outbound_payloads
     )
     final_payloads = [
@@ -1459,11 +1486,16 @@ def test_apply_action_results_robbed_kong_as_third_win_ends_hand_with_final_pane
         payload["do_action_info"]["action_list"] in (["deal_tile"], ["deal_gang_tile"])
         for payload in action_payloads
     )
-    assert not any(
-        payload.get("type") == "gamestate/new_rule/show_result"
-        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    terminal_tile_move_payloads = [
+        payload
         for payload in game.outbound_payloads
-    )
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert len(terminal_tile_move_payloads) == 1
+    assert terminal_tile_move_payloads[0]["show_result_info"]["hepai_player_index"] == 2
+    assert terminal_tile_move_payloads[0]["show_result_info"]["is_qianggang"] is True
     final_payloads = [
         payload
         for payload in game.outbound_payloads
@@ -1540,11 +1572,16 @@ def test_apply_action_results_multi_robbed_kong_ends_hand_and_scores_chankan() -
         payload["do_action_info"]["action_list"] in (["deal_tile"], ["deal_gang_tile"])
         for payload in action_payloads
     )
-    assert not any(
-        payload.get("type") == "gamestate/new_rule/show_result"
-        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    terminal_tile_move_payloads = [
+        payload
         for payload in game.outbound_payloads
-    )
+        if payload.get("type") == "gamestate/new_rule/show_result"
+        and payload.get("player_index") == 0
+        and payload.get("show_result_info", {}).get("defer_score_settlement") is True
+    ]
+    assert [payload["show_result_info"]["hepai_player_index"] for payload in terminal_tile_move_payloads] == [1, 2, 3]
+    assert [payload["show_result_info"]["recycle_discard"] for payload in terminal_tile_move_payloads] == [False, False, True]
+    assert all(payload["show_result_info"]["is_qianggang"] is True for payload in terminal_tile_move_payloads)
     final_payloads = [
         payload
         for payload in game.outbound_payloads
@@ -2348,7 +2385,7 @@ def run() -> None:
         test_apply_action_results_added_kong_pass_emits_meld_update_and_supplement_draw,
         test_continue_after_discard_responses_multi_ron_returns_next_hand_window,
         test_apply_action_results_mid_multi_ron_marks_recycle_only_on_last_panel,
-        test_apply_action_results_terminal_discard_win_emits_only_final_settlement,
+        test_apply_action_results_terminal_discard_win_emits_tile_move_then_final_settlement,
         test_apply_action_results_terminal_multi_ron_emits_each_final_settlement,
         test_continue_after_discard_responses_skips_claims_when_anyone_wins,
         test_continue_after_discard_responses_claim_returns_only_cut_window,

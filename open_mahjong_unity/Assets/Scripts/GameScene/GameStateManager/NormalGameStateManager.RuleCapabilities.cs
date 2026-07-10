@@ -18,6 +18,10 @@ public partial class NormalGameStateManager {
         return false;
     }
 
+    public bool UsesBuhuaWinTilePresentation() {
+        return presentationProfile != null && presentationProfile.win_tile_to_buhua;
+    }
+
     public int ScoreDisplayMultiplier() {
         if (presentationProfile != null && presentationProfile.score_display_multiplier > 0) {
             return presentationProfile.score_display_multiplier;

@@ -13,6 +13,7 @@ class PresentationProfile:
     winner_exit_animation: bool
     defer_win_details: bool
     result_sequence: str
+    win_tile_to_buhua: bool = False
     score_display_multiplier: int = 1
     draw_slot_win_tile: bool = False
     complete_discard_before_ron: bool = False
@@ -29,12 +30,20 @@ class PresentationProfile:
         complete_discard_before_ron: bool = False,
         concealed_win_tile: bool = False,
         preserve_win_animation_on_resume: bool = False,
+        win_tile_to_buhua: bool = False,
+        winner_result_sequence: bool | None = None,
+        defer_win_details: bool | None = None,
     ) -> "PresentationProfile":
         continuous = flow.winners_exit_hand
+        if winner_result_sequence is None:
+            winner_result_sequence = continuous
+        if defer_win_details is None:
+            defer_win_details = continuous
         return cls(
             winner_exit_animation=continuous,
-            defer_win_details=continuous,
-            result_sequence="winner_sequence" if continuous else "single",
+            defer_win_details=defer_win_details,
+            result_sequence="winner_sequence" if winner_result_sequence else "single",
+            win_tile_to_buhua=win_tile_to_buhua,
             score_display_multiplier=score_display_multiplier,
             draw_slot_win_tile=draw_slot_win_tile,
             complete_discard_before_ron=complete_discard_before_ron,

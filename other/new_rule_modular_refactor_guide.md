@@ -48,7 +48,7 @@
 | 二人和牌 | `second_win` | 2 | 是 |
 | 三人和牌（血战到底） | `third_win` | 3 | 是 |
 
-`WinContinuationPolicy.winner_slots_remaining` 是一个关键边界：同一张弃牌可能出现多个和牌响应，但流程只允许消耗剩余名额。这样 `first_win`、`second_win` 不会因“一炮多响”超过目标人数；至于国标头跳、多响、三家和流局等响应取舍，仍应由行动模块决定。
+`winner_target` 是响应批次结束后的终局阈值，不是同一次和牌事件的赢家上限。同一张弃牌或同一次抢杠有几名玩家确认和牌，就结算并展示几名；随后流程模块再判断本局是否结束。国标头跳、多响、三家和流局等取舍仍由行动模块决定。
 
 ## 已落地的代码改动
 
@@ -65,7 +65,7 @@
 
 - `game_new_rule/action_check.py`：`NewRuleActionPolicy` 门面。
 - `game_new_rule/settlement.py`：`NewRuleSettlementPolicy`，从状态机迁出得分与支付逻辑。
-- `game_new_rule/NewRuleGameState.py`：创建并调用四类模块；对弃牌和加杠响应按剩余和牌名额截断。
+- `game_new_rule/NewRuleGameState.py`：创建并调用四类模块；完整收集同一弃牌或抢杠事件的确认赢家，再按终局阈值决定是否续打。
 - `game_new_rule/boardcast.py`：在 `game_info` 广播中携带流程与展示能力。
 - `room_validators.py`、`room_manager.py`、`room_router.py`、`server.py`：校验、保存并透传 `hand_end_mode`。
 
@@ -99,6 +99,7 @@
     "winner_exit_animation": true,
     "defer_win_details": true,
     "result_sequence": "winner_sequence",
+    "win_tile_to_buhua": true,
     "score_display_multiplier": 6,
     "draw_slot_win_tile": true,
     "complete_discard_before_ron": true,
@@ -128,8 +129,8 @@
 例如改一炮多响、过胡、抢杠或可鸣牌限制：
 
 1. 在 `NewRuleActionPolicy`（或新的 ActionPolicy）实现候选和响应选择；
-2. 让选择逻辑尊重 `winner_slots_remaining`；
-3. 添加同一弃牌多响应、流程名额不足等组合测试；
+2. 先完整解析同一事件的所有确认赢家，再调用终局流程判断是否结束；
+3. 添加同一弃牌多响应、抢杠多响和跨越终局阈值等组合测试；
 4. 不在结算模块中隐藏行动优先级判断。
 
 ### 新增流程模式

@@ -35,6 +35,7 @@ public class RoomInfo {
     public bool? open_tobi; // 立直麻将专属：是否击飞
     public string hepai_way; // 立直麻将专属：和牌方式 head_bump / multi_ron / three_ron_abort
     public bool? blood_battle; // 四川麻将专属：是否开启血战到底
+    public string hand_end_mode; // 公共和牌终局流程：first_win / second_win / third_win
     public int open_kong_replacement_count;
     public bool initial_hu_si_xi;
     public bool initial_hu_ban_ban_hu;
@@ -223,6 +224,7 @@ public class PresentationProfileInfo {
     public bool winner_exit_animation;
     public bool defer_win_details;
     public string result_sequence;
+    public bool win_tile_to_buhua;
     public int score_display_multiplier = 1;
     public bool draw_slot_win_tile;
     public bool complete_discard_before_ron;

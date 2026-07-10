@@ -64,10 +64,6 @@ class WinContinuationPolicy:
     def should_end(self, winner_count: int, wall_tiles: int, dead_wall_count: int = 0) -> bool:
         return winner_count >= self.winner_target or wall_tiles <= dead_wall_count
 
-    def winner_slots_remaining(self, winner_count: int) -> int:
-        """Maximum additional winners the current response event may accept."""
-        return max(0, self.winner_target - winner_count)
-
     @staticmethod
     def next_active_index(players: Iterable[Any], from_index: int) -> Optional[int]:
         indexed_players = {int(player.player_index): player for player in players}

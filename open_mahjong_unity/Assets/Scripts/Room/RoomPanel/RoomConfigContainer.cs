@@ -34,9 +34,14 @@ public class RoomConfigContainer : MonoBehaviour {
             "room_type", "game_round", "round_timer", "step_timer", "random_seed",
             "tips", "blood_battle", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
         } },
+        { "changsha", new List<string> {
+            "room_type", "game_round", "round_timer", "step_timer", "random_seed",
+            "tips", "open_kong_replacement_count", "initial_hu_types", "bird_count",
+            "dealer_bird", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
+        } },
         { "new_rule", new List<string> {
             "room_type", "game_round", "round_timer", "step_timer", "random_seed",
-            "tips", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
+            "tips", "hand_end_mode", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
         } },
     };
 
@@ -95,7 +100,7 @@ public class RoomConfigContainer : MonoBehaviour {
                 return true;
             case "game_round":
                 displayName = "圈数";
-                displayValue = RoundTextDictionary.GetMaxRoundText(roomInfo.game_round);
+                displayValue = RoundTextDictionary.GetMaxRoundText(roomInfo.room_rule, roomInfo.game_round);
                 return true;
             case "round_timer":
                 displayName = "局时";
@@ -124,6 +129,26 @@ public class RoomConfigContainer : MonoBehaviour {
             case "blood_battle":
                 displayName = "血战到底";
                 displayValue = (roomInfo.blood_battle ?? true) ? "开" : "关";
+                return true;
+            case "hand_end_mode":
+                displayName = "终局流程";
+                displayValue = FormatHandEndMode(roomInfo.hand_end_mode);
+                return true;
+            case "open_kong_replacement_count":
+                displayName = "开杠张数";
+                displayValue = $"{Mathf.Clamp(roomInfo.open_kong_replacement_count, 1, 4)}张";
+                return true;
+            case "initial_hu_types":
+                displayName = "起手胡";
+                displayValue = FormatChangshaInitialHu(roomInfo);
+                return true;
+            case "bird_count":
+                displayName = "扎鸟张数";
+                displayValue = roomInfo.bird_count > 0 ? $"{roomInfo.bird_count}鸟" : "不扎鸟";
+                return true;
+            case "dealer_bird":
+                displayName = "扎鸟规则";
+                displayValue = roomInfo.dealer_bird ? "定庄扎鸟" : "赢家扎鸟";
                 return true;
             case "has_password":
                 displayName = "密码";
@@ -175,6 +200,24 @@ public class RoomConfigContainer : MonoBehaviour {
 
     private string FormatRoundTimer(int roundTimer) {
         return roundTimer.ToString();
+    }
+
+    private string FormatHandEndMode(string mode) {
+        return mode switch {
+            "second_win" => "二人和牌",
+            "third_win" => "三人和牌（血战到底）",
+            _ => "和牌即止（普通）",
+        };
+    }
+
+    private string FormatChangshaInitialHu(RoomInfo roomInfo) {
+        List<string> enabled = new List<string>();
+        if (roomInfo.initial_hu_si_xi) enabled.Add("四喜");
+        if (roomInfo.initial_hu_ban_ban_hu) enabled.Add("板板胡");
+        if (roomInfo.initial_hu_que_yi_se) enabled.Add("缺一色");
+        if (roomInfo.initial_hu_liu_liu_shun) enabled.Add("六六顺");
+        if (roomInfo.initial_hu_san_tong) enabled.Add("三同");
+        return enabled.Count > 0 ? string.Join("/", enabled) : "关闭";
     }
 
     private string FormatStepTimer(int stepTimer) {

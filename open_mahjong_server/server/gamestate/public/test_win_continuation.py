@@ -79,7 +79,7 @@ def test_first_second_and_third_win_modes_end_at_their_targets() -> None:
         assert game.ended_by == "win"
 
 
-def test_response_batch_does_not_overshoot_first_or_second_winner_target() -> None:
+def test_hand_end_target_does_not_truncate_same_event_multi_ron() -> None:
     first = NewRuleGameState(room_data=room_data("first_win"))
     first.player_list[1].waiting_tiles = {11}
     first.player_list[2].waiting_tiles = {11}
@@ -89,8 +89,9 @@ def test_response_batch_does_not_overshoot_first_or_second_winner_target() -> No
         {1: "hu", 2: "hu"},
         {1: {"points": 0}, 2: {"points": 0}},
     )
-    assert result["winners"] == [1]
-    assert first.hu_count == 1
+    assert result["winners"] == [1, 2]
+    assert first.hu_count == 2
+    assert result["ended"] is True
 
     second = NewRuleGameState(room_data=room_data("second_win"))
     second.mark_player_hu(3, {"points": 0})
@@ -102,8 +103,9 @@ def test_response_batch_does_not_overshoot_first_or_second_winner_target() -> No
         {1: "hu", 2: "hu"},
         {1: {"points": 0}, 2: {"points": 0}},
     )
-    assert result["winners"] == [1]
-    assert second.hu_count == 2
+    assert result["winners"] == [1, 2]
+    assert second.hu_count == 3
+    assert result["ended"] is True
 
 
 def test_new_rule_composes_public_flow_rule_scoring_and_presentation() -> None:
@@ -120,23 +122,27 @@ def test_new_rule_composes_public_flow_rule_scoring_and_presentation() -> None:
         complete_discard_before_ron=True,
         concealed_win_tile=True,
         preserve_win_animation_on_resume=True,
+        win_tile_to_buhua=True,
+        winner_result_sequence=True,
+        defer_win_details=True,
     )
 
 
 def test_game_info_declares_capabilities_instead_of_requiring_rule_name_checks() -> None:
-    game = NewRuleGameState(room_data=room_data("second_win"))
+    game = NewRuleGameState(room_data=room_data("first_win"))
     payload = game_info_payload(game, 0)
-    assert payload["hand_end_mode"] == "second_win"
-    assert payload["winner_target"] == 2
+    assert payload["hand_end_mode"] == "first_win"
+    assert payload["winner_target"] == 1
     assert payload["hand_flow"] == {
-        "mode": "second_win",
-        "winner_target": 2,
-        "winners_exit_hand": True,
+        "mode": "first_win",
+        "winner_target": 1,
+        "winners_exit_hand": False,
     }
     assert payload["presentation_profile"] == {
-        "winner_exit_animation": True,
+        "winner_exit_animation": False,
         "defer_win_details": True,
         "result_sequence": "winner_sequence",
+        "win_tile_to_buhua": True,
         "score_display_multiplier": 6,
         "draw_slot_win_tile": True,
         "complete_discard_before_ron": True,
@@ -152,7 +158,7 @@ def run() -> None:
         test_legacy_blood_battle_flag_maps_to_public_policy,
         test_room_validation_accepts_three_public_modes,
         test_first_second_and_third_win_modes_end_at_their_targets,
-        test_response_batch_does_not_overshoot_first_or_second_winner_target,
+        test_hand_end_target_does_not_truncate_same_event_multi_ron,
         test_new_rule_composes_public_flow_rule_scoring_and_presentation,
         test_game_info_declares_capabilities_instead_of_requiring_rule_name_checks,
     ]

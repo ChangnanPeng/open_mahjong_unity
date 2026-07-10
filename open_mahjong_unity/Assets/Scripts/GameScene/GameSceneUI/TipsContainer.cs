@@ -45,11 +45,15 @@ public class TipsContainer : MonoBehaviour
     public bool HasCachedTenpaiTips => _hasCachedTenpaiTips && _cachedWaitingTiles.Count > 0;
 
     /// <summary>牌桌弃牌/副露变化后重算听牌提示 UI（完整手牌、无切牌预览），不重跑听牌检测。</summary>
-    public void RefreshTenpaiTipsIfCached() {
+    public void RefreshTenpaiTipsIfCached(bool syncHandFromLiveState = false) {
         if (!HasCachedTenpaiTips) return;
         NormalGameStateManager gameManager = NormalGameStateManager.Instance;
         if (gameManager == null || !gameManager.tips) return;
         _pendingCutTileId = null;
+        if (syncHandFromLiveState) {
+            _cachedHandTiles.Clear();
+            _cachedHandTiles.AddRange(gameManager.selfHandTiles);
+        }
         SetTipsWithHand(_cachedHandTiles, _cachedWaitingTiles);
     }
 
@@ -189,6 +193,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessRiichiTile(hepaiTile, handList, combinationList);
             } else if (gameManager.roomRule == "sichuan") {
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
+            } else if (gameManager.roomRule == "changsha") {
+                ProcessChangshaTile(hepaiTile, handList, combinationList);
             } else if (gameManager.roomRule == "new_rule") {
                 // New-rule client-side tips are not implemented yet.
             } else {
@@ -248,6 +254,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessRiichiTile(hepaiTile, handList, combinationList);
             } else if (ctx.RoomRule == "sichuan") {
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
+            } else if (ctx.RoomRule == "changsha") {
+                ProcessChangshaTile(hepaiTile, handList, combinationList);
             } else if (ctx.RoomRule == "new_rule") {
                 // New-rule record tips are not implemented yet.
             } else {
@@ -533,6 +541,21 @@ public class TipsContainer : MonoBehaviour
         InstantiateTipsTile(hepaiTile);
         GameObject fanObject = Instantiate(FanPrefab, FanContainer.transform);
         SetTipsFanCount(fanObject, FormatTipsFanLabel($"{fan}番", hepaiTile), "dianhe", hepaiTile);
+    }
+
+    private void ProcessChangshaTile(
+        int hepaiTile,
+        List<int> handList,
+        List<string> combinationList) {
+        var result = ChangshaExternal.HepaiCheck(handList, combinationList, new List<string>(), hepaiTile, false);
+        int score = result.Item1;
+        string label = score > 0 ? $"{score}分" : "无番";
+        if (result.Item2 != null && result.Item2.Count > 0) {
+            label = $"{result.Item2[0]} {label}";
+        }
+        InstantiateTipsTile(hepaiTile);
+        GameObject fanObject = Instantiate(FanPrefab, FanContainer.transform);
+        SetTipsFanCount(fanObject, FormatTipsFanLabel(label, hepaiTile), score > 0 ? "dianhe" : "wuyi", hepaiTile);
     }
 
     /// <summary>

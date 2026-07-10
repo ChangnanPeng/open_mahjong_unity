@@ -121,6 +121,12 @@ public class GameStateNetworkManager : MonoBehaviour {
             case "gamestate/broadcast_sticker":
                 HandleBroadcastSticker(response);
                 break;
+            case "gamestate/vote_update":
+                HandleVoteUpdate(response);
+                break;
+            case "gamestate/vote_end":
+                HandleVoteEnd(response);
+                break;
             default:
                 Debug.LogWarning($"未知的游戏状态消息类型: {response.type}");
                 break;
@@ -157,7 +163,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             handresponse.remain_tiles,
             handresponse.action_list,
             handresponse.riichi_candidate_cuts,
-            handresponse.forbidden_cut_tiles
+            handresponse.forbidden_cut_tiles,
+            handresponse.forced_cut_tiles
         );
     }
     
@@ -198,7 +205,8 @@ public class GameStateNetworkManager : MonoBehaviour {
             askresponse.remaining_time,
             askresponse.action_list,
             askresponse.cut_tile,
-            askresponse.chi_candidates
+            askresponse.chi_candidates,
+            askresponse.is_tactical_recheck == true
         );
     }
     
@@ -208,13 +216,16 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleDoAction(Response response) {
         Debug.Log($"收到执行操作消息: {response.do_action_info}");
         DoActionInfo doresponse = response.do_action_info;
+        if (doresponse == null) return;
         NormalGameStateManager.Instance.DoAction(
             doresponse.action_list,
             doresponse.action_player,
             doresponse.cut_tile,
+            doresponse.cut_tiles,
             doresponse.cut_tile_index,
             doresponse.cut_class,
             doresponse.deal_tile,
+            doresponse.deal_tiles,
             doresponse.buhua_tile,
             doresponse.combination_mask,
             doresponse.combination_target,
@@ -223,7 +234,10 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.silent == true,
             doresponse.is_mo_gang,
             doresponse.gang_score_changes,
-            doresponse.is_mo_buhua
+            doresponse.is_mo_buhua,
+            doresponse.action_tick,
+            doresponse.cut_from_player,
+            doresponse.meld_reveal_delay
         );
         SyncGameInfo(response);
     }
@@ -468,6 +482,74 @@ public class GameStateNetworkManager : MonoBehaviour {
             response.sticker_info.original_player_index,
             response.sticker_info.player_index,
             response.sticker_info.sticker);
+    }
+
+    private void HandleVoteUpdate(Response response) {
+        VotePanel.Instance?.ApplyState(response.vote_info);
+        ClearGameTimerIfVoteRequires(response.vote_info);
+    }
+
+    private void HandleVoteEnd(Response response) {
+        VotePanel.Instance?.Hide();
+        ClearGameActionTimer();
+        PostGameNavigator.ExitToLobby(forceTeardown: true);
+    }
+
+    private static void ClearGameTimerIfVoteRequires(VoteInfo info) {
+        if (info == null || string.IsNullOrEmpty(info.phase)) return;
+        switch (info.phase) {
+            case "end_countdown":
+            case "pause_pending":
+            case "paused":
+            case "resume_voting":
+            case "resume_countdown":
+                ClearGameActionTimer();
+                break;
+        }
+    }
+
+    private static void ClearGameActionTimer() {
+        if (NormalGameStateManager.Instance != null) {
+            NormalGameStateManager.Instance.SwitchCurrentPlayer("None", "ClearAction", 0);
+        } else {
+            GameCanvas.Instance?.StopTimeRunning();
+            GameCanvas.Instance?.ClearActionButton();
+        }
+    }
+
+    public async void SendVoteStart(string voteType) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteStartRequest {
+                type = "gamestate/vote_start",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+                vote_type = voteType,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) { Debug.LogError($"发起投票失败: {e.Message}"); }
+    }
+
+    public async void SendVoteResponse(string vote) {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteResponseRequest {
+                type = "gamestate/vote_response",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+                vote = vote,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) { Debug.LogError($"提交投票失败: {e.Message}"); }
+    }
+
+    public async void SendVoteResume() {
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        try {
+            var request = new VoteResumeRequest {
+                type = "gamestate/vote_resume",
+                gamestate_id = UserDataManager.Instance.GamestateId,
+            };
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) { Debug.LogError($"请求解除暂停失败: {e.Message}"); }
     }
     
     /// <summary>

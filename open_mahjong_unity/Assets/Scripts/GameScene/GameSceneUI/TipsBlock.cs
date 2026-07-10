@@ -45,6 +45,9 @@ public class TipsBlock : MonoBehaviour, IPointerEnterHandler, IPointerExitHandle
                     waitingTiles.RemoveWhere(w => (w / 10) == dingque);
                 }
             }
+            else if (NormalGameStateManager.Instance.roomRule == "changsha"){
+                waitingTiles = ChangshaExternal.TingpaiCheck(selfHandTiles, combinationTiles);
+            }
             else if (NormalGameStateManager.Instance.roomRule == "new_rule"){
                 waitingTiles = new HashSet<int>();
             }
