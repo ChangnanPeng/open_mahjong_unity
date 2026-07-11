@@ -153,6 +153,59 @@ class SichuanRoomValidator(BaseModel):
             raise ValueError(str(e)) from e
 
 
+class JianzhongRoomValidator(BaseModel):
+    room_name: str
+    game_round: int
+    round_timer: int
+    step_timer: int
+    random_seed: Union[int, str] = 0
+    show_moqie_hint: bool = False
+    tactical_call: bool = False
+    claim_protection: bool = True
+    hand_end_mode: str = "third_win"
+
+    @validator('room_name')
+    def validate_room_name(cls, v):
+        if not v.strip():
+            raise ValueError('room_name cannot be empty')
+        return v.strip()
+
+    @validator('game_round')
+    def validate_game_round(cls, v):
+        if v < 1 or v > 4:
+            raise ValueError('game_round must be between 1 and 4')
+        return v
+
+    @validator('round_timer')
+    def validate_timers(cls, v):
+        if v < 0 or v > 1000:
+            raise ValueError('round_timer must be between 0 and 1000')
+        return v
+
+    @validator('step_timer')
+    def validate_step_timer(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError('step_timer must be between 0 and 100')
+        return v
+
+    @validator('random_seed')
+    def validate_random_seed(cls, v):
+        try:
+            return parse_user_master_seed(v)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
+
+    @validator('hand_end_mode')
+    def validate_hand_end_mode(cls, v):
+        from ..gamestate.public.win_continuation import HandEndMode
+
+        try:
+            return HandEndMode(v).value
+        except ValueError as e:
+            allowed = ', '.join(mode.value for mode in HandEndMode)
+            raise ValueError(f'hand_end_mode must be one of: {allowed}') from e
+
+
 class ChangshaRoomValidator(BaseModel):
     room_name: str
     game_round: int

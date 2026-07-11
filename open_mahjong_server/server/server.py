@@ -331,6 +331,9 @@ class GameServer:
     async def create_Sichuan_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "sichuan/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, blood_battle: bool = True, claim_protection: bool = True) -> Response:
         return await self.room_manager.create_Sichuan_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, blood_battle, claim_protection)
 
+    async def create_Jianzhong_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "jianzhong/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, hand_end_mode: str = "third_win") -> Response:
+        return await self.room_manager.create_Jianzhong_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, hand_end_mode)
+
     # 获取房间列表
     def get_room_list(self, show_tip: bool = False) -> Response:
         return self.room_manager.get_room_list(show_tip=show_tip)
@@ -820,4 +823,3 @@ async def player_login(
         user_config=user_config,
         rank_data=rank_data,
     )
-

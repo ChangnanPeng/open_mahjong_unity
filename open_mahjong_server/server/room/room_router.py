@@ -66,6 +66,8 @@ async def handle_room_message(game_server, Connect_id: str, message: dict, webso
         await handle_create_Classical_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Sichuan_room":
         await handle_create_Sichuan_room(game_server, Connect_id, message, websocket)
+    elif message_type == "room/create_Jianzhong_room":
+        await handle_create_Jianzhong_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/create_Riichi_room":
         await handle_create_Riichi_room(game_server, Connect_id, message, websocket)
     elif message_type == "room/get_room_list":
@@ -236,6 +238,33 @@ async def handle_create_Sichuan_room(game_server, Connect_id: str, message: dict
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
+async def handle_create_Jianzhong_room(game_server, Connect_id: str, message: dict, websocket):
+    logging.info(f"创建简中房间请求 - 用户名: {Connect_id}")
+    if Connect_id in game_server.players:
+        player = game_server.players[Connect_id]
+        blocked = _reject_room_entry(game_server, player)
+        if blocked:
+            await websocket.send_json(blocked.dict(exclude_none=True))
+            return
+
+    response = await game_server.create_Jianzhong_room(
+        Connect_id,
+        message["roomname"],
+        message["gameround"],
+        message["password"],
+        message["roundTimerValue"],
+        message["stepTimerValue"],
+        message["tips"],
+        message.get("random_seed", 0),
+        message.get("sub_rule", "jianzhong/standard"),
+        message.get("tourist_limit", False),
+        message.get("allow_spectator", True),
+        message.get("tactical_call", False),
+        message.get("claim_protection", True),
+        message.get("hand_end_mode", "third_win"),
+    )
+    await websocket.send_json(response.dict(exclude_none=True))
+
 async def handle_create_Riichi_room(game_server, Connect_id: str, message: dict, websocket):
     """处理创建立直麻将房间请求"""
     logging.info(f"创建立直麻将房间请求 - 用户名: {Connect_id}")
@@ -307,4 +336,3 @@ async def handle_sync_my_room(game_server, Connect_id: str, websocket):
     """处理同步当前玩家房间状态请求"""
     response = await game_server.sync_my_room(Connect_id)
     await websocket.send_json(response.dict(exclude_none=True))
-
