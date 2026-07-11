@@ -39,6 +39,10 @@ public class RoomConfigContainer : MonoBehaviour {
             "tips", "open_kong_replacement_count", "initial_hu_types", "bird_count",
             "dealer_bird", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
         } },
+        { "jianzhong", new List<string> {
+            "room_type", "game_round", "round_timer", "step_timer", "random_seed",
+            "tips", "hand_end_mode", "tactical_call", "has_password", "tourist_limit", "allow_spectator",
+        } },
     };
 
     private static readonly List<string> DefaultDisplayFields = new List<string> {
@@ -126,6 +130,10 @@ public class RoomConfigContainer : MonoBehaviour {
                 displayName = "血战到底";
                 displayValue = (roomInfo.blood_battle ?? true) ? "开" : "关";
                 return true;
+            case "hand_end_mode":
+                displayName = "终局流程";
+                displayValue = FormatHandEndMode(roomInfo.hand_end_mode);
+                return true;
             case "open_kong_replacement_count":
                 displayName = "开杠张数";
                 displayValue = $"{Mathf.Clamp(roomInfo.open_kong_replacement_count, 1, 4)}张";
@@ -192,6 +200,14 @@ public class RoomConfigContainer : MonoBehaviour {
 
     private string FormatRoundTimer(int roundTimer) {
         return roundTimer.ToString();
+    }
+
+    private string FormatHandEndMode(string mode) {
+        return mode switch {
+            "second_win" => "二人和牌",
+            "third_win" => "三人和牌（血战到底）",
+            _ => "和牌即止（普通）",
+        };
     }
 
     private string FormatChangshaInitialHu(RoomInfo roomInfo) {

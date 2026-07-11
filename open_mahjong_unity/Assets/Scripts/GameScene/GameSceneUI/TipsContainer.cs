@@ -45,7 +45,6 @@ public class TipsContainer : MonoBehaviour
     public bool HasCachedTenpaiTips => _hasCachedTenpaiTips && _cachedWaitingTiles.Count > 0;
 
     /// <summary>牌桌弃牌/副露变化后重算听牌提示 UI（完整手牌、无切牌预览），不重跑听牌检测。</summary>
-    /// <param name="syncHandFromLiveState">为 true 时用当前 selfHandTiles 覆盖缓存，避免鸣牌后余张多算。</param>
     public void RefreshTenpaiTipsIfCached(bool syncHandFromLiveState = false) {
         if (!HasCachedTenpaiTips) return;
         NormalGameStateManager gameManager = NormalGameStateManager.Instance;
@@ -196,6 +195,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
             } else if (gameManager.roomRule == "changsha") {
                 ProcessChangshaTile(hepaiTile, handList, combinationList);
+            } else if (gameManager.roomRule == "jianzhong") {
+                ProcessJianzhongTile(hepaiTile);
             } else {
                 Debug.LogWarning($"未知的规则类型: {gameManager.roomRule}");
             }
@@ -255,6 +256,8 @@ public class TipsContainer : MonoBehaviour
                 ProcessSichuanTile(hepaiTile, handList, combinationList);
             } else if (ctx.RoomRule == "changsha") {
                 ProcessChangshaTile(hepaiTile, handList, combinationList);
+            } else if (ctx.RoomRule == "jianzhong") {
+                ProcessJianzhongTile(hepaiTile);
             } else {
                 Debug.LogWarning($"未知的规则类型: {ctx.RoomRule}");
             }
@@ -553,6 +556,16 @@ public class TipsContainer : MonoBehaviour
         InstantiateTipsTile(hepaiTile);
         GameObject fanObject = Instantiate(FanPrefab, FanContainer.transform);
         SetTipsFanCount(fanObject, FormatTipsFanLabel(label, hepaiTile), score > 0 ? "dianhe" : "wuyi", hepaiTile);
+    }
+
+    private void ProcessJianzhongTile(int hepaiTile) {
+        InstantiateTipsTile(hepaiTile);
+        GameObject fanObject = Instantiate(FanPrefab, FanContainer.transform);
+        SetTipsFanCount(
+            fanObject,
+            FormatTipsFanLabel("可和", hepaiTile),
+            "dianhe",
+            hepaiTile);
     }
 
     /// <summary>
@@ -878,4 +891,3 @@ public class TipsContainer : MonoBehaviour
     }
 
 }
-

@@ -20,7 +20,10 @@ public partial class Game3DManager {
 
     public IEnumerator PlaySichuanMidGameHu(HepaiPresentationRequest request) {
 
-        if (request == null || string.IsNullOrEmpty(request.WinnerPosition)) yield break;
+
+        if (request == null || string.IsNullOrEmpty(request.WinnerPosition)) {
+            yield break;
+        }
 
 
 
@@ -154,7 +157,10 @@ public partial class Game3DManager {
 
         PosPanel3D panel = GetPosPanel(playerPosition);
 
-        if (panel == null || panel.buhuaPosition == null) yield break;
+
+        if (panel == null || panel.buhuaPosition == null) {
+            yield break;
+        }
 
 
 
@@ -216,15 +222,33 @@ public partial class Game3DManager {
 
         }
 
-        GameObject handTile = TryTakeLastHandTileObject(panel.cardsPosition);
+        bool usesDrawSlotWinTile = gsm != null && gsm.UsesDrawSlotWinTile();
+        if (usesDrawSlotWinTile) {
+            SuppressNextDrawForPlayer(playerPosition);
+            yield return null;
+        }
+
+        GameObject handTile = usesDrawSlotWinTile
+            ? TryTakeDrawSlotHandTileObject(panel.cardsPosition, playerPosition)
+            : TryTakeLastHandTileObject(panel.cardsPosition);
+
+
+        if (usesDrawSlotWinTile && handTile != null) {
+            ClearSuppressedDrawForPlayer(playerPosition);
+        }
 
         if (handTile == null) {
 
             Debug.LogWarning($"[SichuanHu] 他家自摸取末张手牌失败 winner={playerPosition}，fallback spawn");
 
-            handTile = SpawnSichuanBuhuaWinTileObject(panel, playerPosition, 0, true, false);
-
-            yield break;
+            Vector3 fallbackStart = GetOtherPlayerDrawSlotPose(panel, playerPosition);
+            if (usesDrawSlotWinTile) {
+                SuppressNextDrawForPlayer(playerPosition);
+            }
+            handTile = SpawnSichuanZimoTileFromOutput(playerPosition, 0, fallbackStart, panel.buhuaPosition);
+            if (handTile == null) {
+                yield break;
+            }
 
         }
 
@@ -234,7 +258,9 @@ public partial class Game3DManager {
 
         Vector3 startPos = handTile.transform.position;
 
+
         yield return CoAnimateTileToBuhua(handTile, panel, playerPosition, tileId, faceDown: true, dimmed: false, startPos);
+
 
     }
 
@@ -289,8 +315,10 @@ public partial class Game3DManager {
         if (winnerPanel == null || winnerPanel.buhuaPosition == null) yield break;
 
 
+        CompleteCurrentDiscardMoveBeforeRon(request.DiscardPlayerPosition);
 
-        GameObject riverTile = DetachLastDiscardFromRiver(request.DiscardPlayerPosition, tileId);
+        GameObject riverTile = DetachLastDiscardFromRiver(
+            request.DiscardPlayerPosition, tileId, preferJiagang: request.IsQianggang);
 
         if (riverTile != null) {
 
@@ -327,6 +355,7 @@ public partial class Game3DManager {
         if (winnerPanel == null || winnerPanel.buhuaPosition == null) yield break;
 
 
+        CompleteCurrentDiscardMoveBeforeRon(request?.DiscardPlayerPosition);
 
         if (!TryGetWinTileSpawnPose(request, out Vector3 startPos, out Quaternion startRot)) {
 
@@ -338,9 +367,19 @@ public partial class Game3DManager {
 
 
 
-        int spawnId = tileId >= 10 ? tileId : 0;
+        bool moveActualQianggangTile = request != null
+            && request.IsQianggang
+            && request.RecycleDiscardAfterPresent
+            && lastCutJiagang3DObject != null;
 
-        GameObject clone = MahjongObjectPool.Instance.Spawn(spawnId, startPos, startRot);
+        GameObject clone = null;
+        if (moveActualQianggangTile) {
+            clone = lastCutJiagang3DObject;
+            lastCutJiagang3DObject = null;
+            clone.transform.SetParent(null, worldPositionStays: true);
+        } else {
+            clone = SpawnSichuanRonPresentTile(tileId, startPos, startRot);
+        }
 
         if (clone == null) yield break;
 
@@ -350,7 +389,7 @@ public partial class Game3DManager {
 
 
 
-        if (request.RecycleDiscardAfterPresent) {
+        if (request.RecycleDiscardAfterPresent && !moveActualQianggangTile) {
 
             RecyclePresentedWinTileSource(request, tileId);
 
@@ -376,7 +415,19 @@ public partial class Game3DManager {
 
     }
 
+    private GameObject SpawnSichuanRonPresentTile(int tileId, Vector3 startPos, Quaternion startRot) {
 
+        int spawnId = tileId >= 10 ? tileId : 0;
+
+        GameObject cardObj = MahjongObjectPool.Instance.Spawn(spawnId, startPos, startRot);
+
+        if (cardObj != null) return cardObj;
+
+        cardObj = MahjongObjectPool.Instance.SpawnVisibleTileFromBlankFallback(spawnId, startPos, startRot);
+
+        return cardObj;
+
+    }
 
     private void RecyclePresentedWinTileSource(HepaiPresentationRequest request, int tileId) {
 
@@ -387,8 +438,6 @@ public partial class Game3DManager {
             lastCutJiagang3DObject = null;
 
             obj.transform.SetParent(null, worldPositionStays: true);
-
-            NormalGameStateManager.Instance?.SyncRonDiscardRemoved(request.DiscardPlayerPosition, tileId);
 
             MahjongObjectPool.Instance.Return(-1, obj);
 
@@ -418,6 +467,12 @@ public partial class Game3DManager {
 
     }
 
+    private void CompleteCurrentDiscardMoveBeforeRon(string discarderPosition) {
+
+        if (NormalGameStateManager.Instance == null || !NormalGameStateManager.Instance.CompletesDiscardBeforeRon()) return;
+        CompleteDiscardMoveCoroutine(discarderPosition);
+    }
+
 
 
     private IEnumerator CoAnimateTileToBuhua(
@@ -426,7 +481,10 @@ public partial class Game3DManager {
 
         int tileId, bool faceDown, bool dimmed, Vector3? explicitStartPos) {
 
-        if (cardObj == null || panel?.buhuaPosition == null) yield break;
+
+        if (cardObj == null || panel?.buhuaPosition == null) {
+            yield break;
+        }
 
 
 
@@ -454,7 +512,14 @@ public partial class Game3DManager {
 
         Quaternion startRot = faceDown ? finalRot : cardObj.transform.rotation;
 
+
         cardObj.transform.SetPositionAndRotation(startPos, startRot);
+
+        if (faceDown && NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesConcealedWinTile()) {
+
+            ApplyConcealedFaceDownLikeMeld(cardObj, tileId, dimmed);
+
+        }
 
 
 
@@ -486,6 +551,7 @@ public partial class Game3DManager {
 
         cardObj.name = $"SichuanHu_{panel.buhuaPosition.childCount}";
 
+
     }
 
 
@@ -500,6 +566,67 @@ public partial class Game3DManager {
 
         return obj;
 
+    }
+
+    private GameObject TryTakeDrawSlotHandTileObject(Transform cardsPosition, string playerPosition) {
+        if (cardsPosition == null || cardsPosition.childCount == 0) {
+            return null;
+        }
+        if (!TryGetHandTileDirection(playerPosition, out Vector3 direction)) {
+            return TryTakeLastHandTileObject(cardsPosition);
+        }
+
+        direction.Normalize();
+        Transform best = null;
+        float bestDistance = float.NegativeInfinity;
+        Vector3 origin = cardsPosition.position;
+
+        for (int i = 0; i < cardsPosition.childCount; i++) {
+            Transform child = cardsPosition.GetChild(i);
+            float distance = Vector3.Dot(child.position - origin, direction);
+            if (distance > bestDistance) {
+                bestDistance = distance;
+                best = child;
+            }
+        }
+
+        float drawSlotThreshold = (cardsPosition.childCount - 0.5f) * cardWidth;
+        if (bestDistance < drawSlotThreshold) {
+            return null;
+        }
+
+        if (best == null) return null;
+        GameObject obj = best.gameObject;
+        obj.transform.SetParent(null, worldPositionStays: true);
+        return obj;
+    }
+
+    private Vector3 GetOtherPlayerDrawSlotPose(PosPanel3D panel, string playerPosition) {
+        if (panel?.cardsPosition == null || !TryGetHandTileDirection(playerPosition, out Vector3 direction)) {
+            return panel?.outputPos != null ? panel.outputPos.position : Vector3.zero;
+        }
+        return panel.cardsPosition.position + (panel.cardsPosition.childCount + 1) * cardWidth * direction.normalized;
+    }
+
+    private bool TryGetHandTileDirection(string playerPosition, out Vector3 direction) {
+        if (playerPosition == "self") {
+            direction = RightDirection;
+            return true;
+        }
+        if (playerPosition == "left") {
+            direction = BackDirection;
+            return true;
+        }
+        if (playerPosition == "top") {
+            direction = LeftDirection;
+            return true;
+        }
+        if (playerPosition == "right") {
+            direction = FrontDirection;
+            return true;
+        }
+        direction = Vector3.zero;
+        return false;
     }
 
 
@@ -564,11 +691,15 @@ public partial class Game3DManager {
 
 
 
-    private GameObject DetachRonSourceObject(string discarderPos, int expectedTileId) {
+    private GameObject DetachRonSourceObject(string discarderPos, int expectedTileId, bool preferJiagang = false) {
 
-        GameObject obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
-        bool fromRegisteredRiver = obj != null;
+        GameObject obj = preferJiagang ? TryResolveJiagangSourceObject(discarderPos, expectedTileId) : null;
+        bool fromRegisteredRiver = false;
         if (obj == null) {
+            obj = ResolveLastDiscardObject(discarderPos, expectedTileId);
+            fromRegisteredRiver = obj != null;
+        }
+        if (obj == null && !preferJiagang) {
             obj = TryResolveJiagangSourceObject(discarderPos, expectedTileId);
         }
 
@@ -592,8 +723,9 @@ public partial class Game3DManager {
 
 
 
-    private GameObject DetachLastDiscardFromRiver(string discarderPos, int expectedTileId = 0) {
-        return DetachRonSourceObject(discarderPos, expectedTileId);
+    private GameObject DetachLastDiscardFromRiver(
+        string discarderPos, int expectedTileId = 0, bool preferJiagang = false) {
+        return DetachRonSourceObject(discarderPos, expectedTileId, preferJiagang);
     }
 
 
@@ -793,5 +925,3 @@ public partial class Game3DManager {
     }
 
 }
-
-

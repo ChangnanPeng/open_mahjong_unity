@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -10,12 +11,14 @@ using UnityEngine;
 public partial class RoundEndPresentation {
     private Coroutine _sichuanEndgameRunner;
     private bool _sichuanEndgameSessionStarted;
+    private readonly Queue<IEnumerator> _sichuanEndgameStepQueue = new Queue<IEnumerator>();
 
     public void ResetSichuanEndgameQueue() {
         if (_sichuanEndgameRunner != null) {
             StopCoroutine(_sichuanEndgameRunner);
             _sichuanEndgameRunner = null;
         }
+        _sichuanEndgameStepQueue.Clear();
         _sichuanEndgameSessionStarted = false;
         _sichuanEndgamePanelStarted = false;
         if (EndResultPanel.Instance != null) {
@@ -25,6 +28,15 @@ public partial class RoundEndPresentation {
 
     public void EnqueueSichuanEndgameStep(IEnumerator step) {
         if (step == null) return;
+        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.UsesWinnerResultSequence()) {
+            _sichuanEndgameStepQueue.Enqueue(step);
+            Debug.Log($"[JianzhongEndgameQueue] enqueue step, queued={_sichuanEndgameStepQueue.Count}, running={_sichuanEndgameRunner != null}");
+            if (_sichuanEndgameRunner == null) {
+                _sichuanEndgameRunner = StartCoroutine(RunJianzhongEndgameQueue());
+            }
+            return;
+        }
+
         if (_sichuanEndgameRunner != null) {
             StopCoroutine(_sichuanEndgameRunner);
             _sichuanEndgameRunner = null;
@@ -33,6 +45,24 @@ public partial class RoundEndPresentation {
             }
         }
         _sichuanEndgameRunner = StartCoroutine(RunSichuanEndgameStep(step));
+    }
+
+    private IEnumerator RunJianzhongEndgameQueue() {
+        if (!_sichuanEndgameSessionStarted) {
+            StopActiveSequence();
+            HideSelfGameplayControl(false);
+            gameObject.SetActive(true);
+            _sichuanEndgameSessionStarted = true;
+            Debug.Log("[JianzhongEndgameQueue] start session");
+        }
+
+        while (_sichuanEndgameStepQueue.Count > 0) {
+            Debug.Log($"[JianzhongEndgameQueue] run step, remaining_before={_sichuanEndgameStepQueue.Count}");
+            yield return _sichuanEndgameStepQueue.Dequeue();
+        }
+
+        _sichuanEndgameRunner = null;
+        Debug.Log("[JianzhongEndgameQueue] queue drained");
     }
 
     private IEnumerator RunSichuanEndgameStep(IEnumerator step) {

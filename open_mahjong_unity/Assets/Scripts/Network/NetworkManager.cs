@@ -30,13 +30,9 @@ public class NetworkManager : MonoBehaviour {
     private string playerId; // 定义玩家ID
     private bool isConnecting = false; // 定义连接状态
     private Queue<byte[]> messageQueue = new Queue<byte[]>(); // 定义消息队列
-    private readonly Queue<byte[]> priorityMessageQueue = new Queue<byte[]>(); // 需立即处理的消息（如 match/match_found）
+    private readonly Queue<byte[]> priorityMessageQueue = new Queue<byte[]>();
     private const string MatchFoundTypeJson = "\"type\":\"match/match_found\"";
 
-    /// <summary>网络消息队列是否真正积压（当前帧出队后仍有 ≥2 条未处理）。
-    /// 用于判断客户端是否在“补帧/追赶”：后台降帧切回时会连续处理十几条。
-    /// 显示层延迟（如鸣牌 claim_meld_followup_gap）在补帧时应跳过，避免逻辑已同步、3D 却逐条卡住。
-    /// 阈值取 ≥2：仅剩 1 条（下一巡 cut 刚入队，属正常快打）时仍保留间隔，否则动态延迟几乎永远不生效。</summary>
     public bool IsBacklogged {
         get { lock(messageQueue) { return messageQueue.Count >= 2; } }
     }
@@ -57,7 +53,6 @@ public class NetworkManager : MonoBehaviour {
 
     /// <summary>最近一次 ping/pong 测得的延迟（毫秒）。-1 表示未测得，>=0 为有效值。</summary>
     public int LatencyMs => _latencyMs;
-    /// <summary>当前 WebSocket 是否处于已连接状态。</summary>
     public bool IsWebSocketOpen => websocket != null && websocket.State == WebSocketState.Open;
     /// <summary>延迟变更事件。每次收到 pong 或 ping 超时时触发，参数为最新延迟（毫秒）。</summary>
     public event Action<int> OnLatencyChanged;
@@ -122,9 +117,7 @@ public class NetworkManager : MonoBehaviour {
             isConnecting = false;
             OnConnectionEstablished();
             ExecuteOnMainThread(() => {
-                if (IsOnLoginPage()) {
-                    LoginPanel.Instance?.ConnectOkText();
-                }
+                if (IsOnLoginPage()) LoginPanel.Instance?.ConnectOkText();
             });
             SendReleaseVersion();
         };
@@ -134,9 +127,7 @@ public class NetworkManager : MonoBehaviour {
             Debug.LogError($"WebSocket连接失败: {errorMsg}");
             isConnecting = false;
             ExecuteOnMainThread(() => {
-                if (IsOnLoginPage()) {
-                    LoginPanel.Instance?.ConnectErrorText(errorMsg);
-                }
+                if (IsOnLoginPage()) LoginPanel.Instance?.ConnectErrorText(errorMsg);
                 HandleConnectionLostUi();
             });
         };
@@ -147,9 +138,7 @@ public class NetworkManager : MonoBehaviour {
             isConnecting = false;
             ExecuteOnMainThread(() => {
                 if (AutoReconnect.TryHandleOnClose()) return;
-                if (IsOnLoginPage()) {
-                    LoginPanel.Instance?.ConnectErrorText("连接已关闭");
-                }
+                if (IsOnLoginPage()) LoginPanel.Instance?.ConnectErrorText("连接已关闭");
                 HandleConnectionLostUi();
             });
         };
@@ -639,6 +628,13 @@ public class NetworkManager : MonoBehaviour {
                 case "gamestate/changsha/show_result":
                 case "gamestate/changsha/game_end":
                 case "gamestate/changsha/ready_status":
+                case "gamestate/jianzhong/game_start":
+                case "gamestate/jianzhong/broadcast_hand_action":
+                case "gamestate/jianzhong/ask_other_action":
+                case "gamestate/jianzhong/do_action":
+                case "gamestate/jianzhong/show_result":
+                case "gamestate/jianzhong/game_end":
+                case "gamestate/jianzhong/ready_status":
                 case "switch_seat":
                 case "refresh_player_tag_list":
                 case "gamestate/broadcast_sticker":

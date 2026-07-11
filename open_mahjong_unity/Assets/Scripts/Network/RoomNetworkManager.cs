@@ -233,6 +233,39 @@ public class RoomNetworkManager : MonoBehaviour {
             NetworkManager.Instance.CreateRoomResponse.Invoke(false, e.Message);
         }
     }
+
+    public async void Create_Jianzhong_Room(Jianzhong_Create_RoomConfig config) {
+        if (BlockRoomEntryRequest()) return;
+        try {
+            if (!TryResolveRandomSeed(config.RandomSeed, out string randomSeed, out string seedError)) {
+                NotificationManager.Instance.ShowTip("create_room", false, seedError);
+                return;
+            }
+
+            var request = new CreateGBRoomRequest {
+                type = "room/create_Jianzhong_room",
+                rule = "jianzhong",
+                sub_rule = config.SubRule ?? "jianzhong/standard",
+                roomname = config.RoomName,
+                gameround = config.GameRound,
+                roundTimerValue = config.RoundTimer,
+                stepTimerValue = config.StepTimer,
+                tips = config.Tips,
+                password = config.Password,
+                random_seed = randomSeed,
+                open_cuohe = false,
+                hepai_limit = 0,
+                tourist_limit = config.TouristLimit,
+                allow_spectator = config.AllowSpectator,
+                tactical_call = false,
+                hand_end_mode = config.HandEndMode
+            };
+            Debug.Log($"Send create Jianzhong room: {config.RoomName}, {config.GameRound}, {config.SubRule}, handEndMode={config.HandEndMode}, RandomSeed: {randomSeed}");
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            NetworkManager.Instance.CreateRoomResponse.Invoke(false, e.Message);
+        }
+    }
     
     /// <summary>
     /// 创建古典麻将房间
@@ -504,4 +537,3 @@ public class RoomNetworkManager : MonoBehaviour {
         }
     }
 }
-

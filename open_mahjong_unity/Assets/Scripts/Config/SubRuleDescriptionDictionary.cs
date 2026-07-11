@@ -15,6 +15,10 @@ public static class SubRuleDescriptionDictionary {
         { "riichi/langyong", "让每一局，都像海浪般汹涌滔滔｜一、每吃、碰、杠一次，自己的浪涌点数+1（初始为0）。｜二、每1点浪涌，结算时输赢倍数+1。｜三、当全场浪涌累计达到4点，进入“浪潮模式”，结算时倍数再+1。｜四、规则内置可食替｜规则提供：b站up大理石狐自恧" },
     };
 
+    static SubRuleDescriptionDictionary() {
+        Descriptions["jianzhong/standard"] = "\u7b80\u5316\u7248\u4e2d\u5eb8\u9ebb\u5c06\u89c4\u5219\uff1a\u652f\u6301\u548c\u724c\u5373\u6b62\u3001\u4e8c\u4eba\u548c\u724c\u4e0e\u4e09\u4eba\u548c\u724c\u6d41\u7a0b\uff1b\u65e0\u82b1\u724c\u3001\u65e0\u5b9a\u7f3a\u3001\u65e0\u67e5\u53eb\u3001\u65e0\u8d77\u548c\u9650\u5236\u3002";
+    }
+
     public static string GetDescription(string subRule) {
         return subRule != null && Descriptions.TryGetValue(subRule, out string desc) ? desc : "";
     }

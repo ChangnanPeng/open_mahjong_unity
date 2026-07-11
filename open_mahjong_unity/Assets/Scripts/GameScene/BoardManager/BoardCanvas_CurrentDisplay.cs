@@ -41,6 +41,11 @@ public partial class BoardCanvas {
             targetImage = player_right_current_image;
         }
 
+        if (targetImage == null) {
+            remiansTilesText.text = $"浣?{remainTiles}";
+            return;
+        }
+
         Color color = targetImage.color;
         color.a = 1f;
         targetImage.color = color;
@@ -53,6 +58,10 @@ public partial class BoardCanvas {
         );
 
         remiansTilesText.text = $"余:{remainTiles}";
+    }
+
+    public void UpdateRemainTiles(int remainTiles) {
+        remiansTilesText.text = $"余:{Mathf.Max(remainTiles, 0)}";
     }
 
     private IEnumerator FlashImage(Image image) {

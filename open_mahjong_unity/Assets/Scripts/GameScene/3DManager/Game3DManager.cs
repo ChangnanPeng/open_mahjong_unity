@@ -20,19 +20,13 @@ public partial class Game3DManager : MonoBehaviour {
 
     private GameObject lastCutJiagang3DObject; // 最后一张切牌或加杠牌的3D对象（荣和/抢杠倒牌演出用）
 
-    // 出牌飞行动画协程按玩家隔离：避免 A 的飞牌协程被 B 的鸣牌 StopCoroutine 误终止，
-    // 也避免多家并发出牌时互相覆盖引用造成河牌停在中途或被错误回收。
     private readonly Dictionary<string, Coroutine> _discardMoveCoroutinesByPlayer = new Dictionary<string, Coroutine>();
-
-    // 删除手牌的位置按玩家隔离：出牌飞牌起点只取本家删牌位，避免他家并发删牌覆盖起点导致牌飞错河。
+    private readonly Dictionary<string, GameObject> _discardMoveObjectsByPlayer = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, Vector3> _discardMoveTargetsByPlayer = new Dictionary<string, Vector3>();
+    private readonly Dictionary<string, Quaternion> _discardMoveRotationsByPlayer = new Dictionary<string, Quaternion>();
     private readonly Dictionary<string, Vector3> _lastRemovePosByPlayer = new Dictionary<string, Vector3> {
-        { "self", Vector3.zero }, { "left", Vector3.zero },
-        { "top", Vector3.zero }, { "right", Vector3.zero },
+        { "self", Vector3.zero }, { "left", Vector3.zero }, { "top", Vector3.zero }, { "right", Vector3.zero },
     };
-
-    // 每家「最新弃牌」的 3D 对象 + 牌 id：在 Set3DTileCoroutine 的 Discard 分支 Spawn 时登记。
-    // 鸣牌认走弃牌时优先用这个确切对象（校验 tileId），避免河里同类牌歧义（两张 7p 认错旧的）
-    // 以及共享字段 lastDiscardPlayerPosition/lastCutJiagang3DObject 在乱序/回放下的失效。
     private readonly Dictionary<string, GameObject> _lastDiscardObjByPlayer = new Dictionary<string, GameObject>();
     private readonly Dictionary<string, int> _lastDiscardTileIdByPlayer = new Dictionary<string, int>();
 
@@ -41,143 +35,81 @@ public partial class Game3DManager : MonoBehaviour {
         _lastDiscardObjByPlayer[playerPosition] = obj;
         _lastDiscardTileIdByPlayer[playerPosition] = tileId;
     }
-
     private void ClearLastDiscard(string playerPosition) {
-        if (string.IsNullOrEmpty(playerPosition)) return;
-        _lastDiscardObjByPlayer[playerPosition] = null;
+        if (!string.IsNullOrEmpty(playerPosition)) _lastDiscardObjByPlayer[playerPosition] = null;
     }
-
-    /// <summary>登记 tileId 与期望牌张是否一致（含赤宝 105/15 归一化）。</summary>
     private static bool TilesMatchForDiscardLookup(int registeredTileId, int expectedTileId) {
-        if (expectedTileId <= 0) return true;
-        if (registeredTileId == expectedTileId) return true;
-        return GameRecordMeldCodec.NormalizeMeldsLookupTileId(registeredTileId)
-            == GameRecordMeldCodec.NormalizeMeldsLookupTileId(expectedTileId);
+        return expectedTileId <= 0 || registeredTileId == expectedTileId ||
+            GameRecordMeldCodec.NormalizeMeldsLookupTileId(registeredTileId) == GameRecordMeldCodec.NormalizeMeldsLookupTileId(expectedTileId);
     }
-
-    /// <summary>
-    /// 认走/荣和取走弃牌时，仅认 Set3DTile Discard 分支 RegisterLastDiscard 登记的对象。
-    /// 不扫描河牌、不退回全局 lastCut；认不到返回 null，由调用方打日志并放弃。
-    /// </summary>
     private GameObject ResolveLastDiscardObject(string discarderPos, int expectedTileId) {
-        if (string.IsNullOrEmpty(discarderPos)) return null;
-        if (!_lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject regObj)
-            || regObj == null || !regObj.activeInHierarchy) {
-            return null;
-        }
-        if (!_lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int regTile)) {
-            return null;
-        }
-        if (!TilesMatchForDiscardLookup(regTile, expectedTileId)) {
-            return null;
-        }
-        return regObj;
+        if (string.IsNullOrEmpty(discarderPos) || !_lastDiscardObjByPlayer.TryGetValue(discarderPos, out GameObject obj)
+            || obj == null || !obj.activeInHierarchy || !_lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int tile)
+            || !TilesMatchForDiscardLookup(tile, expectedTileId)) return null;
+        return obj;
     }
-
-    /// <summary>
-    /// 抢杠/加杠和牌张：副露区 id 匹配，或 live 加杠动画写入的 lastCutJiagang3DObject（校验 tileId）。
-    /// 不扫描河牌；供荣和/抢杠取牌，不用于鸣牌回收河牌。
-    /// </summary>
-    private GameObject TryResolveJiagangSourceObject(string playerPosition, int expectedTileId) {
-        GameObject jiagangObj = FindJiagangTileObject(playerPosition, expectedTileId);
-        if (jiagangObj != null) return jiagangObj;
-        if (lastCutJiagang3DObject != null && lastCutJiagang3DObject.activeInHierarchy) {
-            Tile3D t = lastCutJiagang3DObject.GetComponent<Tile3D>();
-            if (t != null && TilesMatchForDiscardLookup(t.GetTileId(), expectedTileId)) {
-                return lastCutJiagang3DObject;
-            }
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// 牌谱 Goto 重建专用：仅当河末张 id 与和牌张一致时登记，不做全河扫描。
-    /// </summary>
-    private GameObject TryRegisterRecordRiverLastDiscard(string sourcePlayerPosition, int expectedTileId) {
-        PosPanel3D panel = GetPosPanel(sourcePlayerPosition);
-        Transform river = panel?.discardsPosition;
-        if (river == null || river.childCount == 0) return null;
-        GameObject lastObj = river.GetChild(river.childCount - 1).gameObject;
-        Tile3D lastTile = lastObj.GetComponent<Tile3D>();
-        if (lastTile == null || !TilesMatchForDiscardLookup(lastTile.GetTileId(), expectedTileId)) {
-            return null;
-        }
-        RegisterLastDiscard(sourcePlayerPosition, lastObj, lastTile.GetTileId());
-        return lastObj;
-    }
-
     private GameObject FindJiagangTileObject(string playerPosition, int expectedTileId) {
         if (string.IsNullOrEmpty(playerPosition) || expectedTileId < 10) return null;
         PosPanel3D panel = GetPosPanel(playerPosition);
         if (panel?.combination3DObjects == null) return null;
-
-        GameObject lastMatch = null;
-        foreach (Transform comboParent in panel.combination3DObjects) {
-            if (comboParent == null) continue;
-            for (int i = 0; i < comboParent.childCount; i++) {
-                Tile3D tile3D = comboParent.GetChild(i).GetComponent<Tile3D>();
-                if (tile3D != null && TilesMatchForDiscardLookup(tile3D.GetTileId(), expectedTileId)) {
-                    lastMatch = tile3D.gameObject;
-                }
+        GameObject match = null;
+        foreach (Transform parent in panel.combination3DObjects) {
+            if (parent == null) continue;
+            for (int i = 0; i < parent.childCount; i++) {
+                Tile3D tile = parent.GetChild(i).GetComponent<Tile3D>();
+                if (tile != null && TilesMatchForDiscardLookup(tile.GetTileId(), expectedTileId)) match = tile.gameObject;
             }
         }
-        return lastMatch;
+        return match;
     }
-
-    /// <summary>牌谱 Goto 重建：同步跑完副露放置（无动画），避免加杠 3D 下一帧才生成。</summary>
+    private GameObject TryResolveJiagangSourceObject(string playerPosition, int expectedTileId) {
+        Tile3D tile = lastCutJiagang3DObject != null ? lastCutJiagang3DObject.GetComponent<Tile3D>() : null;
+        if (tile != null && lastCutJiagang3DObject.activeInHierarchy
+            && TilesMatchForDiscardLookup(tile.GetTileId(), expectedTileId)) {
+            return lastCutJiagang3DObject;
+        }
+        return FindJiagangTileObject(playerPosition, expectedTileId);
+    }
     public void RunMeldRebuildImmediate(string playerIndex, string actionType, int[] combinationMask) {
         RunCoroutineImmediate(ActionAnimationCoroutine(playerIndex, actionType, combinationMask, false));
     }
-
     private static void RunCoroutineImmediate(IEnumerator routine) {
         if (routine == null) return;
-        var stack = new System.Collections.Generic.Stack<IEnumerator>();
-        stack.Push(routine);
-        while (stack.Count > 0) {
-            IEnumerator current = stack.Peek();
-            if (!current.MoveNext()) {
-                stack.Pop();
-                continue;
-            }
-            if (current.Current is IEnumerator nested) {
-                stack.Push(nested);
-            }
-        }
+        var stack = new Stack<IEnumerator>(); stack.Push(routine);
+        while (stack.Count > 0) { var current = stack.Peek(); if (!current.MoveNext()) { stack.Pop(); } else if (current.Current is IEnumerator nested) { stack.Push(nested); } }
     }
-
-    /// <summary>认走/荣和取走弃牌后：停掉该打牌者飞牌协程并清掉登记，
-    /// 避免被取走的牌仍在飞行/后续落到河里，或被后续鸣牌/荣和重复认走。</summary>
     private void OnLastDiscardTaken(string discarderPos) {
         StopDiscardMoveCoroutine(discarderPos);
+        if (!string.IsNullOrEmpty(discarderPos)) _discardMoveObjectsByPlayer[discarderPos] = null;
         ClearLastDiscard(discarderPos);
     }
-
-    private Dictionary<int,Vector3> pengToJiagangPosDict = new Dictionary<int,Vector3>(); // 碰牌的加杠预留指针
-
-    private void SetLastRemovePos(string playerPosition, Vector3 pos) {
-        if (string.IsNullOrEmpty(playerPosition)) return;
-        _lastRemovePosByPlayer[playerPosition] = pos;
-    }
-
-    private Vector3 GetLastRemovePos(string playerPosition) {
-        if (string.IsNullOrEmpty(playerPosition)) return Vector3.zero;
-        return _lastRemovePosByPlayer.TryGetValue(playerPosition, out Vector3 pos) ? pos : Vector3.zero;
-    }
-
+    private void SetLastRemovePos(string playerPosition, Vector3 pos) { if (!string.IsNullOrEmpty(playerPosition)) _lastRemovePosByPlayer[playerPosition] = pos; }
+    private Vector3 GetLastRemovePos(string playerPosition) => !string.IsNullOrEmpty(playerPosition) && _lastRemovePosByPlayer.TryGetValue(playerPosition, out Vector3 pos) ? pos : Vector3.zero;
     private void StopDiscardMoveCoroutine(string playerPosition) {
+        if (!string.IsNullOrEmpty(playerPosition) && _discardMoveCoroutinesByPlayer.TryGetValue(playerPosition, out Coroutine coroutine) && coroutine != null) StopCoroutine(coroutine);
+        if (!string.IsNullOrEmpty(playerPosition)) _discardMoveCoroutinesByPlayer[playerPosition] = null;
+    }
+    private void CompleteDiscardMoveCoroutine(string playerPosition) {
         if (string.IsNullOrEmpty(playerPosition)) return;
-        if (_discardMoveCoroutinesByPlayer.TryGetValue(playerPosition, out Coroutine c) && c != null) {
-            StopCoroutine(c);
+        StopDiscardMoveCoroutine(playerPosition);
+        if (_discardMoveObjectsByPlayer.TryGetValue(playerPosition, out GameObject obj)
+            && obj != null && obj.activeInHierarchy
+            && _discardMoveTargetsByPlayer.TryGetValue(playerPosition, out Vector3 target)
+            && _discardMoveRotationsByPlayer.TryGetValue(playerPosition, out Quaternion rotation)) {
+            obj.transform.SetPositionAndRotation(target, rotation);
         }
-        _discardMoveCoroutinesByPlayer[playerPosition] = null;
+        _discardMoveObjectsByPlayer[playerPosition] = null;
+    }
+    private void StopAllDiscardMoveCoroutines() {
+        foreach (var pair in _discardMoveCoroutinesByPlayer) if (pair.Value != null) StopCoroutine(pair.Value);
+        _discardMoveCoroutinesByPlayer.Clear();
+        _discardMoveObjectsByPlayer.Clear();
+        _discardMoveTargetsByPlayer.Clear();
+        _discardMoveRotationsByPlayer.Clear();
     }
 
-    private void StopAllDiscardMoveCoroutines() {
-        foreach (var kvp in _discardMoveCoroutinesByPlayer) {
-            if (kvp.Value != null) StopCoroutine(kvp.Value);
-        }
-        _discardMoveCoroutinesByPlayer.Clear();
-    }
+    private Vector3 lastRemove3DPosition; // 最后一张删除的3D对象
+    private Dictionary<int,Vector3> pengToJiagangPosDict = new Dictionary<int,Vector3>(); // 碰牌的加杠预留指针
 
     private float cardWidth; // 卡片宽度 组合牌 3D手牌使用
     private float cardHeight; // 卡片高度
@@ -355,6 +287,17 @@ public partial class Game3DManager : MonoBehaviour {
         return null;
     }
 
+    private GameObject TryRegisterRecordRiverLastDiscard(string sourcePlayerPosition, int expectedTileId) {
+        PosPanel3D panel = GetPosPanel(sourcePlayerPosition);
+        Transform river = panel?.discardsPosition;
+        if (river == null || river.childCount == 0) return null;
+        GameObject lastObj = river.GetChild(river.childCount - 1).gameObject;
+        Tile3D lastTile = lastObj.GetComponent<Tile3D>();
+        if (lastTile == null || !TilesMatchForDiscardLookup(lastTile.GetTileId(), expectedTileId)) return null;
+        RegisterLastDiscard(sourcePlayerPosition, lastObj, lastTile.GetTileId());
+        return lastObj;
+    }
+
     /// <summary>
     /// 局终/牌谱明牌摆牌初始朝向：Expand 动画将 Cube 绕本地 X 轴 +90°，
     /// 初始世界朝向取「河牌俯视」在该旋转下的逆变换，动画全程牌面与河牌一致。
@@ -388,23 +331,18 @@ public partial class Game3DManager : MonoBehaviour {
     }
 
     // 3D手牌处理入口：暗杠/加杠与杠后岭上摸牌走各家串行队列；其余走 Change3DTileCoroutine。
-    /// <summary>web 后台降帧切回时，网络队列会积压多条未处理消息，客户端正连续追赶同步现场。
-    /// 此期间任何“固定墙钟”装饰延迟都应跳过（否则逻辑瞬间同步、3D 逐条卡 0.5s）。
-    /// 阈值 ≥2：仅剩 1 条属正常快打，仍保留间隔。</summary>
     private static bool IsCatchingUpFromBacklog() {
         return NetworkManager.Instance != null && NetworkManager.Instance.IsBacklogged;
     }
 
-    public void Change3DDiscardTiles(int[] tileIds, string PlayerPosition, bool cut_class, bool isRiichi = false, bool playCutPhysicsSound = false) {
-        if (tileIds == null || tileIds.Length == 0) {
-            return;
-        }
-        if (tileIds.Length == 1 && !HasPendingHandAnimWork(PlayerPosition)) {
-            Change3DTile("Discard", tileIds[0], 0, PlayerPosition, cut_class, null, isRiichi, playCutPhysicsSound: playCutPhysicsSound);
+    public void Change3DDiscardTiles(int[] tileIds, string playerPosition, bool cutClass, bool isRiichi = false, bool playCutPhysicsSound = false) {
+        if (tileIds == null || tileIds.Length == 0) return;
+        if (tileIds.Length == 1 && !HasPendingHandAnimWork(playerPosition)) {
+            Change3DTile("Discard", tileIds[0], 0, playerPosition, cutClass, null, isRiichi, playCutPhysicsSound: playCutPhysicsSound);
             return;
         }
         for (int i = 0; i < tileIds.Length; i++) {
-            EnqueueDiscardHandWork(PlayerPosition, tileIds[i], cut_class, isRiichi, playCutPhysicsSound && i == 0);
+            EnqueueDiscardHandWork(playerPosition, tileIds[i], cutClass, isRiichi, playCutPhysicsSound && i == 0);
         }
     }
 
@@ -445,12 +383,16 @@ public partial class Game3DManager : MonoBehaviour {
         if (TryEnqueueAnkanHandChange(actionType, tileId, removeCount, PlayerPosition, combination_mask, queueMoGang)) {
             return;
         }
+
         if (actionType == "Discard" && HasPendingHandAnimWork(PlayerPosition)) {
             EnqueueDiscardHandWork(PlayerPosition, tileId, cut_class, isRiichi, playCutPhysicsSound);
             return;
         }
 
-        StartCoroutine(Change3DTileCoroutine(actionType, tileId, removeCount, PlayerPosition, cut_class, combination_mask, isRiichi, playCutPhysicsSound, meldRevealDelay, meldDiscarderPos, meldClaimedTile, meldFeedbackAction, meldFeedbackRoomRule));
+        StartCoroutine(Change3DTileCoroutine(
+            actionType, tileId, removeCount, PlayerPosition, cut_class, combination_mask,
+            isRiichi, playCutPhysicsSound, meldRevealDelay, meldDiscarderPos, meldClaimedTile,
+            meldFeedbackAction, meldFeedbackRoomRule));
     }
 
     private static void PlayDeferredMeldFeedback(string playerPosition, string action, string roomRule) {
@@ -511,18 +453,16 @@ public partial class Game3DManager : MonoBehaviour {
         }
     }
     
-    public IEnumerator Change3DTileCoroutine(string actionType, int tileId, int removeCount, string PlayerPosition, bool cut_class, int[] combination_mask, bool isRiichi = false, bool playCutPhysicsSound = false, float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0, string meldFeedbackAction = null, string meldFeedbackRoomRule = null) {
+    public IEnumerator Change3DTileCoroutine(
+        string actionType, int tileId, int removeCount, string PlayerPosition, bool cut_class,
+        int[] combination_mask, bool isRiichi = false, bool playCutPhysicsSound = false,
+        float meldRevealDelay = 0f, string meldDiscarderPos = null, int meldClaimedTile = 0,
+        string meldFeedbackAction = null, string meldFeedbackRoomRule = null) {
         PosPanel3D panel = GetPosPanel(PlayerPosition);
         if (panel == null) {
             yield break;
         }
 
-        // 受保护观众鸣牌：服务器已按序发送（wire 不乱序），此处把 display/音效/3D 一并延后
-        // meldRevealDelay 秒，复现“出牌→鸣牌”间隔（由服务端 claim_meld_followup_gap 下发）。
-        // 认走的打牌者+牌张在派发时即捕获（meldDiscarderPos/meldClaimedTile），不读共享字段，
-        // 避免延迟期间被后续鸣牌覆盖导致回收错河牌。
-        // 补帧例外：web 后台降帧切回时队列积压，客户端在连续追赶同步现场，此时固定墙钟延迟会
-        // 让逻辑瞬间同步完、呈现却逐条卡住，非常诡异——故检测到队列仍有积压时跳过该纯装饰延迟。
         if (meldRevealDelay > 0f && !IsCatchingUpFromBacklog()) {
             yield return new WaitForSeconds(meldRevealDelay);
         }
@@ -584,7 +524,9 @@ public partial class Game3DManager : MonoBehaviour {
         if (IsMeldHandAction(actionType)) {
             if (IsRecordShowCardsModeActive() && PlayerPosition != "self") {
                 bool removeDrawFirst = (actionType == "angang" || actionType == "jiagang") && cut_class;
-                yield return RecordMeldShowCardsCoroutine(PlayerPosition, actionType, combination_mask, removeDrawFirst, tileId, meldDiscarderPos, meldClaimedTile);
+                yield return RecordMeldShowCardsCoroutine(
+                    PlayerPosition, actionType, combination_mask, removeDrawFirst, tileId,
+                    meldDiscarderPos, meldClaimedTile);
                 yield break;
             }
             StartMeldPresentation(actionType, PlayerPosition, combination_mask, meldDiscarderPos, meldClaimedTile);

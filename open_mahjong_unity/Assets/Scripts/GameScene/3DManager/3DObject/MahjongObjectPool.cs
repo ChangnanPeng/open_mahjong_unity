@@ -241,6 +241,16 @@ public class MahjongObjectPool : MonoBehaviour {
         return tile;
     }
 
+    public GameObject SpawnVisibleTileFromBlankFallback(int tileId, Vector3 position, Quaternion rotation) {
+        GameObject tile = SpawnBlankTile(position, rotation);
+        if (tile != null) {
+            ApplyCardTexture(tile, tileId);
+            Tile3D tile3D = tile.GetComponent<Tile3D>();
+            tile3D.SetTileIds(tileId, BlankPoolTileId);
+        }
+        return tile;
+    }
+
     /// <summary>
     /// 将牌归还到池中
     /// </summary>
