@@ -38,6 +38,10 @@ public partial class NormalGameStateManager : MonoBehaviour{
     public string roomType; // 房间类型（custom/match等）
     public string roomRule; // 房间规则（guobiao/qingque等）
     public string subRule;  // 子规则（guobiao/standard、guobiao/xiaolin、qingque/standard）
+    public string handEndMode = "first_win";
+    public int winnerTarget = 1;
+    public HandFlowInfo handFlow;
+    public PresentationProfileInfo presentationProfile;
     public int hepaiLimit = 8; // 起和番限制（国标有效，服务器下发的 hepai_limit，默认8）
     public int selfIndex; // 自身位置 0东 1南 2西 3北
     public int roomStepTime; // 步时
@@ -93,7 +97,7 @@ public partial class NormalGameStateManager : MonoBehaviour{
 
     public void ClearRoundSettlementHistory() {
         roundSettlementHistory.Clear();
-        ResetSichuanEndgameScoreAccum();
+        ResetWinnerSequenceScoreAccum();
     }
 
     /// <summary>
@@ -101,7 +105,7 @@ public partial class NormalGameStateManager : MonoBehaviour{
     /// </summary>
     public void ClearScoreRecordSettlementCache() {
         roundSettlementHistory.Clear();
-        ResetSichuanEndgameScoreAccum();
+        ResetWinnerSequenceScoreAccum();
         if (player_to_info == null) return;
         foreach (PlayerInfoClass player in player_to_info.Values) {
             if (player == null) continue;

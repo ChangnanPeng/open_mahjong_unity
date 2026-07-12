@@ -27,21 +27,20 @@ public partial class NormalGameStateManager {
 
         // 川麻
         bool deferScore = defer_score_settlement == true;
-        bool isMidGameSichuanHu = deferScore && IsSichuanRule() && IsHuClass(hu_class);
-        bool isSichuanEndgameScoreStep = IsSichuanRule() && IsSichuanEndgameScoreStep(liuju_step);
+        bool isMidGameSichuanHu = deferScore && (UsesWinnerExitFlow() || UsesBuhuaWinTilePresentation()) && IsHuClass(hu_class);
+        bool isWinnerSequenceScoreStep = (IsSichuanRule() || UsesWinnerResultSequence()) && IsWinnerSequenceScoreStep(liuju_step);
         ApplySichuanGangRefundIfAny(gang_refund_changes, liuju_step);
-        if (isSichuanEndgameScoreStep) {
-            // 
+        if (isWinnerSequenceScoreStep) {
             if (liuju_step == "reveal_hu") {
-                BeginSichuanEndgameScoreAccum();
+                BeginWinnerSequenceScoreAccum();
             } else if (liuju_step == "settle_hu") {
-                AccumulateSichuanEndgameScore(score_changes);
-                RecordSichuanEndgameHu();
+                AccumulateWinnerSequenceScore(score_changes);
+                RecordWinnerSequenceHu();
             } else if (liuju_step == "chajiao") {
-                MarkSichuanEndgameChajiaoStep();
-                AccumulateSichuanEndgameScore(score_changes);
+                MarkWinnerSequenceChajiaoStep();
+                AccumulateWinnerSequenceScore(score_changes);
             }
-            if (liuju_status_final && TryFlushSichuanEndgameScoreToHistory()) {
+            if (liuju_status_final && TryFlushWinnerSequenceScoreToHistory()) {
                 GameSceneUIManager.Instance.UpdateScoreRecord();
             }
         } else if (!isMidGameSichuanHu) {
@@ -101,11 +100,11 @@ public partial class NormalGameStateManager {
             ApplyShowResultScores(player_to_score);
             RoundEndPresentation.Instance.PresentLiuju(GetSpecialLiujuCaption(hu_class, roomRule));
         } else {
-            if (IsSichuanRule() && liuju_step == "settle_hu") {
+            if ((IsSichuanRule() || ScoreDisplayMultiplier() != 1) && liuju_step == "settle_hu") {
                 RoundEndPresentation.Instance.EnqueueSichuanSettleHu(
                     hepai_player_index, player_to_score, hu_score, hu_fan, hu_class,
                     hepai_player_hand, hepai_player_combination_mask, score_changes, liuju_status_final);
-                if (player_to_score != null) {
+                if (player_to_score != null && !UsesWinnerResultSequence()) {
                     ApplyShowResultScores(player_to_score);
                 }
             } else {

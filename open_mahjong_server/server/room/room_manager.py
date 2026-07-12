@@ -1,5 +1,12 @@
 from typing import Dict, Any, Optional
-from .room_validators import GBRoomValidator, MMCValidator, RiichiRoomValidator, SichuanRoomValidator, ChangshaRoomValidator
+from .room_validators import (
+    GBRoomValidator,
+    MMCValidator,
+    RiichiRoomValidator,
+    SichuanRoomValidator,
+    ChangshaRoomValidator,
+    JiandanRoomValidator,
+)
 from ..response import Response
 from ..gamestate.game_guobiao.GuobiaoGameState import GuobiaoGameState
 from ..game_calculation.game_calculation_service import Chinese_Hepai_Check
@@ -27,7 +34,8 @@ class RoomManager:
             "changsha": ChangshaRoomValidator,
             "mmc": MMCValidator,
             "riichi": RiichiRoomValidator,
-            "sichuan": SichuanRoomValidator
+            "sichuan": SichuanRoomValidator,
+            "jiandan": JiandanRoomValidator
         }
         # 不同规则挂载的游戏验证器
         self.Chinese_Hepai_Check = Chinese_Hepai_Check()
@@ -618,6 +626,101 @@ class RoomManager:
         except Exception as e:
             return Response(type="error_message", success=False, message=f"创建房间失败: {str(e)}")
 
+    async def create_Jiandan_room(self, player_id: str, room_name: str, gameround: int,
+                                  password: str, roundTimerValue: int, stepTimerValue: int,
+                                  tips: bool, random_seed: int = 0, sub_rule: str = "jiandan/standard",
+                                  tourist_limit: bool = False, allow_spectator: bool = True,
+                                  tactical_call: bool = False, claim_protection: bool = True,
+                                  hand_end_mode: str = "third_win") -> Response:
+        try:
+            if player_id not in self.game_server.players:
+                return Response(type="tips", success=False, message="please login first")
+
+            player = self.game_server.players[player_id]
+            if not player.user_id:
+                return Response(type="tips", success=False, message="please login first")
+            host_user_id = player.user_id
+            blocked = self._reject_room_entry_conflicts(host_user_id, "create room")
+            if blocked:
+                return blocked
+            host_name = player.username
+
+            host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
+            if not host_settings:
+                return Response(type="tips", success=False, message="failed to load user settings")
+
+            has_password = password != ""
+
+            room_config = {
+                "room_name": room_name,
+                "game_round": gameround,
+                "round_timer": roundTimerValue,
+                "step_timer": stepTimerValue,
+                "random_seed": random_seed,
+                "tactical_call": tactical_call,
+                "claim_protection": claim_protection,
+                "hand_end_mode": hand_end_mode,
+            }
+
+            try:
+                validator_class = self.room_validators["jiandan"]
+                validated_config = validator_class(**room_config)
+            except ValueError as e:
+                return Response(type="tips", success=False, message=f"invalid room config: {str(e)}")
+
+            room_id = self._generate_room_id()
+
+            room_data = {
+                "room_id": room_id,
+                "room_type": "custom",
+                "room_rule": "jiandan",
+                "sub_rule": sub_rule,
+                "hidden_room": False,
+                "hepai_limit": 0,
+                "open_cuohe": False,
+                "tourist_limit": tourist_limit,
+                "allow_spectator": allow_spectator,
+                "max_player": 4,
+                "player_list": [host_user_id],
+                "player_settings": {
+                    host_user_id: {
+                        "user_id": host_user_id,
+                        "username": host_settings.get('username', host_name),
+                        "title_id": host_settings.get('title_id', 1),
+                        "profile_image_id": host_settings.get('profile_image_id', 1),
+                        "character_id": host_settings.get('character_id', 1),
+                        "voice_id": host_settings.get('voice_id', 1)
+                    }
+                },
+                "has_password": has_password,
+                "tips": tips,
+                "show_moqie_hint": False,
+                "host_user_id": host_user_id,
+                "host_name": host_name,
+                "is_game_running": False,
+            }
+
+            room_data.update(validated_config.dict())
+            room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
+
+            self.rooms[room_id] = room_data
+            if has_password:
+                self.room_passwords[room_id] = password
+
+            player.current_room_id = room_id
+
+            await self._broadcast_room_info(room_id)
+
+            return Response(
+                type="room/create_room_done",
+                success=True,
+                message="room created",
+                room_info=room_data
+            )
+
+        except Exception as e:
+            return Response(type="error_message", success=False, message=f"failed to create room: {str(e)}")
+
     async def create_Riichi_room(self, player_id: str, room_name: str, gameround: int,
                                  password: str, roundTimerValue: int, stepTimerValue: int,
                                  tips: bool, random_seed: int = 0,
@@ -728,6 +831,8 @@ class RoomManager:
         try:
             room_list = []
             for room_id, room_data in self.rooms.items():
+                if room_data.get("hidden_room", False):
+                    continue
                 room_list.append(room_data)
             return Response(
                 type="room/get_room_list",
@@ -754,6 +859,12 @@ class RoomManager:
                 )
 
             room_data = self.rooms[room_id]
+            if room_data.get("hidden_room", False):
+                return Response(
+                    type="error_message",
+                    success=False,
+                    message="room is hidden"
+                )
             
             # 检查游戏是否正在运行
             if room_data.get("is_game_running", False):
@@ -963,6 +1074,14 @@ class RoomManager:
                 )
 
             room_data = self.rooms[room_id]
+            if room_data.get("hidden_room", False):
+                requester = self.game_server.players.get(Connect_id)
+                if not requester or requester.user_id != room_data.get("host_user_id"):
+                    return Response(
+                        type="tips",
+                        success=False,
+                        message="hidden room bot changes require host"
+                    )
             
             # 检查游戏是否正在运行
             if room_data.get("is_game_running", False):
@@ -1024,6 +1143,10 @@ class RoomManager:
                 return Response(type="error_message", success=False, message="房间不存在")
 
             room_data = self.rooms[room_id]
+            if room_data.get("hidden_room", False):
+                requester = self.game_server.players.get(Connect_id)
+                if not requester or requester.user_id != room_data.get("host_user_id"):
+                    return Response(type="tips", success=False, message="hidden room bot changes require host")
 
             if room_data.get("is_game_running", False):
                 return Response(type="error_message", success=False, message="游戏正在进行中，无法添加机器人")
@@ -1361,5 +1484,3 @@ class RoomManager:
             del self.room_passwords[room_id]
         
         logger.info(f"房间 {room_id} 已销毁") 
-
-

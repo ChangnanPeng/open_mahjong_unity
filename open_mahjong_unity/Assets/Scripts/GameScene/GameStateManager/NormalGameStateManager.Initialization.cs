@@ -8,11 +8,8 @@ public partial class NormalGameStateManager {
         ClearPendingCuoheContinue();
         ClearPendingSichuanContinue();
         lastAskHandPlayerIndex = -1;
-        // 新对局（gamestate_id 变化）才清空本地结算快照；同一场对局的下一局 game_start 不应清空，
-        // 否则会抹掉已累积的主番快照（国标每局都会广播 game_start），导致计分板主番列整列变 —。
-        // 重连时若本地快照行数与服务端 score_history 不一致，仍清空以免与分值行错位。
-        bool isNewMatch = string.IsNullOrEmpty(gamestateId) || gamestateId != gameInfo.gamestate_id;
-        if (isNewMatch) {
+        string incomingGamestateId = gameInfo?.gamestate_id;
+        if (string.IsNullOrEmpty(gamestateId) || gamestateId != incomingGamestateId) {
             ClearRoundSettlementHistory();
         }
         if (!IsRealtimeSpectator) {
@@ -30,7 +27,7 @@ public partial class NormalGameStateManager {
 
         Game3DManager.Instance.Clear3DTile(); // 清空3D手牌
 
-        InitializeSetInfo(gameInfo, isNewMatch); // 初始化对局数据
+        InitializeSetInfo(gameInfo); // 初始化对局数据
         GameCanvas.Instance.InitializeUIInfo(gameInfo,indexToPosition); // 初始化面板信息
         BoardCanvas.Instance.InitializeBoardInfo(gameInfo,indexToPosition); // 初始化桌面信息
         RestoreSichuanDingque(gameInfo); // 四川：重连/进局中时恢复各家定缺标记
@@ -158,10 +155,24 @@ public partial class NormalGameStateManager {
     }
 
     // 设置游戏信息
-    private void InitializeSetInfo(GameInfo gameInfo, bool isNewMatch){
+    private void InitializeSetInfo(GameInfo gameInfo){
         // 清空操作列表
         allowActionList = new List<string>();
+        LastAskActionTick = 0;
+        lastCutCardID = 0;
+        currentAskCutTileId = 0;
+        lastDiscardPlayerPosition = null;
+        CurrentPlayer = null;
+        lastDealTileType = null;
+        selfRiichiCandidateCuts.Clear();
+        selfForbiddenCutTiles.Clear();
         selfForcedCutTiles.Clear();
+        chiCandidates.Clear();
+        IsQiangGangAsk = false;
+        pendingAskFromJiagang = false;
+        if (RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive) {
+            RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+        }
         // 清空弃牌列表
         player_to_info["self"].discard_tiles = new List<int>();
         player_to_info["left"].discard_tiles = new List<int>();
@@ -223,6 +234,10 @@ public partial class NormalGameStateManager {
         roomType = gameInfo.room_type;
         roomRule = gameInfo.room_rule;
         subRule = gameInfo.sub_rule;
+        handEndMode = gameInfo.hand_flow?.mode ?? gameInfo.hand_end_mode ?? "first_win";
+        winnerTarget = gameInfo.hand_flow?.winner_target ?? gameInfo.winner_target ?? ((gameInfo.blood_battle ?? false) ? 3 : 1);
+        handFlow = gameInfo.hand_flow;
+        presentationProfile = gameInfo.presentation_profile;
         hepaiLimit = gameInfo.hepai_limit > 0 ? gameInfo.hepai_limit : 8; // 起和番限制，国标提示用
         roomStepTime = gameInfo.step_time; // 存储步时
         roomRoundTime = gameInfo.round_time; // 存储局时
@@ -368,18 +383,6 @@ public partial class NormalGameStateManager {
                 ScoreHistorySettlementHelper.AlignRoundNumberHistory(player_to_info["left"].score_history, player_to_info["left"].round_number_history);
                 player_to_info["left"].original_player_index = player.original_player_index; // 存储原始玩家索引
                 player_to_info["left"].tag_list = player.tag_list; // 存储标签列表
-            }
-        }
-
-        // 重连兜底：同一对局重连时，若本地快照行数与服务端恢复的 score_history 不一致，清空以免错位。
-        // 正常下一局 game_start 时两者同步增长，不会进入此分支，主番快照得以保留。
-        if (!isNewMatch) {
-            int scoreRows = 0;
-            foreach (var info in player_to_info.Values) {
-                if (info.score_history != null) scoreRows = Mathf.Max(scoreRows, info.score_history.Count);
-            }
-            if (roundSettlementHistory.Count != scoreRows) {
-                ClearRoundSettlementHistory();
             }
         }
     }

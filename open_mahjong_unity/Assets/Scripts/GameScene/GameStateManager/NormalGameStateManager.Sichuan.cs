@@ -15,60 +15,6 @@ public partial class NormalGameStateManager {
     // 血战到底：收到 round_continues=true 的和牌结算后挂起，待下次询问时恢复行牌
     public bool pendingSichuanContinueAfterResult;
 
-    /// <summary>血战终局：合并 reveal_hu / settle_hu / chajiao 分步结算，终局只写一行计分板。</summary>
-    private Dictionary<int, int> _sichuanEndgameScoreAccum;
-    private int _sichuanEndgameHuCount;
-    private bool _sichuanEndgameHadChajiao;
-
-    public void ResetSichuanEndgameScoreAccum() {
-        _sichuanEndgameScoreAccum = null;
-        _sichuanEndgameHuCount = 0;
-        _sichuanEndgameHadChajiao = false;
-    }
-
-    public void BeginSichuanEndgameScoreAccum() {
-        _sichuanEndgameScoreAccum = new Dictionary<int, int>();
-        _sichuanEndgameHuCount = 0;
-        _sichuanEndgameHadChajiao = false;
-    }
-
-    public void AccumulateSichuanEndgameScore(Dictionary<int, int> deltas) {
-        if (deltas == null || deltas.Count == 0) return;
-        _sichuanEndgameScoreAccum ??= new Dictionary<int, int>();
-        foreach (var kvp in deltas) {
-            if (!_sichuanEndgameScoreAccum.ContainsKey(kvp.Key)) {
-                _sichuanEndgameScoreAccum[kvp.Key] = 0;
-            }
-            _sichuanEndgameScoreAccum[kvp.Key] += kvp.Value;
-        }
-    }
-
-    public void RecordSichuanEndgameHu() {
-        _sichuanEndgameScoreAccum ??= new Dictionary<int, int>();
-        _sichuanEndgameHuCount++;
-    }
-
-    public void MarkSichuanEndgameChajiaoStep() {
-        _sichuanEndgameHadChajiao = true;
-    }
-
-    /// <summary>终局末步：将累积的分差写入计分板（一局一行，主番仅 三家和/查叫/流局）。</summary>
-    public bool TryFlushSichuanEndgameScoreToHistory() {
-        if (_sichuanEndgameScoreAccum == null) return false;
-        var merged = new Dictionary<int, int>(_sichuanEndgameScoreAccum);
-        string roundLabel = ScoreHistorySettlementHelper.ResolveSichuanEndgameRoundLabel(
-            _sichuanEndgameHuCount, _sichuanEndgameHadChajiao);
-        RoundSettlementSnapshot snap = ScoreHistorySettlementHelper.CreateSichuanScoreboardSnapshot(subRule, roundLabel);
-        roundSettlementHistory.Add(snap);
-        ApplyLocalScoreHistoryFromSettlement(snap, merged);
-        ResetSichuanEndgameScoreAccum();
-        return true;
-    }
-
-    public bool IsSichuanEndgameScoreStep(string liujuStep) {
-        return liujuStep == "reveal_hu" || liujuStep == "settle_hu" || liujuStep == "chajiao";
-    }
-
     /// <summary>非血战终局或即时和牌：四川计分板不写番种/手牌，主番留空。</summary>
     public void AppendSichuanSimpleScoreboardSnapshot(string huClass, Dictionary<int, int> scoreChanges) {
         string roundLabel = huClass == "liuju" ? SichuanRoundLabel.Liuju : null;
@@ -102,6 +48,11 @@ public partial class NormalGameStateManager {
         return !string.IsNullOrEmpty(subRule) && subRule.StartsWith("sichuan");
     }
 
+    public bool IsJiandan() {
+        if (roomRule == "jiandan") return true;
+        return !string.IsNullOrEmpty(subRule) && subRule.StartsWith("jiandan");
+    }
+
     /// <summary>自家手牌是否仍含定缺花色（与服务端 has_dingque_in_hand 一致）。</summary>
     public bool SelfHasDingqueTileInHand() {
         if (selfDingqueSuit < 1 || selfDingqueSuit > 3 || selfHandTiles == null) return false;
@@ -126,7 +77,7 @@ public partial class NormalGameStateManager {
 
     /// <summary>血战到底：标记本盘和牌后继续，等待服务端下一次行牌询问。</summary>
     public void MarkPendingSichuanContinue() {
-        if (!IsSichuanRule()) return;
+        if (!UsesWinnerExitFlow()) return;
         pendingSichuanContinueAfterResult = true;
     }
 
@@ -176,6 +127,16 @@ public partial class NormalGameStateManager {
             return;
         }
         pendingSichuanContinueAfterResult = false;
+
+        // Jiandan mid-hand hu uses RoundEndPresentation only as the coroutine host
+        // for the short 3D win-tile animation. The next ask can arrive before that
+        // animation finishes; stopping the active sequence here cuts the tile flight.
+        if (PreservesWinAnimationOnResume()) {
+            if (EndResultPanel.Instance != null) {
+                EndResultPanel.Instance.ClearEndResultPanel();
+            }
+            return;
+        }
 
         if (RoundEndPresentation.Instance != null) {
             RoundEndPresentation.Instance.StopActiveSequence();

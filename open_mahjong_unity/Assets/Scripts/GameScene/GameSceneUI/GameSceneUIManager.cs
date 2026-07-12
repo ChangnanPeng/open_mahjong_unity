@@ -183,6 +183,7 @@ public class GameSceneUIManager : MonoBehaviour
             else ExitButtonManager.Instance.HideAll();
         }
         if (realtimeSpectatorIndicator != null) realtimeSpectatorIndicator.ResetForNewGame(); // 重置被实时观战指示器，主动询问一次
+        RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
     }
 
@@ -202,6 +203,7 @@ public class GameSceneUIManager : MonoBehaviour
         AutoAction.Instance.InitializeForSpectator();
         RecordSetting.Instance.gameObject.SetActive(false);
         if (ExitButtonManager.Instance != null) ExitButtonManager.Instance.ShowForRealtimeSpectator();
+        RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
     }
 

@@ -105,7 +105,6 @@ public partial class Game3DManager : MonoBehaviour {
         }
         if (SetType == "Discard") {
             lastCutJiagang3DObject = cardObj;
-            // 登记为该家最新弃牌对象：鸣牌认走时直接用此确切对象，避免河里同类牌歧义与共享字段失效。
             RegisterLastDiscard(PlayerPosition, cardObj, tileId);
         }
         // 立直横置标记写入 Tile3D，归还对象池时会被清掉
@@ -128,13 +127,16 @@ public partial class Game3DManager : MonoBehaviour {
         }
 
         if (SetType == "Discard") {
-            // 同一家上一张飞牌若仍未结束则先终止，避免同家并发飞牌引用混乱；按玩家隔离不影响他家
-            StopDiscardMoveCoroutine(PlayerPosition);
-            Coroutine moveCo = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
-            _discardMoveCoroutinesByPlayer[PlayerPosition] = moveCo;
-            yield return moveCo;
-            if (_discardMoveCoroutinesByPlayer.TryGetValue(PlayerPosition, out Coroutine cur) && cur == moveCo) {
+            CompleteDiscardMoveCoroutine(PlayerPosition);
+            _discardMoveObjectsByPlayer[PlayerPosition] = cardObj;
+            _discardMoveTargetsByPlayer[PlayerPosition] = currentPosition;
+            _discardMoveRotationsByPlayer[PlayerPosition] = rotation;
+            Coroutine move = StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
+            _discardMoveCoroutinesByPlayer[PlayerPosition] = move;
+            yield return move;
+            if (_discardMoveCoroutinesByPlayer.TryGetValue(PlayerPosition, out Coroutine current) && current == move) {
                 _discardMoveCoroutinesByPlayer[PlayerPosition] = null;
+                _discardMoveObjectsByPlayer[PlayerPosition] = null;
             }
         }
         else {

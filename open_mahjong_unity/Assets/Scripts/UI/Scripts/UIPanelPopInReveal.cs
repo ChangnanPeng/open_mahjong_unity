@@ -6,7 +6,7 @@ using UnityEngine;
 public static class UIPanelPopInReveal {
     private const float DefaultScaleOvershoot = 1.2f;
 
-    private static readonly Dictionary<int, (Vector3 scale, float alpha)> s_restByPanelId = new Dictionary<int, (Vector3, float)>();
+    private static readonly Dictionary<GameObject, (Vector3 scale, float alpha)> s_restByPanel = new Dictionary<GameObject, (Vector3, float)>();
 
     public static Coroutine PlayShow(MonoBehaviour runner, GameObject panel, float durationSeconds = 1f, float startScaleMultiplier = DefaultScaleOvershoot) {
         if (panel == null || runner == null) return null;
@@ -19,10 +19,9 @@ public static class UIPanelPopInReveal {
             runningCoroutine = null;
         }
         if (panel == null) return;
-        int id = panel.GetInstanceID();
         RectTransform rt = panel.GetComponent<RectTransform>();
         CanvasGroup cg = panel.GetComponent<CanvasGroup>();
-        if (s_restByPanelId.TryGetValue(id, out (Vector3 scale, float alpha) rest)) {
+        if (s_restByPanel.TryGetValue(panel, out (Vector3 scale, float alpha) rest)) {
             if (rt != null) rt.localScale = rest.scale;
             if (cg != null) cg.alpha = rest.alpha;
         }
@@ -39,8 +38,7 @@ public static class UIPanelPopInReveal {
 
         Vector3 endScale = rt.localScale;
         float endAlpha = cg.alpha;
-        int id = panel.GetInstanceID();
-        s_restByPanelId[id] = (endScale, endAlpha);
+        s_restByPanel[panel] = (endScale, endAlpha);
 
         Vector3 startScale = endScale * startScaleMultiplier;
         rt.localScale = startScale;

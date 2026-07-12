@@ -2234,6 +2234,10 @@ from .changsha.store_changsha import store_changsha_game_record
 
 DatabaseManager.store_changsha_game_record = store_changsha_game_record
 
+from .jiandan.store_jiandan import store_jiandan_game_record
+
+DatabaseManager.store_jiandan_game_record = store_jiandan_game_record
+
 from .riichi.store_riichi import store_riichi_game_record, store_riichi_game_stats, store_riichi_fan_stats
 from .riichi.get_riichi_stats import get_riichi_stats
 

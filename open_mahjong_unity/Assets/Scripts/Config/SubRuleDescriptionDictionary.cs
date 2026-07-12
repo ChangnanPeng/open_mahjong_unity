@@ -15,6 +15,10 @@ public static class SubRuleDescriptionDictionary {
         { "riichi/langyong", "让每一局，都像海浪般汹涌滔滔｜一、每吃、碰、杠一次，自己的浪涌点数+1（初始为0）。｜二、每1点浪涌，结算时输赢倍数+1。｜三、当全场浪涌累计达到4点，进入“浪潮模式”，结算时倍数再+1。｜四、规则内置可食替｜规则提供：b站up大理石狐自恧" },
     };
 
+    static SubRuleDescriptionDictionary() {
+        Descriptions["jiandan/standard"] = "简单麻将规则是由南瓜饼编写的一款麻雀规则，旨在寻求新手入门简单与竞技策略深度的平衡。无起和限制。支持普通的一人和牌即止、二人和牌、或三人和牌（血战到底）流程。如在测试中发现设计问题或有任何建议，可以联系规则制定人南瓜饼Q839465687，提交bug可在群906497522提交。";
+    }
+
     public static string GetDescription(string subRule) {
         return subRule != null && Descriptions.TryGetValue(subRule, out string desc) ? desc : "";
     }

@@ -1,11 +1,11 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using System;
 using System.Collections.Generic;
 using TMPro;
 
 /// <summary>
-/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical / sichuan / changsha）
+/// 统一创建房间面板。通过规则下拉状态字符串（guobiao / riichi / qingque / classical）
 /// 驱动配置项的显隐与默认值。
 ///
 /// 设计要点：头部 <see cref="RuleConfigs"/> 为每条规则"全量"登记需要的配置项及默认值。
@@ -34,6 +34,7 @@ public class CreatePanel : MonoBehaviour {
     private const string CfgHepaiWay       = "hepai_way";        // 和牌方式下拉索引
     private const string CfgTacticalCall   = "tactical_call";    // 战术鸣牌（国标 / 青雀 / 四川）
     private const string CfgBloodBattle    = "blood_battle";     // 血战到底（四川）
+    private const string CfgHandEndMode    = "hand_end_mode";    // 公共和牌终局流程
     private const string CfgCsOpenKongCount = "cs_open_kong_count";
     private const string CfgCsInitialSiXi = "cs_initial_si_xi";
     private const string CfgCsInitialBanBanHu = "cs_initial_ban_ban_hu";
@@ -135,9 +136,20 @@ public class CreatePanel : MonoBehaviour {
             { CfgCsBirdCount, 2 },
             { CfgCsDealerBird, true },
         } },
+        { "jiandan", new Dictionary<string, object> {
+            { CfgGameRound,      4 }, // 默认全庄战
+            { CfgRoundTimer,     2 },
+            { CfgStepTimer,      1 },
+            { CfgTips,           true },
+            { CfgPassword,       false },
+            { CfgRandomSeed,     false },
+            { CfgTouristLimit,   false },
+            { CfgAllowSpectator, true },
+            { CfgHandEndMode,    2 }, // 0=和牌即止 1=二人和牌 2=三人和牌
+        } },
     };
 
-    /// <summary>规则状态：guobiao / riichi / qingque / classical / sichuan / changsha。</summary>
+    /// <summary>规则状态：guobiao / riichi / qingque / classical，与 chooseRule 下拉索引对应 0/1/2/3。</summary>
     private string _ruleState = "guobiao";
 
     [Header("Dropdown")]
@@ -182,6 +194,8 @@ public class CreatePanel : MonoBehaviour {
     [SerializeField] private TMP_Dropdown HepaiWayDropdown;
     [SerializeField] private GameObject CuoheTypePanel;
     [SerializeField] private TMP_Dropdown CuoheTypeDropdown;
+    private GameObject JiandanHandEndModePanel;
+    private TMP_Dropdown JiandanHandEndModeDropdown;
     private GameObject ChangshaOpenKongPanel;
     private TMP_Dropdown ChangshaOpenKongDropdown;
     private GameObject ChangshaBirdCountPanel;
@@ -200,15 +214,6 @@ public class CreatePanel : MonoBehaviour {
 
     private bool _gameRoundLabelsCached;
     private string[] _defaultGameRoundLabels;
-
-    private void EnsureRuleDropdownOptions() {
-        if (chooseRule == null) return;
-        foreach (TMP_Dropdown.OptionData option in chooseRule.options) {
-            if (option.text.Contains("长沙")) return;
-        }
-        chooseRule.options.Add(new TMP_Dropdown.OptionData("长沙麻将"));
-        chooseRule.RefreshShownValue();
-    }
 
     private void Start() {
         EnsureRuleDropdownOptions();
@@ -237,6 +242,7 @@ public class CreatePanel : MonoBehaviour {
         EnsureRiichiOptionToggles();
         EnsureCuoheTypePanel();
         InitCuoheTypeDropdown();
+        EnsureJiandanHandEndModePanel();
         EnsureChangshaOptionControls();
         InitSubRuleDropdown();
         ApplyRuleDefaults(_ruleState);
@@ -247,13 +253,17 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private void OnRuleDropdownChanged(int selectedIndex) {
-        _ruleState = selectedIndex switch {
+        string optionText = selectedIndex >= 0 && selectedIndex < chooseRule.options.Count
+            ? chooseRule.options[selectedIndex].text
+            : "";
+        _ruleState = optionText.Contains("长沙") ? "changsha"
+            : optionText == "简单" ? "jiandan"
+            : selectedIndex switch {
             0 => "guobiao",
             1 => "riichi",
             2 => "qingque",
             3 => "classical",
             4 => "sichuan",
-            5 => "changsha",
             _ => "guobiao"
         };
         bool hasSubRule = RuleConfigs[_ruleState].ContainsKey(CfgSubRule);
@@ -303,6 +313,7 @@ public class CreatePanel : MonoBehaviour {
             case CfgHepaiWay:       HepaiWayDropdown.value = (int)value; break;
             case CfgTacticalCall:   TacticalCallToggle.isOn = (bool)value; break;
             case CfgBloodBattle:    if (BloodBattleToggle != null) BloodBattleToggle.isOn = (bool)value; break;
+            case CfgHandEndMode:     if (JiandanHandEndModeDropdown != null) JiandanHandEndModeDropdown.value = (int)value; break;
             case CfgCsOpenKongCount: SetChangshaOpenKongCount((int)value); break;
             case CfgCsInitialSiXi:   if (ChangshaInitialSiXiToggle != null) ChangshaInitialSiXiToggle.isOn = (bool)value; break;
             case CfgCsInitialBanBanHu: if (ChangshaInitialBanBanHuToggle != null) ChangshaInitialBanBanHuToggle.isOn = (bool)value; break;
@@ -350,6 +361,7 @@ public class CreatePanel : MonoBehaviour {
         HepaiWayPanel.SetActive(visible.ContainsKey(CfgHepaiWay));
         TacticalCallToggle.gameObject.SetActive(visible.ContainsKey(CfgTacticalCall));
         if (BloodBattleToggle != null) BloodBattleToggle.gameObject.SetActive(visible.ContainsKey(CfgBloodBattle));
+        if (JiandanHandEndModePanel != null) JiandanHandEndModePanel.SetActive(visible.ContainsKey(CfgHandEndMode));
         SetChangshaOptionsVisible(_ruleState == "changsha");
         ApplyGameRoundDisplayForRule();
         RefreshCuoheTypePanelVisibility();
@@ -359,9 +371,24 @@ public class CreatePanel : MonoBehaviour {
         if (_ruleState == "qingque") return "qingque/standard";
         if (_ruleState == "classical") return "classical/standard";
         if (_ruleState == "sichuan") return "sichuan/standard";
+        if (_ruleState == "jiandan") return "jiandan/standard";
         if (_ruleState == "changsha") return "changsha/classic_double_bird";
         if (_ruleState == "riichi") return GetSelectedRiichiSubRule();
         return GetSelectedSubRule();
+    }
+
+    private void EnsureRuleDropdownOptions() {
+        if (chooseRule == null) return;
+        int changshaIndex = chooseRule.options.FindIndex(option => option.text.Contains("长沙"));
+        int jiandanIndex = chooseRule.options.FindIndex(option => option.text == "简单");
+        if (changshaIndex < 0) {
+            int insertIndex = jiandanIndex >= 0 ? jiandanIndex : chooseRule.options.Count;
+            chooseRule.options.Insert(insertIndex, new TMP_Dropdown.OptionData("长沙麻将"));
+        }
+        if (jiandanIndex < 0) {
+            chooseRule.options.Add(new TMP_Dropdown.OptionData("简单"));
+        }
+        chooseRule.RefreshShownValue();
     }
 
     private string GetSelectedRiichiSubRule() {
@@ -506,7 +533,6 @@ public class CreatePanel : MonoBehaviour {
             ChangshaBirdCountDropdown.AddOptions(new List<string> { "不扎鸟", "1鸟", "2鸟", "4鸟" });
             SetChangshaBirdCount(2);
         }
-
         SetChangshaOptionsVisible(false);
     }
 
@@ -515,33 +541,24 @@ public class CreatePanel : MonoBehaviour {
         if (template == null) return null;
         GameObject clone = Instantiate(template, template.transform.parent);
         clone.name = goName;
-        SetPanelLabel(clone, labelText);
-        clone.SetActive(false);
-        return clone;
-    }
-
-    private static void SetPanelLabel(GameObject panel, string labelText) {
-        if (panel == null) return;
-        foreach (TMP_Text label in panel.GetComponentsInChildren<TMP_Text>(true)) {
+        foreach (TMP_Text label in clone.GetComponentsInChildren<TMP_Text>(true)) {
             if (label.GetComponentInParent<TMP_Dropdown>() != null) continue;
             label.text = labelText;
-            return;
+            break;
         }
+        clone.SetActive(false);
+        return clone;
     }
 
     private void SetChangshaOptionsVisible(bool visible) {
         if (ChangshaOpenKongPanel != null) ChangshaOpenKongPanel.SetActive(visible);
         if (ChangshaBirdCountPanel != null) ChangshaBirdCountPanel.SetActive(visible);
-        SetToggleVisible(ChangshaInitialSiXiToggle, visible);
-        SetToggleVisible(ChangshaInitialBanBanHuToggle, visible);
-        SetToggleVisible(ChangshaInitialQueYiSeToggle, visible);
-        SetToggleVisible(ChangshaInitialLiuLiuShunToggle, visible);
-        SetToggleVisible(ChangshaInitialSanTongToggle, visible);
-        SetToggleVisible(ChangshaDealerBirdToggle, visible);
-    }
-
-    private static void SetToggleVisible(Toggle toggle, bool visible) {
-        if (toggle != null) toggle.gameObject.SetActive(visible);
+        foreach (Toggle toggle in new[] {
+            ChangshaInitialSiXiToggle, ChangshaInitialBanBanHuToggle, ChangshaInitialQueYiSeToggle,
+            ChangshaInitialLiuLiuShunToggle, ChangshaInitialSanTongToggle, ChangshaDealerBirdToggle,
+        }) {
+            if (toggle != null) toggle.gameObject.SetActive(visible);
+        }
     }
 
     private void SetChangshaOpenKongCount(int count) {
@@ -551,9 +568,7 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private int GetChangshaOpenKongCount() {
-        return ChangshaOpenKongDropdown != null
-            ? Mathf.Clamp(ChangshaOpenKongDropdown.value + 1, 1, 4)
-            : 2;
+        return ChangshaOpenKongDropdown != null ? Mathf.Clamp(ChangshaOpenKongDropdown.value + 1, 1, 4) : 2;
     }
 
     private void SetChangshaBirdCount(int count) {
@@ -572,10 +587,8 @@ public class CreatePanel : MonoBehaviour {
     private void CacheDefaultGameRoundLabels() {
         if (_gameRoundLabelsCached) return;
         _defaultGameRoundLabels = new[] {
-            GetToggleLabelText(gameTime1Button),
-            GetToggleLabelText(gameTime2Button),
-            GetToggleLabelText(gameTime3Button),
-            GetToggleLabelText(gameTime4Button),
+            GetToggleLabelText(gameTime1Button), GetToggleLabelText(gameTime2Button),
+            GetToggleLabelText(gameTime3Button), GetToggleLabelText(gameTime4Button),
         };
         _gameRoundLabelsCached = true;
     }
@@ -583,10 +596,7 @@ public class CreatePanel : MonoBehaviour {
     private void ApplyGameRoundDisplayForRule() {
         CacheDefaultGameRoundLabels();
         bool isChangsha = _ruleState == "changsha";
-        if (isChangsha && gameTime3Button != null && gameTime3Button.isOn) {
-            SelectGameTime(4);
-        }
-
+        if (isChangsha && gameTime3Button != null && gameTime3Button.isOn) SelectGameTime(4);
         SetToggleLabel(gameTime1Button, isChangsha ? "4局" : _defaultGameRoundLabels[0]);
         SetToggleLabel(gameTime2Button, isChangsha ? "8局" : _defaultGameRoundLabels[1]);
         SetToggleLabel(gameTime3Button, _defaultGameRoundLabels[2]);
@@ -595,17 +605,13 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private static string GetToggleLabelText(Toggle toggle) {
-        TMP_Text label = GetToggleLabel(toggle);
+        TMP_Text label = toggle != null ? toggle.GetComponentInChildren<TMP_Text>(true) : null;
         return label != null ? label.text : "";
     }
 
     private static void SetToggleLabel(Toggle toggle, string text) {
-        TMP_Text label = GetToggleLabel(toggle);
+        TMP_Text label = toggle != null ? toggle.GetComponentInChildren<TMP_Text>(true) : null;
         if (label != null) label.text = text;
-    }
-
-    private static TMP_Text GetToggleLabel(Toggle toggle) {
-        return toggle != null ? toggle.GetComponentInChildren<TMP_Text>(true) : null;
     }
 
     private void ClosePanel() {
@@ -642,10 +648,52 @@ public class CreatePanel : MonoBehaviour {
             return;
         }
 
-        if (_ruleState == "changsha") {
-            CreateChangshaRoom();
+        if (_ruleState == "jiandan") {
+            CreateJiandanRoom();
             return;
         }
+
+        if (_ruleState == "changsha") {
+            CreateChangshaRoom();
+        }
+    }
+
+    /// <summary>
+    /// Runtime-cloned common flow selector. It is intentionally modeled as a
+    /// hand-flow option rather than a Jiandan-only blood-battle switch so the
+    /// same control can later be enabled for Guobiao or other rule profiles.
+    /// </summary>
+    private void EnsureJiandanHandEndModePanel() {
+        if (JiandanHandEndModePanel != null && JiandanHandEndModeDropdown != null) return;
+        if (HepaiWayPanel == null) return;
+
+        JiandanHandEndModePanel = Instantiate(HepaiWayPanel, HepaiWayPanel.transform.parent);
+        JiandanHandEndModePanel.name = "HandEndModePanel";
+        JiandanHandEndModeDropdown = JiandanHandEndModePanel.GetComponentInChildren<TMP_Dropdown>(true);
+        foreach (TMP_Text label in JiandanHandEndModePanel.GetComponentsInChildren<TMP_Text>(true)) {
+            if (label.GetComponentInParent<TMP_Dropdown>() != null) continue;
+            label.text = "终局流程";
+            break;
+        }
+        if (JiandanHandEndModeDropdown != null) {
+            JiandanHandEndModeDropdown.ClearOptions();
+            JiandanHandEndModeDropdown.AddOptions(new List<string> {
+                "和牌即止",
+                "二人和牌",
+                "三人和牌",
+            });
+            JiandanHandEndModeDropdown.value = 2;
+            JiandanHandEndModeDropdown.RefreshShownValue();
+        }
+        JiandanHandEndModePanel.SetActive(false);
+    }
+
+    private string GetSelectedHandEndMode() {
+        return (JiandanHandEndModeDropdown != null ? JiandanHandEndModeDropdown.value : 2) switch {
+            0 => "first_win",
+            1 => "second_win",
+            _ => "third_win",
+        };
     }
 
     private void CreateRiichiRoom() {
@@ -818,6 +866,31 @@ public class CreatePanel : MonoBehaviour {
         RoomNetworkManager.Instance.Create_Sichuan_Room(config);
     }
 
+    private void CreateJiandanRoom() {
+        var config = new Jiandan_Create_RoomConfig {
+            RoomName = roomNameInput.text.Trim(),
+            GameRound = GetSelectedGameTime(),
+            Password = passwordToggle.isOn ? passwordInput.text.Trim() : "",
+            RandomSeed = SetRandomSeedToggle.isOn ? randomSeedInput.text.Trim() : "",
+            Rule = "jiandan",
+            SubRule = "jiandan/standard",
+            RoundTimer = GetSelectedRoundTimer(),
+            StepTimer = GetSelectedStepTimer(),
+            Tips = tipsToggle.isOn,
+            TouristLimit = TouristLimitToggle.isOn,
+            AllowSpectator = AllowSpectatorToggle.isOn,
+            TacticalCall = false,
+            HandEndMode = GetSelectedHandEndMode(),
+        };
+
+        if (!config.Validate(out string error, passwordToggle.isOn, SetRandomSeedToggle.isOn)) {
+            Debug.LogWarning(error);
+            NotificationManager.Instance.ShowTip("create_room", false, $"创建房间失败: {error}");
+            return;
+        }
+        RoomNetworkManager.Instance.Create_Jiandan_Room(config);
+    }
+
     private void CreateChangshaRoom() {
         var config = new Changsha_Create_RoomConfig {
             RoomName = roomNameInput.text.Trim(),
@@ -903,11 +976,7 @@ public class CreatePanel : MonoBehaviour {
             if (_ruleState == "guobiao")
                 HepaiLimitInput.text = GetGuobiaoSubRuleDefaultHepaiLimit(GetSelectedSubRule()).ToString();
             else {
-                object fallbackValue;
-                int fallback = RuleConfigs.TryGetValue(_ruleState, out var config)
-                    && config.TryGetValue(CfgHepaiLimit, out fallbackValue)
-                    ? Convert.ToInt32(fallbackValue)
-                    : 8;
+                int fallback = (int)RuleConfigs[_ruleState].GetValueOrDefault(CfgHepaiLimit, 8);
                 HepaiLimitInput.text = fallback.ToString();
             }
         }

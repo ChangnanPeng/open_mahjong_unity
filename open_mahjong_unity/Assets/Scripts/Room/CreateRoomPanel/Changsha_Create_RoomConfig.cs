@@ -1,18 +1,4 @@
-using UnityEngine;
-
-public class Changsha_Create_RoomConfig {
-    public string RoomName { get; set; }
-    public int GameRound { get; set; }
-    public string Password { get; set; }
-    public string Rule { get; set; }
-    public string SubRule { get; set; }
-    public int RoundTimer { get; set; }
-    public int StepTimer { get; set; }
-    public bool Tips { get; set; }
-    public string RandomSeed { get; set; }
-    public bool TouristLimit { get; set; }
-    public bool AllowSpectator { get; set; }
-    public bool TacticalCall { get; set; }
+public class Changsha_Create_RoomConfig : Qingque_Create_RoomConfig {
     public int OpenKongReplacementCount { get; set; } = 2;
     public bool InitialHuSiXi { get; set; } = true;
     public bool InitialHuBanBanHu { get; set; } = true;
@@ -22,20 +8,9 @@ public class Changsha_Create_RoomConfig {
     public int BirdCount { get; set; } = 2;
     public bool DealerBird { get; set; } = true;
 
-    public bool Validate(out string error, bool passwordToggle, bool setRandomSeedToggle) {
-        if (string.IsNullOrEmpty(RoomName)) {
-            error = "房间名不能为空";
+    public new bool Validate(out string error, bool passwordToggle, bool setRandomSeedToggle) {
+        if (!base.Validate(out error, passwordToggle, setRandomSeedToggle)) {
             return false;
-        }
-        if (setRandomSeedToggle) {
-            if (string.IsNullOrEmpty(RandomSeed)) {
-                error = "随机种子不能为空";
-                return false;
-            }
-            if (!MasterSeedInputValidator.TryNormalizeHex(RandomSeed, out _, out string seedError)) {
-                error = seedError;
-                return false;
-            }
         }
         if (GameRound != 1 && GameRound != 2 && GameRound != 4) {
             error = "长沙麻将对局数量必须是4/8/16";
@@ -47,18 +22,6 @@ public class Changsha_Create_RoomConfig {
         }
         if (BirdCount != 0 && BirdCount != 1 && BirdCount != 2 && BirdCount != 4) {
             error = "扎鸟张数必须是0/1/2/4";
-            return false;
-        }
-        if (RoundTimer < 0) {
-            error = "局时不能为负数";
-            return false;
-        }
-        if (StepTimer < 0) {
-            error = "步时不能为负数";
-            return false;
-        }
-        if (passwordToggle && string.IsNullOrEmpty(Password)) {
-            error = "密码不能为空";
             return false;
         }
         error = null;

@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 
+/// <summary>
+/// 统一维护各规则的局数文本映射，供牌谱局按钮与当前局显示共用。
+/// </summary>
 public static class RoundTextDictionary {
     public static readonly Dictionary<int, string> CurrentRoundTextGB = new Dictionary<int, string>() {
         {1, "东风东"}, {2, "东风南"}, {3, "东风西"}, {4, "东风北"},
@@ -15,8 +18,19 @@ public static class RoundTextDictionary {
         {13, "北一局"}, {14, "北二局"}, {15, "北三局"}, {16, "北四局"},
     };
 
-    public static readonly Dictionary<int, string> CurrentRoundTextRiichi = new Dictionary<int, string>(CurrentRoundTextQingque);
-    public static readonly Dictionary<int, string> CurrentRoundTextClassical = new Dictionary<int, string>(CurrentRoundTextQingque);
+    public static readonly Dictionary<int, string> CurrentRoundTextRiichi = new Dictionary<int, string>() {
+        {1, "东一局"}, {2, "东二局"}, {3, "东三局"}, {4, "东四局"},
+        {5, "南一局"}, {6, "南二局"}, {7, "南三局"}, {8, "南四局"},
+        {9, "西一局"}, {10, "西二局"}, {11, "西三局"}, {12, "西四局"},
+        {13, "北一局"}, {14, "北二局"}, {15, "北三局"}, {16, "北四局"},
+    };
+
+    public static readonly Dictionary<int, string> CurrentRoundTextClassical = new Dictionary<int, string>() {
+        {1, "东一局"}, {2, "东二局"}, {3, "东三局"}, {4, "东四局"},
+        {5, "南一局"}, {6, "南二局"}, {7, "南三局"}, {8, "南四局"},
+        {9, "西一局"}, {10, "西二局"}, {11, "西三局"}, {12, "西四局"},
+        {13, "北一局"}, {14, "北二局"}, {15, "北三局"}, {16, "北四局"},
+    };
 
     public static readonly Dictionary<int, string> CurrentRoundTextSichuan = new Dictionary<int, string>() {
         {1, "第一副"}, {2, "第二副"}, {3, "第三副"}, {4, "第四副"},
@@ -32,6 +46,27 @@ public static class RoundTextDictionary {
         {13, "第13局"}, {14, "第14局"}, {15, "第15局"}, {16, "第16局"},
     };
 
+    /// <summary>局数（当前第几局）显示名</summary>
+    public static string GetRoundName(string rule, int currentRound) {
+        if (!string.IsNullOrEmpty(rule)) {
+            int slash = rule.IndexOf('/');
+            if (slash >= 0) rule = rule.Substring(0, slash);
+        }
+        Dictionary<int, string> roundMap = null;
+        if (rule == "guobiao") roundMap = CurrentRoundTextGB;
+        else if (rule == "qingque") roundMap = CurrentRoundTextQingque;
+        else if (rule == "riichi") roundMap = CurrentRoundTextRiichi;
+        else if (rule == "classical") roundMap = CurrentRoundTextClassical;
+        else if (rule == "sichuan") roundMap = CurrentRoundTextSichuan;
+        else if (rule == "changsha") roundMap = CurrentRoundTextChangsha;
+        else if (rule == "jiandan") roundMap = CurrentRoundTextQingque;
+        if (roundMap != null && roundMap.TryGetValue(currentRound, out string roundName)) {
+            return roundName;
+        }
+        return $"第{currentRound}局";
+    }
+
+    /// <summary>圈数（东风战/东南战等）显示名，供房间配置等使用。</summary>
     public static readonly Dictionary<int, string> MaxRoundText = new Dictionary<int, string> {
         { 1, "东风战" },
         { 2, "东南战" },
@@ -40,27 +75,11 @@ public static class RoundTextDictionary {
     };
 
     public static readonly Dictionary<int, string> MaxRoundTextChangsha = new Dictionary<int, string> {
-        { 1, "4局" },
-        { 2, "8局" },
-        { 4, "16局" },
+        { 1, "4局" }, { 2, "8局" }, { 4, "16局" },
     };
 
-    public static string GetRoundName(string rule, int currentRound) {
-        Dictionary<int, string> roundMap = null;
-        if (rule == "guobiao") roundMap = CurrentRoundTextGB;
-        else if (rule == "qingque") roundMap = CurrentRoundTextQingque;
-        else if (rule == "riichi") roundMap = CurrentRoundTextRiichi;
-        else if (rule == "classical") roundMap = CurrentRoundTextClassical;
-        else if (rule == "sichuan") roundMap = CurrentRoundTextSichuan;
-        else if (rule == "changsha") roundMap = CurrentRoundTextChangsha;
-        if (roundMap != null && roundMap.TryGetValue(currentRound, out string roundName)) {
-            return roundName;
-        }
-        return $"第{currentRound}局";
-    }
-
-    public static string GetMaxRoundText(int gameRound) {
-        return MaxRoundText.TryGetValue(gameRound, out string text) ? text : $"未知({gameRound})";
+    public static string GetMaxRoundText(int game_round) {
+        return MaxRoundText.TryGetValue(game_round, out string text) ? text : $"未知({game_round})";
     }
 
     public static string GetMaxRoundText(string rule, int gameRound) {
@@ -75,20 +94,20 @@ public static class RoundTextDictionary {
         return GetMaxRoundText(gameRound);
     }
 
-    public static string GetMatchTypeDisplay(string matchType) {
-        return GetMatchTypeDisplay(null, matchType);
+    /// <summary>根据服务端 match_type（如 1/4、2/4、4/4）返回局数显示名（东风战/东南战/全庄战等）</summary>
+    public static string GetMatchTypeDisplay(string match_type) {
+        return GetMatchTypeDisplay(null, match_type);
     }
 
-    public static string GetMatchTypeDisplay(string rule, string matchType) {
-        if (string.IsNullOrEmpty(matchType)) return "";
-        string normalized = matchType;
+    public static string GetMatchTypeDisplay(string rule, string match_type) {
+        if (string.IsNullOrEmpty(match_type)) return "";
+        string normalized = match_type;
         if (normalized.EndsWith("_rank")) {
             normalized = normalized.Substring(0, normalized.Length - "_rank".Length);
         }
         int slash = normalized.IndexOf('/');
-        if (slash < 0 || !int.TryParse(normalized.Substring(0, slash), out int rounds)) {
+        if (slash < 0 || !int.TryParse(normalized.Substring(0, slash), out int rounds))
             return "";
-        }
         return GetMaxRoundText(rule, rounds);
     }
 }
