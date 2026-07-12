@@ -23,6 +23,9 @@ public static class ScoreHistorySettlementHelper {
 
     public static string GetMainFanColumnLabel(string subRule, RoundSettlementSnapshot snapshot, int rowIndex = -1) {
         if (snapshot == null) return "—";
+        if (snapshot.winnerCount >= 0) {
+            return FormatWinnerCountLabel(snapshot.winnerCount);
+        }
         if (!string.IsNullOrEmpty(snapshot.sichuanRoundLabel)) {
             return SichuanRoundLabel.ToDisplayText(snapshot.sichuanRoundLabel);
         }
@@ -38,6 +41,27 @@ public static class ScoreHistorySettlementHelper {
         if (hadChajiaoStep) return SichuanRoundLabel.Chajiao;
         if (huCount >= 3) return SichuanRoundLabel.ThreeHu;
         return SichuanRoundLabel.Liuju;
+    }
+
+    /// <summary>多家和牌流程：主番列按本局实际和牌人数显示，与终局和牌面板数量一致。</summary>
+    public static string FormatWinnerCountLabel(int winnerCount) {
+        return winnerCount switch {
+            <= 0 => "流局",
+            1 => "一人和",
+            2 => "二人和",
+            _ => "三人和",
+        };
+    }
+
+    public static RoundSettlementSnapshot CreateJianzhongScoreboardSnapshot(string subRule, int winnerCount) {
+        int normalizedCount = Math.Max(0, Math.Min(3, winnerCount));
+        return new RoundSettlementSnapshot {
+            subRule = subRule,
+            winnerCount = normalizedCount,
+            hasWin = normalizedCount > 0,
+            isLiuju = normalizedCount == 0,
+            huClass = normalizedCount == 0 ? "liuju" : null,
+        };
     }
 
     public static RoundSettlementSnapshot CreateSichuanScoreboardSnapshot(string subRule, string roundLabel) {

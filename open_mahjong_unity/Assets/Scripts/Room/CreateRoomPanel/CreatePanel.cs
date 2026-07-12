@@ -137,10 +137,10 @@ public class CreatePanel : MonoBehaviour {
             { CfgCsDealerBird, true },
         } },
         { "jianzhong", new Dictionary<string, object> {
-            { CfgGameRound,      1 },
+            { CfgGameRound,      4 }, // 默认全庄战
             { CfgRoundTimer,     2 },
             { CfgStepTimer,      1 },
-            { CfgTips,           false },
+            { CfgTips,           true },
             { CfgPassword,       false },
             { CfgRandomSeed,     false },
             { CfgTouristLimit,   false },
@@ -678,9 +678,9 @@ public class CreatePanel : MonoBehaviour {
         if (JianzhongHandEndModeDropdown != null) {
             JianzhongHandEndModeDropdown.ClearOptions();
             JianzhongHandEndModeDropdown.AddOptions(new List<string> {
-                "和牌即止（普通）",
+                "和牌即止",
                 "二人和牌",
-                "三人和牌（血战到底）",
+                "三人和牌",
             });
             JianzhongHandEndModeDropdown.value = 2;
             JianzhongHandEndModeDropdown.RefreshShownValue();

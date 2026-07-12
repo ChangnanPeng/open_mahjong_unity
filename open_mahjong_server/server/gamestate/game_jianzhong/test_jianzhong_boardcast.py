@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 SERVER_ROOT = Path(__file__).resolve().parents[3]
 if str(SERVER_ROOT) not in sys.path:
@@ -37,6 +39,36 @@ def test_game_info_masks_concealed_kong_for_other_players() -> None:
     assert other_view["players_info"][0]["combination_mask"] == [[2, 0, 2, 0, 2, 0, 2, 0]]
     assert other_view["players_info"][0]["hand_tiles"] is None
     assert other_view["players_info"][0]["hand_tiles_count"] == 3
+
+
+def test_game_info_preserves_player_cosmetics_and_room_state() -> None:
+    room_data = JianzhongGameState._default_room_data()
+    room_data.update({
+        "allow_spectator": True,
+        "claim_protection": False,
+        "player_settings": {
+            101: {
+                "username": "p1",
+                "title_id": 7,
+                "profile_image_id": 8,
+                "character_id": 9,
+                "voice_id": 10,
+            },
+        },
+    })
+    game = JianzhongGameState(room_data=room_data)
+
+    payload = game_info_payload(game, 0)
+    player = payload["players_info"][0]
+
+    assert player["title_used"] == 7
+    assert player["profile_used"] == 8
+    assert player["character_used"] == 9
+    assert player["voice_used"] == 10
+    assert payload["commitment"] == game.commitment
+    assert payload["salt"] == game.salt
+    assert payload["claim_protection"] is False
+    assert payload["isPlayerSetRandomSeed"] is game.isPlayerSetRandomSeed
 
 
 def test_visible_concealed_kong_payload_masks_other_viewers_but_keeps_mask_shape() -> None:
@@ -143,8 +175,67 @@ def test_deal_tile_payload_hides_drawn_tile_from_other_viewers() -> None:
     other_payload = visible_action_payload(game, 1, {"action": "deal_tile", "player": 0, "tile": 31})
 
     assert owner_payload["do_action_info"]["action_list"] == ["deal_tile"]
+    assert owner_payload["tile"] == 31
     assert owner_payload["do_action_info"]["deal_tile"] == 31
+    assert other_payload["tile"] is None
     assert other_payload["do_action_info"]["deal_tile"] is None
+
+
+def test_claim_protection_delays_cut_for_non_claiming_viewers() -> None:
+    class FakeWebSocket:
+        def __init__(self) -> None:
+            self.sent = []
+
+        async def send_json(self, payload: dict) -> None:
+            self.sent.append(payload)
+
+    async def scenario() -> None:
+        game = JianzhongGameState()
+        game.claim_protect_delay = 60
+        connections = {}
+        for player in game.player_list:
+            websocket = FakeWebSocket()
+            connections[player.user_id] = SimpleNamespace(websocket=websocket)
+        game.game_server = SimpleNamespace(
+            user_id_to_connection=connections,
+            friend_manager=None,
+        )
+
+        game.begin_claim_protection({0: [], 1: ["hu", "pass"], 2: [], 3: []}, 0)
+        game.emit_visible_action_payloads({"action": "cut", "player": 0, "tile": 31})
+        await game.flush_outbound_payloads()
+
+        assert len(connections[101].websocket.sent) == 1
+        assert len(connections[102].websocket.sent) == 1
+        assert connections[103].websocket.sent == []
+        assert connections[104].websocket.sent == []
+
+        await game.finish_claim_protection()
+
+        assert len(connections[103].websocket.sent) == 1
+        assert len(connections[104].websocket.sent) == 1
+        await game.cleanup_game_state()
+
+    asyncio.run(scenario())
+
+
+def test_claim_payload_identifies_the_discarder() -> None:
+    game = JianzhongGameState()
+
+    payload = visible_action_payload(
+        game,
+        2,
+        {
+            "action": "peng",
+            "player": 1,
+            "tile": 31,
+            "meld_code": "k31",
+            "combination_mask": [1, 31, 0, 31, 0, 31],
+            "cut_from_player": 0,
+        },
+    )
+
+    assert payload["do_action_info"]["cut_from_player"] == 0
 
 
 def test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results() -> None:
@@ -477,6 +568,54 @@ def test_game_start_payload_after_end_reveals_final_state_and_applies_scores_onc
     assert second_payload["game_info"]["players_info"][1]["score"] == 48
 
 
+def test_score_history_records_one_aggregate_row_and_broadcasts_it() -> None:
+    game = JianzhongGameState()
+    game.current_round = 7
+    game.deferred_hu_settlements = [
+        {
+            "winner": 1,
+            "score_changes": [-48, 48, 0, 0],
+        },
+        {
+            "winner": 2,
+            "score_changes": [-10, 0, 30, -20],
+        },
+    ]
+
+    first_payloads = final_settlement_payloads(game, 0)
+    second_payloads = final_settlement_payloads(game, 0)
+
+    histories = [
+        info["score_history"]
+        for info in first_payloads[-1]["game_info"]["players_info"]
+    ]
+    round_histories = [
+        info["round_number_history"]
+        for info in first_payloads[-1]["game_info"]["players_info"]
+    ]
+    assert histories == [["-58"], ["+48"], ["+30"], ["-20"]]
+    assert round_histories == [[7], [7], [7], [7]]
+    assert [player.score_history for player in game.player_list] == histories
+    assert [player.round_number_history for player in game.player_list] == round_histories
+    assert second_payloads[-1]["game_info"]["players_info"][0]["score_history"] == ["-58"]
+
+
+def test_score_history_records_zero_row_for_no_winner_draw() -> None:
+    game = JianzhongGameState()
+    game.current_round = 3
+
+    payload = final_settlement_payload(game, 0)
+
+    assert [
+        info["score_history"]
+        for info in payload["game_info"]["players_info"]
+    ] == [["0"], ["0"], ["0"], ["0"]]
+    assert [
+        info["round_number_history"]
+        for info in payload["game_info"]["players_info"]
+    ] == [[3], [3], [3], [3]]
+
+
 def test_ready_status_payload_uses_existing_ready_shape() -> None:
     game = JianzhongGameState()
     game.action_dict = {0: ["ready"], 1: [], 2: [], 3: []}
@@ -513,11 +652,14 @@ def test_game_end_payload_uses_existing_game_end_shape() -> None:
 def run() -> None:
     tests = [
         test_game_info_masks_concealed_kong_for_other_players,
+        test_game_info_preserves_player_cosmetics_and_room_state,
         test_visible_concealed_kong_payload_masks_other_viewers_but_keeps_mask_shape,
         test_mid_hand_win_payload_hides_fans_points_and_self_draw_tile,
         test_mid_hand_discard_win_keeps_public_discard_tile_but_hides_scoring,
         test_mid_hand_result_carries_multi_ron_recycle_contract,
         test_deal_tile_payload_hides_drawn_tile_from_other_viewers,
+        test_claim_protection_delays_cut_for_non_claiming_viewers,
+        test_claim_payload_identifies_the_discarder,
         test_final_settlement_reveals_hands_concealed_kongs_and_deferred_results,
         test_final_settlement_keeps_zero_point_empty_fan_result,
         test_final_settlement_preserves_zero_discarder_index,
@@ -532,6 +674,8 @@ def run() -> None:
         test_game_start_payload_uses_viewer_safe_state,
         test_pending_action_payload_replays_standard_action_ask,
         test_game_start_payload_after_end_reveals_final_state_and_applies_scores_once,
+        test_score_history_records_one_aggregate_row_and_broadcasts_it,
+        test_score_history_records_zero_row_for_no_winner_draw,
         test_ready_status_payload_uses_existing_ready_shape,
         test_game_end_payload_uses_existing_game_end_shape,
     ]

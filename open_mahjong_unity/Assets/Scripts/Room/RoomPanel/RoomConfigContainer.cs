@@ -205,8 +205,8 @@ public class RoomConfigContainer : MonoBehaviour {
     private string FormatHandEndMode(string mode) {
         return mode switch {
             "second_win" => "二人和牌",
-            "third_win" => "三人和牌（血战到底）",
-            _ => "和牌即止（普通）",
+            "third_win" => "三人和牌",
+            _ => "和牌即止",
         };
     }
 

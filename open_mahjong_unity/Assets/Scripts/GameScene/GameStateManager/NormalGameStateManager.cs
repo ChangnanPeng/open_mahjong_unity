@@ -97,7 +97,7 @@ public partial class NormalGameStateManager : MonoBehaviour{
 
     public void ClearRoundSettlementHistory() {
         roundSettlementHistory.Clear();
-        ResetSichuanEndgameScoreAccum();
+        ResetWinnerSequenceScoreAccum();
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public partial class NormalGameStateManager : MonoBehaviour{
     /// </summary>
     public void ClearScoreRecordSettlementCache() {
         roundSettlementHistory.Clear();
-        ResetSichuanEndgameScoreAccum();
+        ResetWinnerSequenceScoreAccum();
         if (player_to_info == null) return;
         foreach (PlayerInfoClass player in player_to_info.Values) {
             if (player == null) continue;

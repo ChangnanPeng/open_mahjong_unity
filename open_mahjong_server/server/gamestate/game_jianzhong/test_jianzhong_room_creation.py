@@ -230,7 +230,9 @@ async def _send_host_cut(server, websocket, game_state: JianzhongGameState, tile
 
 
 async def _wait_for_status(game_state: JianzhongGameState, status: str, player_index: int | None = None) -> None:
-    for _ in range(20):
+    # Multi-winner hands can include the shared claim-protection reveal gap plus
+    # one presentation pause per winner before the ready phase starts.
+    for _ in range(80):
         if game_state.game_status == status and (player_index is None or game_state.current_player_index == player_index):
             return
         await asyncio.sleep(0.05)

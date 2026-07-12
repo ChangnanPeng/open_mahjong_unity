@@ -20,6 +20,8 @@ public class RoundSettlementSnapshot {
     public int[] hepaiPlayerHand;
     public int[][] combinationMask;
     public string subRule;
+    /// <summary>多家和牌流程：本局实际和牌人数；-1 表示不使用人数标签。</summary>
+    public int winnerCount = -1;
     /// <summary>四川：计分板主番 simplified 类型（three_hu / chajiao / liuju）。</summary>
     public string sichuanRoundLabel;
 

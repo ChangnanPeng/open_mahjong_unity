@@ -39,6 +39,7 @@ def _room_data() -> dict:
         "sub_rule": "jianzhong/standard",
         "tips": False,
         "random_seed": 1,
+        "allow_spectator": True,
     }
 
 
@@ -69,8 +70,10 @@ def test_manager_starts_and_cleans_up_jianzhong_game_state() -> None:
         assert manager.get_game_state_by_gamestate_id(game_state.gamestate_id) is game_state
         assert manager.get_game_state_by_user_id(101) is game_state
         assert game_state.game_task is not None
-        assert game_state.spectator_enabled is False
-        assert manager.get_spectator_list() == []
+        assert game_state.spectator_enabled is True
+        spectator_list = manager.get_spectator_list()
+        assert len(spectator_list) == 1
+        assert spectator_list[0].gamestate_id == game_state.gamestate_id
 
         await manager.cleanup_game_state_complete(gamestate_id=game_state.gamestate_id)
 

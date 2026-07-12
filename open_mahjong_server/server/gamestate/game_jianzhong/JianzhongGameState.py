@@ -65,6 +65,10 @@ class JianzhongPlayer:
     record_counter: RecordCounter = field(default_factory=RecordCounter)
     score_history: list[str] = field(default_factory=list)
     round_number_history: list[int] = field(default_factory=list)
+    title_used: int = 1
+    profile_used: int = 1
+    character_used: int = 1
+    voice_used: int = 1
 
     @property
     def is_bot(self) -> bool:
@@ -144,9 +148,11 @@ class JianzhongGameState:
         self.open_cuohe = False
         self.show_moqie_hint = False
         self.hepai_limit = 0
-        self.allow_spectator_config = False
-        self.spectator_enabled = False
-        self.realtime_spectators = []
+        self.tactical_call = False
+        self.claim_protection = room_data.get("claim_protection", True)
+        self.claim_protect_delay = room_data.get("claim_protect_delay", 1.3)
+        self.claim_meld_followup_gap = room_data.get("claim_meld_followup_gap", 0.8)
+        self.allow_spectator_config = room_data.get("allow_spectator", True)
 
         self.player_list: List[JianzhongPlayer] = []
         player_settings = room_data.get("player_settings", {})
@@ -156,7 +162,20 @@ class JianzhongGameState:
             player = JianzhongPlayer(user_id, username, room_data.get("round_timer", 0))
             player.player_index = index
             player.original_player_index = index
+            player.title_used = settings.get("title_id", 1)
+            player.profile_used = settings.get("profile_image_id", 1)
+            player.character_used = settings.get("character_id", 1)
+            player.voice_used = settings.get("voice_id", 1)
             self.player_list.append(player)
+
+        from ..public.claim_protection import init_claim_protection_state
+        from ..public.spectator_manager import SpectatorManager
+        from ..public.spectator_rules import too_many_ai_for_spectator
+
+        init_claim_protection_state(self)
+        self.spectator_enabled = self.allow_spectator_config and not too_many_ai_for_spectator(self.player_list)
+        self.spectator_manager = SpectatorManager(self, delay=180.0, enabled=self.spectator_enabled)
+        self.realtime_spectators = []
 
         self.tiles_list: list[int] = []
         self.current_player_index = 0
@@ -240,6 +259,10 @@ class JianzhongGameState:
 
     async def cleanup_game_state(self) -> None:
         """Cancel the live loop task and outstanding bot work."""
+        from ..public.claim_protection import end_claim_protection_interval
+
+        end_claim_protection_interval(self)
+        await self.spectator_manager.cleanup()
         current_task = asyncio.current_task()
         if self.game_task and not self.game_task.done() and self.game_task is not current_task:
             self.game_task.cancel()
@@ -256,6 +279,35 @@ class JianzhongGameState:
             await asyncio.gather(*self.bot_tasks, return_exceptions=True)
             self.bot_tasks.clear()
         self.bot_action_ticks.clear()
+
+    async def add_spectator(self, user_id: int, connection: Any) -> None:
+        await self.spectator_manager.add_spectator(user_id, connection)
+
+    async def remove_spectator(self, user_id: int) -> None:
+        await self.spectator_manager.remove_spectator(user_id)
+
+    async def send_to_realtime_spectators(self, player_index: int, payload: dict) -> None:
+        from ..public.spectator_rules import deliver_realtime_spectator_message
+
+        await deliver_realtime_spectator_message(self, player_index, payload)
+
+    async def _send_claim_protection_payload(self, viewer_index: int, payload: dict) -> None:
+        await self.send_payload_to_player(viewer_index, payload, record_fallback=False)
+        await self.send_to_realtime_spectators(viewer_index, payload)
+
+    @staticmethod
+    async def _claim_protection_send_fn(game_state: Any, viewer_index: int, payload: dict) -> None:
+        await game_state._send_claim_protection_payload(viewer_index, payload)
+
+    def begin_claim_protection(self, action_dict: Dict[int, list[str]], action_player: int) -> None:
+        from ..public.claim_protection import begin_claim_protection_interval
+
+        begin_claim_protection_interval(self, action_dict, action_player)
+
+    async def finish_claim_protection(self) -> None:
+        from ..public.claim_protection import finalize_claim_protection
+
+        await finalize_claim_protection(self, self._claim_protection_send_fn)
 
     async def player_disconnect(self, user_id: int) -> None:
         """Mark a player offline while preserving state for reconnect."""
@@ -552,6 +604,7 @@ class JianzhongGameState:
         self.game_record["game_title"]["hepai_limit"] = self.hepai_limit
         self.game_record["game_title"]["hand_end_mode"] = self.hand_end_mode
         self.game_record["game_title"]["winner_target"] = self.winner_target
+        self.spectator_manager.record_game_title()
 
     def start_round_recording(self) -> None:
         from ..public.game_record_manager import init_game_round
@@ -560,6 +613,7 @@ class JianzhongGameState:
             self.start_game_recording()
         init_game_round(self)
         self.round_record_finalized = False
+        self.spectator_manager.record_round_start()
 
     def _has_active_round_record(self) -> bool:
         return bool(
@@ -716,6 +770,7 @@ class JianzhongGameState:
         self.emit_game_end_payloads()
         await self.flush_outbound_payloads()
 
+        await self.spectator_manager.send_final_record_and_close()
         self.persist_game_record()
 
         if self.game_server is None:
@@ -763,7 +818,20 @@ class JianzhongGameState:
             player_index = payload.get("player_index")
             if player_index is None:
                 continue
-            await self.send_payload_to_player(player_index, payload, record_fallback=False)
+            action_list = (payload.get("do_action_info") or {}).get("action_list") or []
+            is_cut = bool(action_list) and action_list[0] == "cut"
+            if is_cut and getattr(self, "_cp_active", False):
+                from ..public.claim_protection import (
+                    arm_claim_protection_timer,
+                    is_protected_viewer,
+                    stash_protected_cut_payload,
+                )
+
+                if is_protected_viewer(self, player_index):
+                    stash_protected_cut_payload(self, player_index, payload)
+                    arm_claim_protection_timer(self, self._claim_protection_send_fn)
+                    continue
+            await self._send_claim_protection_payload(player_index, payload)
 
     async def send_payload_to_player(
         self,
@@ -799,6 +867,19 @@ class JianzhongGameState:
             raise ValueError("No live action window is open.")
         window = self.live_pending_window
         results = await self.wait_action(timeout)
+        if window.get("status") == "waiting_action_after_cut":
+            had_claim_protection = bool(getattr(self, "_cp_active", False))
+            await self.finish_claim_protection()
+            has_claim = any(
+                result.get("action_type") not in {None, "", "none", "pass"}
+                for result in results.values()
+            )
+            if had_claim_protection and has_claim:
+                from ..public.claim_protection import compute_protected_meld_delay
+
+                delay = compute_protected_meld_delay(self)
+                if delay > 0:
+                    await asyncio.sleep(delay)
         return self.apply_action_results(window, results, settlements=settlements)
 
     def apply_action_results(
@@ -840,6 +921,8 @@ class JianzhongGameState:
             for key in ("meld_code", "combination_mask", "is_mo_gang"):
                 if key in result:
                     action_payload[key] = result[key]
+            if action == "cut":
+                self.begin_claim_protection(next_window.get("actions") or {}, player_index)
             self.emit_visible_action_payloads(action_payload, reveal_final=next_window.get("status") == "END")
             if action == "hu_self":
                 settlement = self._latest_hu_settlement_for(player_index)
@@ -911,6 +994,7 @@ class JianzhongGameState:
                         "tile": tile,
                         "meld_code": claim_result.get("meld_code"),
                         "combination_mask": claim_result.get("combination_mask"),
+                        "cut_from_player": discarder_index,
                     },
                 )
             if next_window.get("drawn_tile") is not None and next_window.get("player") is not None:
@@ -1212,9 +1296,10 @@ class JianzhongGameState:
             self.game_status = "END"
 
     def apply_deferred_score_changes(self) -> None:
-        """Apply accumulated settlement score changes exactly once at final reveal time."""
+        """Apply one hand's settlements and persist one scoreboard row exactly once."""
         if self.deferred_scores_applied:
             return
+        round_score_changes = [0 for _ in self.player_list]
         for settlement in self.deferred_hu_settlements:
             changes = settlement.get("score_changes")
             if not changes:
@@ -1222,6 +1307,17 @@ class JianzhongGameState:
             for player_index, change in enumerate(changes):
                 if player_index < len(self.player_list):
                     self.player_list[player_index].score += change
+                    round_score_changes[player_index] += change
+        for player in self.player_list:
+            score_change = round_score_changes[player.player_index]
+            if score_change > 0:
+                score_change_text = f"+{score_change:02d}"
+            elif score_change < 0:
+                score_change_text = f"-{abs(score_change):02d}"
+            else:
+                score_change_text = "0"
+            player.score_history.append(score_change_text)
+            player.round_number_history.append(self.current_round)
         self.deferred_scores_applied = True
 
     def should_end_hand(self) -> bool:

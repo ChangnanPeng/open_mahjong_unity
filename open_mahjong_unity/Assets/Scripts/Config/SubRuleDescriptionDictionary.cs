@@ -16,7 +16,7 @@ public static class SubRuleDescriptionDictionary {
     };
 
     static SubRuleDescriptionDictionary() {
-        Descriptions["jianzhong/standard"] = "\u7b80\u5316\u7248\u4e2d\u5eb8\u9ebb\u5c06\u89c4\u5219\uff1a\u652f\u6301\u548c\u724c\u5373\u6b62\u3001\u4e8c\u4eba\u548c\u724c\u4e0e\u4e09\u4eba\u548c\u724c\u6d41\u7a0b\uff1b\u65e0\u82b1\u724c\u3001\u65e0\u5b9a\u7f3a\u3001\u65e0\u67e5\u53eb\u3001\u65e0\u8d77\u548c\u9650\u5236\u3002";
+        Descriptions["jianzhong/standard"] = "简化版中庸麻将规则（简中）是由南瓜饼编写的一款麻雀规则，旨在寻求新手入门简单与竞技策略深度的平衡。无起和限制。支持普通的一人和牌即止、二人和牌、或三人和牌（血战到底）流程。如在测试中发现设计问题或有任何建议，可以联系规则制定人南瓜饼Q839465687，提交bug可在群906497522提交。";
     }
 
     public static string GetDescription(string subRule) {

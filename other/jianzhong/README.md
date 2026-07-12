@@ -6,7 +6,8 @@
 
 - [规则定义](rule_reference.md)
 - [可组合架构](architecture.md)
-- [番种与计分](fan_scoring.md)
+- [番种计分表（中文）](fan_scoring.zh-CN.md) / [English](fan_scoring.md)
+- [逐番详细说明（中文）](fan_details.zh-CN.md) / [English](fan_details.md)
 
 ## 代码入口
 

@@ -86,12 +86,12 @@ def player_info_payload(
         "original_player_index": player.original_player_index,
         "score": player.score,
         "huapai_list": [],
-        "title_used": 0,
-        "character_used": 0,
-        "profile_used": 0,
-        "voice_used": 0,
-        "score_history": [],
-        "round_number_history": [],
+        "title_used": player.title_used,
+        "character_used": player.character_used,
+        "profile_used": player.profile_used,
+        "voice_used": player.voice_used,
+        "score_history": list(player.score_history),
+        "round_number_history": list(player.round_number_history),
         "tag_list": list(player.tag_list),
         "discard_riichi_flags": [],
         "dingque_suit": 0,
@@ -108,8 +108,8 @@ def game_info_payload(game_state: Any, viewer_index: Optional[int], *, reveal_fi
         "action_tick": game_state.server_action_tick,
         "max_round": game_state.max_round,
         "tile_count": len(game_state.tiles_list),
-        "commitment": "",
-        "salt": "",
+        "commitment": game_state.commitment,
+        "salt": game_state.salt,
         "current_round": game_state.current_round,
         "step_time": game_state.step_time,
         "round_time": game_state.round_time,
@@ -119,9 +119,9 @@ def game_info_payload(game_state: Any, viewer_index: Optional[int], *, reveal_fi
         "hepai_limit": 0,
         "open_cuohe": False,
         "show_moqie_hint": False,
-        "tactical_call": False,
-        "claim_protection": True,
-        "isPlayerSetRandomSeed": bool(game_state.room_random_seed),
+        "tactical_call": game_state.tactical_call,
+        "claim_protection": game_state.claim_protection,
+        "isPlayerSetRandomSeed": game_state.isPlayerSetRandomSeed,
         "player_entry_order": [player.user_id for player in game_state.player_list],
         "players_info": [
             player_info_payload(game_state, idx, viewer_index, reveal_final=reveal_final)
@@ -214,6 +214,7 @@ def visible_action_payload(
     actor = action_info.get("player")
     deal_tile = action_info.get("tile") if action in {"deal_tile", "deal_gang_tile", "deal_buhua_tile"} else None
     viewer_deal_tile = sanitize_deal_tile_for_viewer(deal_tile, actor, viewer_index) if actor is not None and viewer_index is not None else deal_tile
+    public_tile = viewer_deal_tile if deal_tile is not None else action_info.get("tile")
     combination_mask = _public_concealed_kong_mask(
         action_info.get("combination_mask"),
         actor,
@@ -228,7 +229,7 @@ def visible_action_payload(
         "success": True,
         "action": action,
         "player": actor,
-        "tile": action_info.get("tile"),
+        "tile": public_tile,
         "game_info": game_info_payload(game_state, viewer_index, reveal_final=reveal_final),
         "do_action_info": {
             "action_list": [action] if action else [],
@@ -241,6 +242,7 @@ def visible_action_payload(
             "combination_target": combination_target,
             "combination_mask": combination_mask,
             "is_mo_gang": action_info.get("is_mo_gang", action == "angang"),
+            "cut_from_player": action_info.get("cut_from_player"),
         },
     }
 

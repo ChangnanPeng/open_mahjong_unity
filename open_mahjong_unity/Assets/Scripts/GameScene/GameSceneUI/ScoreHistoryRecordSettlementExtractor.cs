@@ -72,9 +72,12 @@ public static class ScoreHistoryRecordSettlementExtractor {
         bool mainPhaseStarted = false;
         bool isSichuan = subRule != null && subRule.StartsWith("sichuan");
         bool isSichuanBlood = isSichuan && ReadTitleString(gameTitle, "blood_battle", "true") != "false";
+        bool isJianzhong = subRule != null && subRule.StartsWith("jianzhong");
         int sichuanHuCount = 0;
         bool sichuanHadChajiao = false;
         int[] sichuanAccumBySeat = null;
+        int jianzhongHuCount = 0;
+        int[] jianzhongAccumBySeat = new int[4];
 
         foreach (List<string> tick in round.actionTicks) {
             if (tick == null || tick.Count == 0) continue;
@@ -164,6 +167,11 @@ public static class ScoreHistoryRecordSettlementExtractor {
                 case "hu_first":
                 case "hu_second":
                 case "hu_third": {
+                    if (isJianzhong) {
+                        jianzhongHuCount++;
+                        AccumulateSeatScores(jianzhongAccumBySeat, ParseScoreChanges(tick, 4));
+                        break;
+                    }
                     if (isSichuanBlood && IsDeferredSichuanHuTick(tick)) break;
                     // 古典牌谱顺序为 shuhewei → hu；数和尾已占一行，勿重复追加。
                     if (subRule != null && subRule.StartsWith("classical") && lastRow != null) break;
@@ -248,6 +256,15 @@ public static class ScoreHistoryRecordSettlementExtractor {
                         }
                         if (step == "final" || step == "cha_refund") break;
                     }
+                    if (isJianzhong) {
+                        lastRow = new RecordScoreRow {
+                            snapshot = ScoreHistorySettlementHelper.CreateJianzhongScoreboardSnapshot(subRule, 0),
+                            scoreChangesByOriginal = new int[4],
+                            roundNumber = roundNumber,
+                        };
+                        output.Add(lastRow);
+                        break;
+                    }
                     if (isSichuan) {
                         lastRow = new RecordScoreRow {
                             snapshot = ScoreHistorySettlementHelper.CreateSichuanScoreboardSnapshot(
@@ -269,6 +286,16 @@ public static class ScoreHistoryRecordSettlementExtractor {
                     break;
                 }
             }
+        }
+
+        if (isJianzhong && jianzhongHuCount > 0) {
+            output.Add(new RecordScoreRow {
+                snapshot = ScoreHistorySettlementHelper.CreateJianzhongScoreboardSnapshot(
+                    subRule, jianzhongHuCount),
+                scoreChangesByOriginal = GameRecordJsonDecoder.ConvertPlayerIndexScoreChangesToOriginal(
+                    jianzhongAccumBySeat, round.seats),
+                roundNumber = roundNumber,
+            });
         }
     }
 

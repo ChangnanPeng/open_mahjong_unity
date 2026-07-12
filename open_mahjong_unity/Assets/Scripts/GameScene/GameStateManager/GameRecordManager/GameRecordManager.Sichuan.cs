@@ -193,7 +193,7 @@ public partial class GameRecordManager {
 
     private void HandleSichuanRecordRevealHu(List<string> tick) {
         if (tick.Count < 3) return;
-        NormalGameStateManager.Instance?.BeginSichuanEndgameScoreAccum();
+        NormalGameStateManager.Instance?.BeginWinnerSequenceScoreAccum();
         Dictionary<int, int[]> allHands = ParseRecordHuHandsJson(tick[2]);
         if (allHands.Count > 0) {
             RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
@@ -214,10 +214,10 @@ public partial class GameRecordManager {
         BoardCanvas.Instance.UpdatePlayerScores(after, indexToPosition);
 
         var mgr = NormalGameStateManager.Instance;
-        mgr?.AccumulateSichuanEndgameScore(deltas);
-        mgr?.RecordSichuanEndgameHu();
+        mgr?.AccumulateWinnerSequenceScore(deltas);
+        mgr?.RecordWinnerSequenceHu();
         bool isFinal = tick.Count > 7 && ParseTickInt(tick, 7) != 0;
-        if (isFinal && mgr != null && mgr.TryFlushSichuanEndgameScoreToHistory()) {
+        if (isFinal && mgr != null && mgr.TryFlushWinnerSequenceScoreToHistory()) {
             GameSceneUIManager.Instance.UpdateScoreRecord();
         }
 
@@ -241,9 +241,9 @@ public partial class GameRecordManager {
         bool isFinal = tick.Count > 6 && ParseTickInt(tick, 6) != 0;
 
         var mgr = NormalGameStateManager.Instance;
-        mgr?.MarkSichuanEndgameChajiaoStep();
-        mgr?.AccumulateSichuanEndgameScore(scoreChanges);
-        if (isFinal && mgr != null && mgr.TryFlushSichuanEndgameScoreToHistory()) {
+        mgr?.MarkWinnerSequenceChajiaoStep();
+        mgr?.AccumulateWinnerSequenceScore(scoreChanges);
+        if (isFinal && mgr != null && mgr.TryFlushWinnerSequenceScoreToHistory()) {
             GameSceneUIManager.Instance.UpdateScoreRecord();
         }
 
