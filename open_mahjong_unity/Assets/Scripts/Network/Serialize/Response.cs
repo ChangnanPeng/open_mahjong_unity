@@ -18,7 +18,7 @@ public class RoomInfo {
     public bool has_password;
     public bool tips;
     public string host_name;
-    public int host_user_id;
+    public int host_user_id; // 空赛事房可为 0（无房主）；服务端勿再发 null
     public string room_name;
     public int game_round;
     public int round_timer;
@@ -43,6 +43,14 @@ public class RoomInfo {
     public bool initial_hu_san_tong;
     public int bird_count;
     public bool dealer_bird;
+    public string event_id; // 赛事房间关联的赛事 ID
+}
+
+public class EventListEntry {
+    public string event_id;
+    public string name;
+    public string status;
+    public string role;
 }
 
 public class GameEndInfo { // 显示游戏结束结果
@@ -487,5 +495,6 @@ public class Response { // 所有后端的返回数据都由Response类接收
     public LeaderboardEntry[] leaderboard_list; // 国标段位排行榜
     public StickerInfo sticker_info; // 对局表情包广播
     public VoteInfo vote_info; // 房间对局投票暂停/结束状态同步
+    public EventListEntry[] event_list; // 当前用户可建房的 active 赛事列表
 }
 

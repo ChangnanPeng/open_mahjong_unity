@@ -334,8 +334,8 @@ public static class ScoreHistoryRecordSettlementExtractor {
 
         SimPlayer huPlayer = players[hepaiPlayerIndex];
         string rule = ResolveRecordRule(gameTitle, subRule);
-        int[] hand = RecordHuHandBuilder.BuildDisplayHandFromTick(
-            tick, rule, huPlayer.tileList, huClass, lastDiscardTileId);
+        RecordHuHandBuilder.TryParseHepaiTile(tick, rule, out int hepaiTile);
+        int[] hand = BuildScoreboardHuHand(huPlayer.tileList, huClass, hepaiTile, lastDiscardTileId);
 
         int winnerDelta = 0;
         int[] scoreChanges = ParseScoreChanges(tick, 4);
@@ -376,8 +376,8 @@ public static class ScoreHistoryRecordSettlementExtractor {
         string[] yaku = tick.Count > 5 ? ParseFanList(tick, 5) : Array.Empty<string>();
 
         SimPlayer huPlayer = players[hepaiPlayerIndex];
-        int[] hand = RecordHuHandBuilder.BuildDisplayHandFromTick(
-            tick, subRule, huPlayer.tileList, huClass, lastDiscardTileId);
+        RecordHuHandBuilder.TryParseHepaiTile(tick, subRule, out int hepaiTile);
+        int[] hand = BuildScoreboardHuHand(huPlayer.tileList, huClass, hepaiTile, lastDiscardTileId);
 
         int winnerDelta = 0;
         int[] scoreChanges = tick.Count > 6 ? ParseScoreChanges(tick, 6) : null;
@@ -430,9 +430,7 @@ public static class ScoreHistoryRecordSettlementExtractor {
 
         SimPlayer huPlayer = players[hepaiIndex];
         string huClass = string.IsNullOrEmpty(target.huClass) ? "hu_self" : target.huClass;
-        // shuhewei tick 无 hu_* 和牌张字段，铳张回退 lastDiscardTileId
-        target.hepaiPlayerHand = RecordHuHandBuilder.BuildDisplayHand(
-            huPlayer.tileList, huClass, 0, lastDiscardTileId);
+        target.hepaiPlayerHand = BuildScoreboardHuHand(huPlayer.tileList, huClass, 0, lastDiscardTileId);
         target.combinationMask = CloneMasks(huPlayer.combinationMasks);
     }
 
@@ -608,5 +606,29 @@ public static class ScoreHistoryRecordSettlementExtractor {
         if (otherIndex == 0) return "right";
         if (otherIndex == 1) return "top";
         return "left";
+    }
+
+    /// <summary>计分板：自摸原样；荣和仅追加铳张（与服务器 hand.append 一致，不删摸入张、不跳过同色追加）。</summary>
+    private static int[] BuildScoreboardHuHand(
+        IReadOnlyList<int> closedHand,
+        string huClass,
+        int hepaiTile,
+        int lastWinnableTileId) {
+        if (closedHand == null || closedHand.Count == 0) return Array.Empty<int>();
+        if (huClass == "hu_self") {
+            var self = new int[closedHand.Count];
+            for (int i = 0; i < closedHand.Count; i++) self[i] = closedHand[i];
+            return self;
+        }
+        int winTile = hepaiTile >= 10 ? hepaiTile : (lastWinnableTileId >= 10 ? lastWinnableTileId : 0);
+        if (winTile < 10) {
+            var fallback = new int[closedHand.Count];
+            for (int i = 0; i < closedHand.Count; i++) fallback[i] = closedHand[i];
+            return fallback;
+        }
+        var hand = new int[closedHand.Count + 1];
+        for (int i = 0; i < closedHand.Count; i++) hand[i] = closedHand[i];
+        hand[closedHand.Count] = winTile;
+        return hand;
     }
 }

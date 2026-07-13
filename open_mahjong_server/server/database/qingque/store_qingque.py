@@ -221,7 +221,7 @@ def store_qingque_game_stats(db_manager, game_id: str, player_list: list, room_t
         conn = db_manager._get_connection()
         cursor = conn.cursor()
         
-        rule = room_type
+        rule = "qingque"
         mode = f"{game_round}/4"
         
         stats_columns = [
@@ -304,7 +304,7 @@ def store_qingque_fan_stats(db_manager, game_id: str, player_list: list, room_ty
         conn = db_manager._get_connection()
         cursor = conn.cursor()
         
-        rule = room_type
+        rule = "qingque"
         mode = f"{game_round}/4"
         
         for player in player_list:

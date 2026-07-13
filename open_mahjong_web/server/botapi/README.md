@@ -77,6 +77,7 @@ node scripts/issue-bot-token.js my-qq-bot 86400
 | `rule` | 规则，如 `guobiao`、`riichi` |
 | `sub_rule` | 子规则 |
 | `tier` | 场次：`rank`、`custom`、`events`、`beginner`、`intermediate`、`advanced`、`mcrpl` |
+| `event_id` | 具体赛事 ID（配合 `tier=events`） |
 | `room_type` | 房间类型 |
 | `match_tier` | 匹配档位 |
 | `game_type` | 局制：`dongfeng`、`banzhuang`、`xifeng`、`quanzhuang` |

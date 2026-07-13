@@ -615,7 +615,9 @@ class ClassicalGameState:
         )
 
         has_ai_player = any(player.user_id <= 10 for player in self.player_list)
-        if not has_ai_player and game_id:
+        if self.room_type == "events":
+            logger.info(f'比赛场对局，仅保存牌谱，跳过统计数据保存，game_id: {game_id}')
+        elif not has_ai_player and game_id:
             total_rounds = len(self.game_record.get("game_round", {}))
             self.db_manager.store_classical_game_stats(
                 game_id,

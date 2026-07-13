@@ -213,7 +213,7 @@ class GuobiaoGameState:
 
         # 如果您在管理自己规则内的分支，请不要将Debug = True 的配置上传到公共代码仓库 这一项单元配置不会得到review和测试
         # debug_scenario 见 guobiao_debug.py：tactical_claim（战鸣测试）| buhua_8flowers（seat1 单花补花测试）
-        self.Debug = False
+        self.Debug = True
         self.debug_scenario = GUOBIAO_DEBUG_SCENARIO
         self.pending_kan_hand_settle_delay = False
         if self.Debug:
@@ -260,12 +260,12 @@ class GuobiaoGameState:
                 if "offline" in p.tag_list:
                     p.tag_list.remove("offline")
                     await broadcast_refresh_player_tag_list(self)
-                
+
                 # 向重连的玩家单独发送游戏开始信息
                 if user_id in self.game_server.user_id_to_connection:
                     from ...response import Response, GameInfo
                     player_conn = self.game_server.user_id_to_connection[user_id]
-                    
+
                     # 构建游戏信息
                     base_game_info = {
                         'room_id': self.room_id,
@@ -293,7 +293,7 @@ class GuobiaoGameState:
                     }
                     from ..public.game_record_manager import build_player_entry_order_fields
                     base_game_info.update(build_player_entry_order_fields(self))
-                    
+
                     # 构建玩家信息列表
                     from .combination_mask_view import get_combination_fields_for_viewer
                     reconnect_player_index = p.player_index
@@ -322,20 +322,20 @@ class GuobiaoGameState:
                             'tag_list': player.tag_list,
                         }
                         base_game_info['players_info'].append(player_info)
-                    
+
                     # 与 broadcast_game_start 保持一致：手牌通过 players_info[].hand_tiles 传递
                     game_info = GameInfo(
                         **base_game_info,
                         self_hand_tiles=None
                     )
-                    
+
                     response = Response(
                         type="gamestate/guobiao/game_start",
                         success=True,
                         message="重连成功，游戏继续",
                         game_info=game_info
                     )
-                    
+
                     await player_conn.websocket.send_json(response.dict(exclude_none=True))
                     logger.info(f"已向重连玩家 {p.username} 发送游戏状态信息")
                     await reconnected_send_pending_ask(self, user_id)
@@ -564,6 +564,11 @@ class GuobiaoGameState:
                         
                         # 正确和牌则执行end程序（判断时减去花牌数量，使用可配置的起和番限制）
                         if hu_score - huapai_count >= self.hepai_limit:
+                            # 荣和确认后才写入手牌，供局终展示/牌谱；错和路径永不污染 hand_tiles
+                            if self.hu_class in ("hu_first", "hu_second", "hu_third"):
+                                hepai_idx = self.resolve_hepai_player_index(self.hu_class)
+                                cut_tile = self.player_list[self.current_player_index].discard_tiles[-1]
+                                self.player_list[hepai_idx].hand_tiles.append(cut_tile)
                             self.game_status = "END"
                             break
                         # 错和则执行错和程序
@@ -588,9 +593,16 @@ class GuobiaoGameState:
                                 p.original_player_index: cuohe_score_changes[p.player_index]
                                 for p in self.player_list
                             }
+                            # 荣和错和：和牌张仍在河牌，显式写入 tick，避免 resolve 误取手牌末张
+                            cuohe_hepai_tile = None
+                            cuohe_display_hand = self.player_list[hepai_player_index].hand_tiles
+                            if saved_hu_class in ("hu_first", "hu_second", "hu_third"):
+                                cuohe_hepai_tile = self.player_list[self.current_player_index].discard_tiles[-1]
+                                cuohe_display_hand = list(cuohe_display_hand) + [cuohe_hepai_tile]
                             player_action_record_hu(self, hu_class=self.hu_class, hu_score=hu_score,
                                                     hu_fan=cuohe_hu_fan, hepai_player_index=hepai_player_index,
-                                                    score_changes=cuohe_score_changes)
+                                                    score_changes=cuohe_score_changes,
+                                                    hepai_tile=cuohe_hepai_tile)
                             # 错和与日麻对齐：作为计分板独立一行，记录本次罚分与所属局号(current_round)；
                             # 由于错和不推进 current_round，故本局后续真正和牌会出现同一局号的第二行。
                             for player in self.player_list:
@@ -616,7 +628,7 @@ class GuobiaoGameState:
                                                 hu_score = hu_score,
                                                 hu_fan = cuohe_hu_fan,
                                                 hu_class = self.hu_class,
-                                                hepai_player_hand = self.player_list[hepai_player_index].hand_tiles,
+                                                hepai_player_hand = cuohe_display_hand,
                                                 hepai_player_huapai = self.player_list[hepai_player_index].huapai_list,
                                                 hepai_player_combination_mask = self.player_list[hepai_player_index].combination_mask,
                                                 score_changes = cuohe_score_changes_dict,
@@ -679,7 +691,8 @@ class GuobiaoGameState:
                         self.player_list[hepai_player_index].score += hu_score * 2
                         self.player_list[self.current_player_index].score -= hu_score * 2
                     elif is_kshen:
-                        # K神规点和：12 分以下三家各付 n；12 分以上两家各付 12，放炮者付 3n-12
+                        # K神规点和（小牌点炮无责）：12 分以下三家各付 n；
+                        # 12 分以上两家各付 12，放铳者付 3n-24。自摸另分支：三家各付 n。
                         fangpao_index = self.current_player_index
                         self.player_list[hepai_player_index].score += hu_score * 3
                         if hu_score < 12:
@@ -690,7 +703,7 @@ class GuobiaoGameState:
                             for i in self.player_list:
                                 if i.player_index != hepai_player_index and i.player_index != fangpao_index:
                                     i.score -= 12
-                            self.player_list[fangpao_index].score -= hu_score * 3 - 12
+                            self.player_list[fangpao_index].score -= hu_score * 3 - 24
                     else:
                         # 标准国标荣和
                         self.player_list[hepai_player_index].score += hu_score + 24
@@ -884,6 +897,8 @@ class GuobiaoGameState:
             logger.info(f'自定义起和番限制({self.hepai_limit})，仅保存牌谱，跳过统计数据保存，game_id: {game_id}')
         elif has_ai_player:
             logger.info(f'游戏记录包含AI玩家，跳过统计数据保存，game_id: {game_id}')
+        elif self.room_type == "events":
+            logger.info(f'比赛场对局，仅保存牌谱，跳过统计数据保存，game_id: {game_id}')
         elif game_id:
             total_rounds = len(self.game_record.get("game_round", {}))
             self.db_manager.store_guobiao_game_stats(
@@ -929,7 +944,7 @@ class GuobiaoGameState:
         await run_synced_hu_ready_phase(self, fan_count, broadcast_ready_status)
 
     async def apply_cuohe_resume_after_ready(self, hepai_player_index: int, hu_class: str) -> None:
-        """错和 ready 结束后：陪打标记、撤销荣和误加入的手牌、回到本局继续打牌。"""
+        """错和 ready 结束后：陪打标记、回到本局继续打牌（荣和错和不改 hand_tiles）。"""
         self.player_list[hepai_player_index].tag_list.append("peida")
         await self.broadcast_refresh_player_tag_list()
 
@@ -938,11 +953,6 @@ class GuobiaoGameState:
             self.game_status = "waiting_hand_action"
         elif hu_class in ("hu_first", "hu_second", "hu_third"):
             cut_tile = self.player_list[self.current_player_index].discard_tiles[-1]
-            hepai_hand = self.player_list[hepai_player_index].hand_tiles
-            if hepai_hand and hepai_hand[-1] == cut_tile:
-                hepai_hand.pop()
-            elif cut_tile in hepai_hand:
-                hepai_hand.remove(cut_tile)
             self.action_dict = check_action_after_cut(self, cut_tile)
             if any(self.action_dict[i] for i in self.action_dict):
                 self.game_status = "waiting_action_after_cut"

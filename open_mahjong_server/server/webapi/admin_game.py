@@ -33,6 +33,7 @@ def _game_brief(gamestate_id: str, gs) -> Dict[str, Any]:
         "room_type": getattr(gs, "room_type", None),
         "room_rule": getattr(gs, "room_rule", None),
         "sub_rule": getattr(gs, "sub_rule", None),
+        "event_id": getattr(gs, "event_id", None),
         "game_status": getattr(gs, "game_status", None),
         "vote_phase": getattr(vm, "phase", "idle") if vm else "idle",
         "players": [_player_brief(p) for p in getattr(gs, "player_list", [])],

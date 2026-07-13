@@ -9,7 +9,7 @@ using UnityEngine.Rendering.Universal;
 public class ConfigManager : MonoBehaviour {
     public static ConfigManager Instance { get; private set; }
 
-    public static bool Debug = false;
+    public static bool Debug = true;
     
     public static string webUrl;
     public static string gameUrl;
@@ -166,10 +166,6 @@ public class ConfigManager : MonoBehaviour {
 
     private void Start() {
         ApplyCameraAntialiasingByPlatform();
-    }
-
-    public void SetUserConfig(int volume) {
-        MasterVolume = Mathf.Clamp(volume, 0, 100);
     }
 
     public void SetMasterVolume(int volume) {

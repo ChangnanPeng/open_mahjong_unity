@@ -159,7 +159,9 @@ class SpectatorManager:
                 type="spectator/record_init",
                 success=True,
                 message="观战初始数据",
-                message_info=MessageInfo(title="spectator_record", content=record_json),
+                message_info=MessageInfo(
+                    title=self.gamestate.gamestate_id, content=record_json
+                ),
             )
             await connection.websocket.send_json(init_resp.dict(exclude_none=True))
             logger.info(f"已向观战玩家 {user_id} 发送初始牌谱数据")
@@ -209,13 +211,14 @@ class SpectatorManager:
         record_json = json.dumps(final_record, ensure_ascii=False, default=str)
         msg = "游戏对局结束，已获取全部对局记录"
 
+        gid = self.gamestate.gamestate_id
         for user_id, conn in list(self.spectator_connections.items()):
             try:
                 resp = Response(
                     type="spectator/record_complete",
                     success=True,
                     message=msg,
-                    message_info=MessageInfo(title="spectator_record_final", content=record_json),
+                    message_info=MessageInfo(title=gid, content=record_json),
                 )
                 await conn.websocket.send_json(resp.dict(exclude_none=True))
             except Exception as e:
@@ -322,7 +325,9 @@ class SpectatorManager:
                             type="spectator/record_update",
                             success=True,
                             message="观战增量数据",
-                            message_info=MessageInfo(title="spectator_update", content=update_json),
+                            message_info=MessageInfo(
+                                title=self.gamestate.gamestate_id, content=update_json
+                            ),
                         )
                         conn = self.spectator_connections.get(user_id)
                         if conn:

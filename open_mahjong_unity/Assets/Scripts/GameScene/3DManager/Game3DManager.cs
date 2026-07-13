@@ -587,7 +587,10 @@ public partial class Game3DManager : MonoBehaviour {
                 yield return RecordMeldShowCardsCoroutine(PlayerPosition, actionType, combination_mask, removeDrawFirst, tileId, meldDiscarderPos, meldClaimedTile);
                 yield break;
             }
-            StartMeldPresentation(actionType, PlayerPosition, combination_mask, meldDiscarderPos, meldClaimedTile);
+            // 先等打牌者 cut 完成 RegisterLastDiscard 再回收河牌，避免队列延迟导致认牌失败。
+            // 副露动画与删手牌并行（与原 StartMeldPresentation 行为一致）。
+            yield return ReturnLastCutTileForMeldCoroutine(actionType, meldDiscarderPos, meldClaimedTile);
+            StartCoroutine(ActionAnimationCoroutine(PlayerPosition, actionType, combination_mask, true));
             bool meldCutClass = actionType == "jiagang" && cut_class;
             int meldDiscardId = actionType == "jiagang" && tileId >= 2 ? tileId : -1;
             if (IsSelfCardsPosition(panel.cardsPosition)) {

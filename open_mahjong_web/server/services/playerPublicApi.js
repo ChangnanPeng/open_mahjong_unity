@@ -12,6 +12,7 @@ const ruleConfig = {
   riichi: { historyTable: 'riichi_history_stats', fanTable: 'riichi_fan_stats' },
   qingque: { historyTable: 'qingque_history_stats', fanTable: 'qingque_fan_stats' },
   classical: { historyTable: 'classical_history_stats', fanTable: 'classical_fan_stats' },
+  changsha: { historyTable: 'changsha_history_stats', fanTable: null },
 };
 
 const HISTORY_FIELDS = new Set([
@@ -43,10 +44,16 @@ async function queryRuleStats(userId, rule) {
   const cfg = ruleConfig[rule];
   if (!cfg) return [];
 
-  const historyResult = await pool.query(
-    `SELECT * FROM ${cfg.historyTable} WHERE user_id = $1 ORDER BY rule, mode`,
-    [userId]
-  );
+  let historyResult;
+  try {
+    historyResult = await pool.query(
+      `SELECT * FROM ${cfg.historyTable} WHERE user_id = $1 ORDER BY rule, mode`,
+      [userId]
+    );
+  } catch (err) {
+    if (err && err.code === '42P01') return [];
+    throw err;
+  }
 
   let fanRows = [];
   if (cfg.fanTable) {
@@ -143,6 +150,10 @@ function buildRecordFilters(userId, query, params) {
     conditions.push(`gpr.match_tier = $${params.push(query.match_tier)}`);
   }
 
+  if (query.event_id) {
+    conditions.push(`gpr.event_id = $${params.push(String(query.event_id).trim())}`);
+  }
+
   if (query.rule) conditions.push(`gpr.rule = $${params.push(query.rule)}`);
   if (query.sub_rule) conditions.push(`gpr.sub_rule = $${params.push(query.sub_rule)}`);
   if (query.game_type) {
@@ -161,6 +172,7 @@ function buildRecordMeta(gameRecord, playersRows) {
   let subRule = null;
   let matchType = null;
   let roomType = null;
+  let eventId = null;
   try {
     const recordData = typeof gameRecord.record === 'string'
       ? JSON.parse(gameRecord.record)
@@ -170,6 +182,7 @@ function buildRecordMeta(gameRecord, playersRows) {
     subRule = title.sub_rule || null;
     matchType = title.match_type || null;
     roomType = title.room_type || null;
+    eventId = title.event_id || null;
   } catch (_) {
     // record 解析失败时回退到玩家行字段
   }
@@ -179,8 +192,15 @@ function buildRecordMeta(gameRecord, playersRows) {
     if (!subRule) subRule = sampleRow.sub_rule || null;
     if (!matchType) matchType = sampleRow.match_type || null;
     if (!roomType) roomType = sampleRow.room_type || null;
+    if (!eventId) eventId = sampleRow.event_id || null;
   }
-  return { rule, sub_rule: subRule, match_type: matchType, room_type: roomType };
+  return {
+    rule,
+    sub_rule: subRule,
+    match_type: matchType,
+    room_type: roomType,
+    event_id: eventId,
+  };
 }
 
 function parseRecordQuery(reqQuery) {
@@ -190,6 +210,7 @@ function parseRecordQuery(reqQuery) {
     room_type: reqQuery.room_type || null,
     match_tier: reqQuery.match_tier || null,
     tier: reqQuery.tier || null,
+    event_id: reqQuery.event_id || null,
     game_type: reqQuery.game_type || null,
     date_from: reqQuery.date_from || null,
     date_to: reqQuery.date_to || null,
@@ -220,12 +241,25 @@ async function fetchPlayerInfo(userId) {
   if (userSettingsResult.rows.length === 0) return null;
 
   const userSettings = userSettingsResult.rows[0];
-  const [guobiaoStats, riichiStats, qingqueStats, classicalStats] = await Promise.all([
+  const [guobiaoStats, riichiStats, qingqueStats, classicalStats, changshaStats, rankResult] = await Promise.all([
     queryRuleStats(userId, 'guobiao'),
     queryRuleStats(userId, 'riichi'),
     queryRuleStats(userId, 'qingque'),
     queryRuleStats(userId, 'classical'),
+    queryRuleStats(userId, 'changsha'),
+    pool.query(
+      'SELECT guobiao_rank, guobiao_score, updated_at FROM rank_data WHERE user_id = $1',
+      [userId]
+    ),
   ]);
+
+  const rankRow = rankResult.rows[0] || {
+    guobiao_rank: '10级',
+    guobiao_score: 0,
+    updated_at: null,
+  };
+  const guobiao_rank = rankRow.guobiao_rank;
+  const guobiao_score = parseFloat(rankRow.guobiao_score) || 0;
 
   return {
     user_id: userId,
@@ -237,10 +271,18 @@ async function fetchPlayerInfo(userId) {
       character_id: userSettings.character_id,
       voice_id: userSettings.voice_id,
     },
+    rank: {
+      guobiao_rank,
+      guobiao_score,
+      updated_at: rankRow.updated_at || null,
+      bounds: getScoreBounds(guobiao_rank),
+      progress: getPromotionProgress(guobiao_rank, guobiao_score),
+    },
     guobiao_stats: guobiaoStats,
     riichi_stats: riichiStats,
     qingque_stats: qingqueStats,
     classical_stats: classicalStats,
+    changsha_stats: changshaStats,
     fan_dict: INFO_FAN_DICT,
   };
 }
@@ -328,9 +370,23 @@ async function fetchPlayerRecords(userId, query, offset, limit) {
       match_type: meta.match_type,
       room_type: meta.room_type,
       match_tier: playersRows[0]?.match_tier || null,
-      event_id: playersRows[0]?.event_id || null,
+      event_id: meta.event_id || playersRows[0]?.event_id || null,
+      event_name: null,
       players: playersByGame.get(gameId) || [],
     });
+  }
+
+  // 批量补全赛事名称（含已关闭历史赛事）
+  const eventIds = [...new Set(items.map((it) => it.event_id).filter(Boolean))];
+  if (eventIds.length > 0) {
+    const nameRes = await pool.query(
+      `SELECT event_id, name FROM events WHERE event_id = ANY($1::varchar[])`,
+      [eventIds]
+    );
+    const nameMap = new Map(nameRes.rows.map((r) => [r.event_id, r.name]));
+    for (const it of items) {
+      if (it.event_id) it.event_name = nameMap.get(it.event_id) || null;
+    }
   }
 
   return { total, items, filters };
@@ -395,6 +451,61 @@ async function fetchPlayerRank(userId) {
   };
 }
 
+/** 公开：全部历史赛事（含已关闭），供数据查询站筛选 */
+async function listPublicEvents() {
+  const result = await pool.query(
+    `SELECT event_id, name, description, status, closed_at, created_at
+     FROM events
+     ORDER BY
+       CASE status WHEN 'active' THEN 0 WHEN 'registered' THEN 1 ELSE 2 END,
+       created_at DESC`
+  );
+  return result.rows;
+}
+
+async function fetchPublicEventDetail(eventId) {
+  const id = String(eventId || '').trim();
+  if (!id) return null;
+  const eventRes = await pool.query(
+    `SELECT event_id, name, description, status, closed_at, created_at, updated_at
+     FROM events WHERE event_id = $1`,
+    [id]
+  );
+  if (eventRes.rows.length === 0) return null;
+  const event = eventRes.rows[0];
+  const countRes = await pool.query(
+    `SELECT COUNT(DISTINCT game_id)::int AS game_count
+     FROM game_player_records
+     WHERE event_id = $1`,
+    [id]
+  );
+  const ownerRes = await pool.query(
+    `SELECT ea.user_id, u.username
+     FROM event_admins ea
+     LEFT JOIN users u ON u.user_id = ea.user_id
+     WHERE ea.event_id = $1 AND ea.role = 'owner'
+     LIMIT 1`,
+    [id]
+  );
+  const announcementsRes = await pool.query(
+    `SELECT a.announcement_id, a.title, a.body, a.created_by, a.created_at,
+            u.username AS author_username
+     FROM event_announcements a
+     LEFT JOIN users u ON u.user_id = a.created_by
+     WHERE a.event_id = $1
+     ORDER BY a.created_at DESC
+     LIMIT 50`,
+    [id]
+  );
+  return {
+    ...event,
+    game_count: countRes.rows[0]?.game_count || 0,
+    owner_user_id: ownerRes.rows[0]?.user_id || null,
+    owner_username: ownerRes.rows[0]?.username || null,
+    announcements: announcementsRes.rows,
+  };
+}
+
 module.exports = {
   LIST_PAGE_MAX,
   resolveUserId,
@@ -407,4 +518,6 @@ module.exports = {
   fetchPlayerRecords,
   fetchPlayerRankStats,
   fetchPlayerRank,
+  listPublicEvents,
+  fetchPublicEventDetail,
 };
