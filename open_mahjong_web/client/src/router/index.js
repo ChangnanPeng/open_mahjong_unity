@@ -2,7 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAdminAuthStore } from '@/stores/adminAuth'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PlayerDataLayout from '@/layouts/PlayerDataLayout.vue'
+import AccountLayout from '@/layouts/AccountLayout.vue'
 import Home from '@/views/Home.vue'
+import Login from '@/views/Login.vue'
+import Account from '@/views/Account.vue'
+import EventsList from '@/views/EventsList.vue'
+import EventDetail from '@/views/EventDetail.vue'
 import ChineseMahjong from '@/views/ChineseMahjong.vue'
 import PlayerData from '@/views/PlayerData.vue'
 import PlatformData from '@/views/PlatformData.vue'
@@ -23,6 +28,14 @@ import AdminAudit from '@/views/admin/Audit.vue'
 import AdminMessages from '@/views/admin/Messages.vue'
 import AdminIpBans from '@/views/admin/IpBans.vue'
 import AdminStats from '@/views/admin/Stats.vue'
+import AdminEvents from '@/views/admin/Events.vue'
+import AdminEventDetail from '@/views/admin/EventDetail.vue'
+import AdminEventApplications from '@/views/admin/EventApplications.vue'
+import EventAdminLayout from '@/layouts/EventAdminLayout.vue'
+import EventAdminLogin from '@/views/event-admin/Login.vue'
+import EventAdminEvents from '@/views/event-admin/Events.vue'
+import EventAdminEventDetail from '@/views/event-admin/EventDetail.vue'
+import { useEventAdminAuthStore } from '@/stores/eventAdminAuth'
 
 const routes = [
   // 含布局（顶部导航 + 底部）
@@ -35,6 +48,24 @@ const routes = [
         name: 'Home',
         component: Home,
         meta: { title: '欢迎访问 salasasa.cn' }
+      },
+      {
+        path: 'login',
+        name: 'Login',
+        component: Login,
+        meta: { title: '玩家登录 - salasasa.cn' }
+      },
+      {
+        path: 'events',
+        name: 'EventsList',
+        component: EventsList,
+        meta: { title: '比赛 - salasasa.cn' }
+      },
+      {
+        path: 'events/:eventId',
+        name: 'EventDetail',
+        component: EventDetail,
+        meta: { title: '比赛详情 - salasasa.cn' }
       },
       {
         path: 'shanten',
@@ -69,6 +100,18 @@ const routes = [
         name: 'MobileDownload',
         component: MobileDownload,
         meta: { title: '手机版下载 - salasasa.cn' }
+      }
+    ]
+  },
+  {
+    path: '/account',
+    component: AccountLayout,
+    children: [
+      {
+        path: '',
+        name: 'Account',
+        component: Account,
+        meta: { title: '账户面板 - salasasa.cn' }
       }
     ]
   },
@@ -133,6 +176,19 @@ const routes = [
         component: AdminUserDetail,
         meta: { title: '用户详情' }
       },
+      { path: 'events', name: 'AdminEvents', component: AdminEvents, meta: { title: '赛事管理' } },
+      {
+        path: 'events/:eventId',
+        name: 'AdminEventDetail',
+        component: AdminEventDetail,
+        meta: { title: '赛事详情' }
+      },
+      {
+        path: 'event-applications',
+        name: 'AdminEventApplications',
+        component: AdminEventApplications,
+        meta: { title: '办赛申请' }
+      },
       { path: 'rank', name: 'AdminRank', component: AdminRank, meta: { title: '段位管理' } },
       { path: 'games', name: 'AdminGames', component: AdminGames, meta: { title: '对局记录管理' } },
       { path: 'game-control', name: 'AdminGameControl', component: AdminGameControl, meta: { title: '对局管理' } },
@@ -140,6 +196,31 @@ const routes = [
       { path: 'messages', name: 'AdminMessages', component: AdminMessages, meta: { title: '消息推送' } },
       { path: 'ip-bans', name: 'AdminIpBans', component: AdminIpBans, meta: { title: 'IP 封禁' } },
       { path: 'stats', name: 'AdminStats', component: AdminStats, meta: { title: '全站统计' } }
+    ]
+  },
+  {
+    path: '/event-admin/login',
+    name: 'EventAdminLogin',
+    component: EventAdminLogin,
+    meta: { title: '比赛管理后台登录', publicEventAdmin: true }
+  },
+  {
+    path: '/event-admin',
+    component: EventAdminLayout,
+    meta: { requiresEventAdmin: true },
+    children: [
+      {
+        path: '',
+        name: 'EventAdminEvents',
+        component: EventAdminEvents,
+        meta: { title: '我的赛事' }
+      },
+      {
+        path: 'events/:eventId',
+        name: 'EventAdminEventDetail',
+        component: EventAdminEventDetail,
+        meta: { title: '赛事管理' }
+      }
     ]
   }
 ]
@@ -158,11 +239,35 @@ router.beforeEach(async (to, from, next) => {
     const auth = useAdminAuthStore()
     if (to.meta.publicAdmin) {
       if (!auth.loaded) await auth.fetchMe()
-      if (auth.isLoggedIn) return next('/admin')
+      if (auth.isLoggedIn) return next({ path: '/admin', replace: true })
       return next()
     }
     if (!auth.loaded) await auth.fetchMe()
-    if (!auth.isLoggedIn) return next({ path: '/admin/login', query: { redirect: to.fullPath } })
+    if (!auth.isLoggedIn) {
+      const redirect =
+        to.path === '/admin/login' || to.fullPath.startsWith('/admin/login')
+          ? '/admin'
+          : to.fullPath
+      return next({ path: '/admin/login', query: { redirect }, replace: true })
+    }
+    return next()
+  }
+
+  // 取消独立赛事后台入口：列表/登录并入账户页；保留赛事详情管理路由
+  if (to.path === '/event-admin' || to.path === '/event-admin/' || to.path === '/event-admin/login') {
+    return next({ path: '/account', hash: '#sec-manage' })
+  }
+
+  if (to.path.startsWith('/event-admin')) {
+    const auth = useEventAdminAuthStore()
+    if (!auth.loaded) await auth.fetchMe()
+    if (!auth.isLoggedIn) {
+      return next({
+        path: '/login',
+        query: { redirect: to.fullPath },
+      })
+    }
+    return next()
   }
 
   next()

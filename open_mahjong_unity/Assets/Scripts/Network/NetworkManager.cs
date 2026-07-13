@@ -491,9 +491,6 @@ public class NetworkManager : MonoBehaviour {
                     response.user_settings.voice_id
                 );
             }
-            if (response.user_config != null) {
-                ConfigManager.Instance.SetUserConfig(response.user_config.volume);
-            }
             if (response.rank_data != null) {
                 UserDataManager.Instance.SetRankData(
                     response.rank_data.guobiao_rank,
@@ -504,6 +501,7 @@ public class NetworkManager : MonoBehaviour {
             }
             UserContainer.Instance.ShowUserSettings(response.user_settings);
             FriendNetworkManager.Instance?.ListFriends();
+            EventNetworkManager.Instance?.ListMyActiveEvents();
         }
     }
 
@@ -535,6 +533,12 @@ public class NetworkManager : MonoBehaviour {
                 return;
             }
 
+            // 赛事相关消息统一交由 EventNetworkManager 处理
+            if (response.type != null && response.type.StartsWith("event/")) {
+                EventNetworkManager.Instance?.HandleEventMessage(response);
+                return;
+            }
+
             switch (response.type){
                 case "login":
                     HandleLoginResponse(response);
@@ -550,6 +554,8 @@ public class NetworkManager : MonoBehaviour {
                     break;
                 case "error_message":
                     Debug.Log($"错误消息: {response.message}");
+                    // 加入/创建失败时取消待进入，避免滞后 refresh_room_info 错误跳进房间页
+                    RoomNetworkManager.Instance?.CancelPendingRoomEntry();
                     ErrorResponse.Invoke(response.success, response.message);
                     NotificationManager.Instance.ShowTip("error_message",false,response.message);
                     break;
@@ -719,6 +725,10 @@ public class NetworkManager : MonoBehaviour {
             GameRecordManager.Instance?.ClearDelayedSpectatorSession();
             return;
         }
+        if (!AcceptDelayedSpectatorPayload(response)) {
+            Debug.Log("忽略非当前会话的延时观战 record_init");
+            return;
+        }
         string recordJson = response.message_info?.content;
         if (string.IsNullOrEmpty(recordJson)) {
             Debug.LogError("观战初始数据为空");
@@ -753,7 +763,7 @@ public class NetworkManager : MonoBehaviour {
     }
 
     private void HandleSpectatorRecordUpdate(Response response) {
-        if (!response.success) return;
+        if (!response.success || !AcceptDelayedSpectatorPayload(response)) return;
         string updatesJson = response.message_info?.content;
         if (string.IsNullOrEmpty(updatesJson)) return;
         GameRecordManager.Instance?.AppendSpectatorTicks(updatesJson);
@@ -761,8 +771,8 @@ public class NetworkManager : MonoBehaviour {
 
     private void HandleSpectatorRecordComplete(Response response) {
         if (GameRecordManager.Instance == null) return;
-        if (!GameRecordManager.Instance.IsSpectating) {
-            Debug.Log("忽略迟到的延时观战 record_complete（已退出延时观战）");
+        if (!GameRecordManager.Instance.IsSpectating || !AcceptDelayedSpectatorPayload(response)) {
+            Debug.Log("忽略迟到/非本场的延时观战 record_complete");
             return;
         }
 
@@ -794,10 +804,16 @@ public class NetworkManager : MonoBehaviour {
 
     private void HandleSpectatorRemoveResult(Response response) {
         Debug.Log($"观战移除: {response.message}");
+        // 客户端退出时已 StopSpectating；迟到的上一场 remove 回包不得踢掉当前观战
+        if (GameRecordManager.Instance != null && GameRecordManager.Instance.IsSpectating) return;
         GameRecordManager.Instance?.ClearDelayedSpectatorSession();
-        if (GameRecordManager.Instance != null && GameRecordManager.Instance.IsSpectating) {
-            PostGameNavigator.ExitToSpectator();
-        }
+    }
+
+    /// <summary>message_info.title 必须为当前延时观战的 gamestate_id。</summary>
+    private static bool AcceptDelayedSpectatorPayload(Response response) {
+        var grm = GameRecordManager.Instance;
+        if (grm == null) return false;
+        return grm.IsCurrentDelayedSpectator(response.message_info?.title);
     }
 
     /// <summary>

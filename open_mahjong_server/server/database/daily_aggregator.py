@@ -20,6 +20,14 @@ DEFAULT_RESTORE_SINCE = date(2026, 6, 6)
 MATCH_TIERS = ("beginner", "intermediate", "advanced", "mcrpl")
 MATCH_TIER_SQL = ", ".join(f"'{t}'" for t in MATCH_TIERS)
 DAU_METRIC_BACKFILL_META_KEY = "daily_stats_dau_v1"
+QINGQUE_CLASSICAL_RULE_FIX_META_KEY = "fix_qingque_classical_history_rule_v1"
+
+_HISTORY_STAT_SUM_COLUMNS = [
+    "total_games", "total_rounds", "win_count", "self_draw_count", "deal_in_count",
+    "total_fan_score", "total_win_turn", "total_fangchong_score",
+    "first_place_count", "second_place_count", "third_place_count", "fourth_place_count",
+    "fulu_round_count",
+]
 
 _SCENE_METRIC_COLUMNS = [
     "total_games", "total_rounds", "win_count", "self_draw_count", "deal_in_count",
@@ -198,6 +206,94 @@ def run_daily_aggregation(db_manager, stat_date: date, max_online: int = None) -
     aggregate_scene_daily_stats(db_manager, stat_date)
 
 
+def _fix_history_rule_column(db_manager, table: str, correct_rule: str) -> int:
+    """将 history/fan 表中误写为 custom 的 rule 合并/更正为正确规则名。返回影响行数。"""
+    conn = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s",
+            (table,),
+        )
+        if cursor.fetchone() is None:
+            return 0
+
+        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name=%s", (table,))
+        columns = {r[0] for r in cursor.fetchall()}
+        sum_cols = [c for c in _HISTORY_STAT_SUM_COLUMNS if c in columns]
+        # fan 表：除主键与时间戳外全部累加
+        if not sum_cols:
+            skip = {"user_id", "rule", "mode", "created_at", "updated_at"}
+            sum_cols = sorted(c for c in columns if c not in skip)
+
+        cursor.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE rule = 'custom'"
+        )
+        bad_count = int(cursor.fetchone()[0] or 0)
+        if bad_count == 0:
+            return 0
+
+        if sum_cols:
+            set_clause = ", ".join(f"{c} = t.{c} + b.{c}" for c in sum_cols)
+            cursor.execute(f"""
+                UPDATE {table} AS t
+                SET {set_clause},
+                    updated_at = CURRENT_TIMESTAMP
+                FROM {table} AS b
+                WHERE b.rule = 'custom'
+                  AND t.rule = %s
+                  AND t.user_id = b.user_id
+                  AND t.mode = b.mode
+            """, (correct_rule,))
+
+            cursor.execute(f"""
+                DELETE FROM {table} AS b
+                WHERE b.rule = 'custom'
+                  AND EXISTS (
+                    SELECT 1 FROM {table} AS t
+                    WHERE t.rule = %s AND t.user_id = b.user_id AND t.mode = b.mode
+                  )
+            """, (correct_rule,))
+
+        cursor.execute(
+            f"UPDATE {table} SET rule = %s, updated_at = CURRENT_TIMESTAMP WHERE rule = 'custom'",
+            (correct_rule,),
+        )
+        conn.commit()
+        logger.info("已修正 %s 中 rule=custom → %s（原错误行约 %d）", table, correct_rule, bad_count)
+        return bad_count
+    except Exception as e:
+        logger.error("修正 %s rule 失败: %s", table, e, exc_info=True)
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            cursor.close()
+            db_manager._put_connection(conn)
+
+
+def run_qingque_classical_rule_fix_once(db_manager) -> None:
+    """一次性：青雀/古典 history、fan 表误写 rule=custom 的数据修正（生产启动可挂载）。"""
+    if _is_meta_done(db_manager, QINGQUE_CLASSICAL_RULE_FIX_META_KEY):
+        return
+    pairs = [
+        ("qingque_history_stats", "qingque"),
+        ("qingque_fan_stats", "qingque"),
+        ("classical_history_stats", "classical"),
+        ("classical_fan_stats", "classical"),
+    ]
+    total = 0
+    try:
+        for table, rule in pairs:
+            total += _fix_history_rule_column(db_manager, table, rule)
+        _mark_meta_done(db_manager, QINGQUE_CLASSICAL_RULE_FIX_META_KEY)
+        logger.info("青雀/古典 rule 修正完成，累计处理错误行约 %d", total)
+    except Exception as e:
+        logger.error("青雀/古典 rule 修正中断，下次启动将重试: %s", e, exc_info=True)
+
+
 def run_dau_metric_backfill_once(db_manager) -> None:
     """一次性：为已有统计日重算日活与修正后的活跃用户（含游客对局）。"""
     if _is_meta_done(db_manager, DAU_METRIC_BACKFILL_META_KEY):
@@ -301,13 +397,18 @@ def run_startup_stats_restore(
     since_date: date = DEFAULT_RESTORE_SINCE,
     date_to: Optional[date] = None,
 ) -> None:
-    """启动维护：增量回填未写入的 metrics，再补齐未聚合的统计日。"""
+    """启动维护：修正历史脏数据、增量回填 metrics，再补齐未聚合的统计日。"""
     if date_to is None:
         date_to = current_stat_date()
 
     if date_to < since_date:
         logger.info("统计维护跳过：结束日 %s 早于起始日 %s", date_to, since_date)
         return
+
+    try:
+        run_qingque_classical_rule_fix_once(db_manager)
+    except Exception as e:
+        logger.warning("青雀/古典 rule 启动修正失败: %s", e)
 
     from .backfill_game_player_metrics import backfill_missing_game_player_metrics
 

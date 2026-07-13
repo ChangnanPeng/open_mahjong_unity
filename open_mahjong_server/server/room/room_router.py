@@ -117,6 +117,7 @@ async def handle_create_GB_room(game_server, Connect_id: str, message: dict, web
         message.get("tactical_call", False),
         message.get("claim_protection", True),
         message.get("cuohe_type", 0),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
@@ -145,6 +146,7 @@ async def handle_create_Qingque_room(game_server, Connect_id: str, message: dict
         message.get("allow_spectator", True),
         message.get("tactical_call", False),
         message.get("claim_protection", True),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
@@ -180,6 +182,7 @@ async def handle_create_Changsha_room(game_server, Connect_id: str, message: dic
         message.get("initial_hu_san_tong", True),
         message.get("bird_count", 2),
         message.get("dealer_bird", True),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
@@ -205,6 +208,7 @@ async def handle_create_Classical_room(game_server, Connect_id: str, message: di
         message.get("sub_rule", "classical/standard"),
         message.get("tourist_limit", False),
         message.get("allow_spectator", True),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
@@ -233,6 +237,7 @@ async def handle_create_Sichuan_room(game_server, Connect_id: str, message: dict
         message.get("tactical_call", False),
         message.get("blood_battle", True),
         message.get("claim_protection", True),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 
@@ -265,6 +270,7 @@ async def handle_create_Riichi_room(game_server, Connect_id: str, message: dict,
         message.get("hepai_way", "multi_ron"),
         message.get("tourist_limit", False),
         message.get("allow_spectator", True),
+        message.get("event_id"),
     )
     await websocket.send_json(response.dict(exclude_none=True))
 

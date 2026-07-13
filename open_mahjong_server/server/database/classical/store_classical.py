@@ -135,7 +135,7 @@ def store_classical_game_stats(db_manager, game_id: str, player_list: list, room
         conn = db_manager._get_connection()
         cursor = conn.cursor()
 
-        rule = room_type
+        rule = "classical"
         mode = f"{game_round}/4"
 
         stats_columns = [
@@ -218,7 +218,7 @@ def store_classical_fan_stats(db_manager, game_id: str, player_list: list, room_
         conn = db_manager._get_connection()
         cursor = conn.cursor()
 
-        rule = room_type
+        rule = "classical"
         mode = f"{game_round}/4"
 
         for player in player_list:

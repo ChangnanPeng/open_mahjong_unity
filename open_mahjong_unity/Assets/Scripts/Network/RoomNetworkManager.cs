@@ -10,6 +10,12 @@ using Newtonsoft.Json;
 public class RoomNetworkManager : MonoBehaviour {
     
     public static RoomNetworkManager Instance { get; private set; }
+
+    /// <summary>
+    /// 待进入的房间 ID。JoinRoom 设为具体 roomId；SyncMyRoom 设为 "*" 表示接受任意权威同步。
+    /// 为空表示未请求进入，大厅中收到的滞后 refresh_room_info 应忽略，避免错误跳进房间页。
+    /// </summary>
+    private string _pendingEnterRoomId;
     
     private void Awake() {
         if (Instance != null && Instance != this) {
@@ -75,25 +81,56 @@ public class RoomNetworkManager : MonoBehaviour {
     }
     
     /// <summary>
-    /// 处理获取房间信息响应
+    /// 处理获取房间信息响应。
+    /// 仅在「当前用户确实在房间内」且「已在房间页 / 正在请求进入 / 重连同步」时应用，
+    /// 避免退出房间后滞后的 refresh_room_info 把用户错误带回房间页。
     /// </summary>
     private void HandleGetRoomInfoResponse(Response response) {
         Debug.Log("处理房间信息更新");
-        if (ShouldNavigateToRoomOnRefresh()) {
+        if (!response.success || response.room_info == null) {
+            Debug.LogWarning($"忽略无效的 refresh_room_info: success={response.success}");
+            return;
+        }
+
+        int myId = UserDataManager.Instance.UserId;
+        int[] playerList = response.room_info.player_list;
+        bool iAmInRoom = playerList != null && Array.IndexOf(playerList, myId) >= 0;
+        if (!iAmInRoom) {
+            Debug.Log("忽略 refresh_room_info：当前用户不在 player_list 中");
+            return;
+        }
+
+        string roomId = response.room_info.room_id;
+        string currentWindow = WindowsManager.Instance != null
+            ? WindowsManager.Instance.GetCurrentWindow()
+            : null;
+        bool onRoomPage = currentWindow == "room";
+        bool pendingOk = _pendingEnterRoomId == "*"
+            || (!string.IsNullOrEmpty(_pendingEnterRoomId) && _pendingEnterRoomId == roomId);
+        bool reconnectLobbySync = AutoReconnect.IsActive && !AutoReconnect.ExpectGameRestore;
+
+        if (!onRoomPage && !pendingOk && !reconnectLobbySync) {
+            Debug.Log("忽略 refresh_room_info：未处于房间页且无匹配的待进入请求");
+            return;
+        }
+
+        if (ShouldNavigateToRoomOnRefresh(roomId)) {
             WindowsManager.Instance.SwitchWindow("room");
             RoomWindowsManager.Instance.SwitchRoomWindow("roomInfo");
         }
+        ClearPendingRoomEntry();
         RoomPanel.Instance.GetRoomInfoResponse(
             response.success, 
             response.message, 
             response.room_info
         );
-        UserDataManager.Instance.SetRoomId(response.room_info.room_id);
+        UserDataManager.Instance.SetRoomId(roomId);
         AutoReconnect.OnRoomSyncDone();
     }
 
     private void HandleSyncNotInRoomResponse(Response response) {
         Debug.Log($"房间同步: {response.message}");
+        ClearPendingRoomEntry();
         if (AutoReconnect.IsActive && AutoReconnect.ExpectGameRestore) {
             ClearStaleLobbyState();
         } else {
@@ -102,12 +139,31 @@ public class RoomNetworkManager : MonoBehaviour {
         AutoReconnect.OnRoomSyncDone();
     }
 
-    private static bool ShouldNavigateToRoomOnRefresh() {
+    private bool ShouldNavigateToRoomOnRefresh(string roomId) {
         if (AutoReconnect.IsActive && AutoReconnect.ExpectGameRestore) return false;
         if (WindowsManager.Instance != null && WindowsManager.Instance.GetCurrentWindow() == "game") {
             return false;
         }
-        return true;
+        string current = WindowsManager.Instance != null
+            ? WindowsManager.Instance.GetCurrentWindow()
+            : null;
+        if (current == "room") return true;
+        if (_pendingEnterRoomId == "*") return true;
+        if (!string.IsNullOrEmpty(_pendingEnterRoomId) && _pendingEnterRoomId == roomId) return true;
+        if (AutoReconnect.IsActive && !AutoReconnect.ExpectGameRestore) return true;
+        return false;
+    }
+
+    /// <summary>加入/创建失败（error_message）时取消待进入状态，避免后续滞后广播误跳转。</summary>
+    public void CancelPendingRoomEntry() {
+        if (!string.IsNullOrEmpty(_pendingEnterRoomId)) {
+            Debug.Log($"取消待进入房间: {_pendingEnterRoomId}");
+        }
+        ClearPendingRoomEntry();
+    }
+
+    private void ClearPendingRoomEntry() {
+        _pendingEnterRoomId = null;
     }
     
     /// <summary>
@@ -115,8 +171,17 @@ public class RoomNetworkManager : MonoBehaviour {
     /// </summary>
     private void HandleJoinRoomResponse(Response response) {
         Debug.Log($"加入房间响应: {response.success}, {response.message}");
-        NotificationManager.Instance.ShowTip("join_room", true, "加入房间成功");
-        // 房间信息服务器从get_room_info中发送过来
+        if (response.success) {
+            NotificationManager.Instance.ShowTip("join_room", true, "加入房间成功");
+            // 房间信息由随后的 refresh_room_info 下发并跳转
+        } else {
+            ClearPendingRoomEntry();
+            NotificationManager.Instance.ShowTip(
+                "join_room",
+                false,
+                string.IsNullOrEmpty(response.message) ? "加入房间失败" : response.message
+            );
+        }
     }
     
     /// <summary>
@@ -133,9 +198,12 @@ public class RoomNetworkManager : MonoBehaviour {
     /// 离开/解散房间后重置客户端房间状态与 UI。
     /// </summary>
     public void ApplyLeftRoomState(bool silent = false) {
+        ClearPendingRoomEntry();
         ClearStaleLobbyState();
         WindowsManager.Instance?.OnLeftRoom();
         RoomWindowsManager.Instance?.SwitchRoomWindow("createRoom");
+        // 立即刷新列表，避免依赖 5 秒轮询导致基于过期人数误点加入
+        GetRoomList(showTipOnSuccess: false);
         if (!silent) {
             NotificationManager.Instance.ShowTip("leave_room", true, "离开房间成功");
         }
@@ -190,7 +258,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 hepai_limit = config.HepaiLimit,
                 tourist_limit = config.TouristLimit,
                 allow_spectator = config.AllowSpectator,
-                tactical_call = config.TacticalCall
+                tactical_call = config.TacticalCall,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建房间消息: {config.RoomName}, {config.GameRound}, {config.Password}, {config.SubRule}, {config.RoundTimer}, {config.StepTimer}, {config.Tips}, RandomSeed: {randomSeed}, CuoHe: {config.CuoHe}, CuoheType: {config.CuoheType}, HepaiLimit: {config.HepaiLimit}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -225,7 +294,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 hepai_limit = 1,
                 tourist_limit = config.TouristLimit,
                 allow_spectator = config.AllowSpectator,
-                tactical_call = config.TacticalCall
+                tactical_call = config.TacticalCall,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建青雀房间消息: {config.RoomName}, {config.GameRound}, {config.Password}, {config.SubRule}, {config.RoundTimer}, {config.StepTimer}, {config.Tips}, RandomSeed: {randomSeed}, TouristLimit: {config.TouristLimit}, AllowSpectator: {config.AllowSpectator}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -259,7 +329,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 open_cuohe = false,
                 hepai_limit = 1,
                 tourist_limit = config.TouristLimit,
-                allow_spectator = config.AllowSpectator
+                allow_spectator = config.AllowSpectator,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建古典麻将房间消息: {config.RoomName}, {config.GameRound}, {config.SubRule}, {config.RoundTimer}, {config.StepTimer}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -293,7 +364,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 tourist_limit = config.TouristLimit,
                 allow_spectator = config.AllowSpectator,
                 tactical_call = config.TacticalCall,
-                blood_battle = config.BloodBattle
+                blood_battle = config.BloodBattle,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建四川麻将房间消息: {config.RoomName}, {config.GameRound}, {config.SubRule}, blood_battle={config.BloodBattle}, tactical_call={config.TacticalCall}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -334,7 +406,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 initial_hu_liu_liu_shun = config.InitialHuLiuLiuShun,
                 initial_hu_san_tong = config.InitialHuSanTong,
                 bird_count = config.BirdCount,
-                dealer_bird = config.DealerBird
+                dealer_bird = config.DealerBird,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建长沙麻将房间消息: {config.RoomName}, {config.GameRound}, {config.SubRule}, open_kong={config.OpenKongReplacementCount}, bird_count={config.BirdCount}, dealer_bird={config.DealerBird}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -373,7 +446,8 @@ public class RoomNetworkManager : MonoBehaviour {
                 open_tobi = config.OpenTobi,
                 hepai_way = config.HepaiWay ?? "head_bump",
                 tourist_limit = config.TouristLimit,
-                allow_spectator = config.AllowSpectator
+                allow_spectator = config.AllowSpectator,
+                event_id = string.IsNullOrEmpty(config.EventId) ? null : config.EventId
             };
             Debug.Log($"发送创建立直麻将房间消息: {config.RoomName}, {config.GameRound}, {config.SubRule}, cuohe={config.CuoHe}, hepai_limit={config.HepaiLimit}, red_dora={config.RedDora}, allow_kuikae={config.AllowKuikae}, open_xiru={config.OpenXiru}, open_tobi={config.OpenTobi}, hepai_way={config.HepaiWay}");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
@@ -402,10 +476,13 @@ public class RoomNetworkManager : MonoBehaviour {
     /// <summary>重连后向服务端查询当前玩家是否在房间内，并同步 RoomPanel。</summary>
     public async void SyncMyRoom() {
         try {
+            // 重连同步：接受随后任意权威 refresh_room_info
+            _pendingEnterRoomId = "*";
             var request = new SyncMyRoomRequest { type = "room/sync_my_room" };
             Debug.Log("发送房间同步请求");
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
+            ClearPendingRoomEntry();
             Debug.LogError($"发送房间同步请求失败: {e.Message}");
             AutoReconnect.OnRoomSyncDone();
         }
@@ -416,19 +493,35 @@ public class RoomNetworkManager : MonoBehaviour {
     /// </summary>
     public async void JoinRoom(string roomId, string password) {
         if (BlockRoomEntryRequest()) return;
+        if (LobbyStateGuard.IsInRoom) {
+            NotificationManager.Instance.ShowTip("join_room", false, "请先退出当前房间");
+            return;
+        }
+        _pendingEnterRoomId = roomId;
         var request = new JoinRoomRequest {
             type = "room/join_room",
             room_id = roomId,
             password = password
         };
         Debug.Log($"发送加入房间消息: {roomId}, {password}");
-        await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        try {
+            await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
+        } catch (Exception e) {
+            ClearPendingRoomEntry();
+            Debug.LogError($"发送加入房间消息失败: {e.Message}");
+            NotificationManager.Instance.ShowTip("join_room", false, "加入房间失败");
+        }
     }
     
     /// <summary>
     /// 离开房间
     /// </summary>
     public async void LeaveRoom(string roomId) {
+        ClearPendingRoomEntry();
+        // 先清本地房间 ID，避免离开完成前的滞后 refresh 或误点加入把用户带回房间页
+        if (!string.IsNullOrEmpty(roomId) && roomId != UserDataManager.ROOM_ID_NONE) {
+            UserDataManager.Instance.SetRoomId("");
+        }
         var request = new LeaveRoomRequest {
             type = "room/leave_room",
             room_id = roomId

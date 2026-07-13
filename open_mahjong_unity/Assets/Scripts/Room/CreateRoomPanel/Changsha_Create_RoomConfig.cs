@@ -21,6 +21,7 @@ public class Changsha_Create_RoomConfig {
     public bool InitialHuSanTong { get; set; } = true;
     public int BirdCount { get; set; } = 2;
     public bool DealerBird { get; set; } = true;
+    public string EventId { get; set; }
 
     public bool Validate(out string error, bool passwordToggle, bool setRandomSeedToggle) {
         if (string.IsNullOrEmpty(RoomName)) {

@@ -83,6 +83,18 @@ def _is_valid_cut_action(self, player_index: int, action_data: dict) -> bool:
     return True
 
 
+def _ron_eligible_indexes_from_action_dict(action_dict) -> list[int]:
+    """从 action_dict 提取本巡可荣和/抢杠和的座位。
+
+    必须在等待循环清空各家 action_dict 之前快照：玩家 pass 后自身列表已空，
+    若事后再扫会漏掉立直振听/同巡振听。
+    """
+    return [
+        pi for pi, acts in action_dict.items()
+        if any(a in RON_HU_ACTIONS for a in acts)
+    ]
+
+
 async def wait_action(self):
     self.waiting_players_list = []
     self._pending_ron_claims = {}
@@ -120,6 +132,11 @@ async def wait_action(self):
             clear_draw_slot(cur_player)
             await _execute_cut(self, cur, forced_tile, is_moqie, None, is_riichi=False, already_removed=True)
             return
+
+    # 切牌后/抢杠询问：在等待循环清空 action_dict 前快照可荣和座位，供放过振听使用。
+    ron_eligible_snapshot: list[int] = []
+    if self.game_status in ("waiting_action_after_cut", "waiting_action_qianggang"):
+        ron_eligible_snapshot = _ron_eligible_indexes_from_action_dict(self.action_dict)
 
     for player_index, action_list in self.action_dict.items():
         if action_list:
@@ -299,11 +316,8 @@ async def wait_action(self):
             tile_id = self.player_list[self.current_player_index].discard_tiles[-1]
             combination_mask = []
             combination_target = ""
-            # 记录本巡有荣和机会的玩家：若最终未荣和，则进入同巡振听（立直家额外锁立直振听）
-            ron_eligible_indexes = [
-                pi for pi, acts in self.action_dict.items()
-                if any(a in ("hu_first", "hu_second", "hu_third") for a in acts)
-            ]
+            # 使用等待开始时的快照：等待循环会清空已响应玩家的 action_dict，事后再扫会漏挂振听
+            ron_eligible_indexes = list(ron_eligible_snapshot)
             if self._pending_ron_claims:
                 if await resolve_collected_rons(self, tile_id, ron_eligible_indexes):
                     return
@@ -473,10 +487,8 @@ async def wait_action(self):
 
         case "waiting_action_qianggang":
             # 抢杠和：放过抢杠机会的玩家与放过荣和同等处理——同巡振听；立直家则永久振听到本局结束
-            chankan_eligible_indexes = [
-                pi for pi, acts in self.action_dict.items()
-                if any(a in ("hu_first", "hu_second", "hu_third") for a in acts)
-            ]
+            # 同样使用等待开始时的快照，避免 pass 后 action_dict 已空导致漏挂振听
+            chankan_eligible_indexes = list(ron_eligible_snapshot)
             temp_jiagang_tile = self.jiagang_tile
             self.jiagang_tile = None
             if self._pending_ron_claims:

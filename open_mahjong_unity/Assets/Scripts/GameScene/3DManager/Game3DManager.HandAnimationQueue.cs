@@ -223,16 +223,18 @@ public partial class Game3DManager {
     }
 
     /// <summary>
-    /// 吃碰明杠等：仅回收 RegisterLastDiscard 登记的河牌切子（加杠/暗杠除外）。
-    /// 认不到登记对象则打 Warning 并放弃，不扫描河牌末张。
+    /// 打牌者 cut 若仍卡在手牌动画队列，RegisterLastDiscard 会晚于紧随的 peng。
+    /// 鸣牌回收最多等这么久，避免逻辑河已删、3D 河牌残留。
     /// </summary>
-    private void TryReturnLastCutTileForMeld(string actionType, string discarderPosOverride = null, int claimedTileOverride = 0) {
-        if (actionType == "jiagang" || actionType == "angang") {
-            return;
-        }
-        string discarderPos = discarderPosOverride;
-        int claimedTile = claimedTileOverride;
+    private const float MeldRiverRegisterWaitSec = 2f;
 
+    private void ResolveMeldDiscarderAndTile(
+        string discarderPosOverride,
+        int claimedTileOverride,
+        out string discarderPos,
+        out int claimedTile) {
+        discarderPos = discarderPosOverride;
+        claimedTile = claimedTileOverride;
         if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
             discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
             if (string.IsNullOrEmpty(discarderPos)) {
@@ -241,15 +243,51 @@ public partial class Game3DManager {
             if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
             if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
         }
+    }
+
+    /// <summary>
+    /// 吃碰明杠：回收 RegisterLastDiscard 登记的河牌切子（加杠/暗杠除外）。
+    /// 若 cut 仍在打牌者手牌队列中尚未登记，则等待登记完成后再回收；超时仍认不到则 Warning 放弃。
+    /// </summary>
+    private IEnumerator ReturnLastCutTileForMeldCoroutine(
+        string actionType,
+        string discarderPosOverride = null,
+        int claimedTileOverride = 0) {
+        if (actionType == "jiagang" || actionType == "angang") {
+            yield break;
+        }
+
+        ResolveMeldDiscarderAndTile(
+            discarderPosOverride, claimedTileOverride, out string discarderPos, out int claimedTile);
 
         GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
+        float elapsed = 0f;
+        int idleFrames = 0;
+        while (obj == null && elapsed < MeldRiverRegisterWaitSec) {
+            // 打牌者仍有手牌队列工作时，cut 的 Discard 可能尚未跑到 Register。
+            bool pendingCut = !string.IsNullOrEmpty(discarderPos) && HasPendingHandAnimWork(discarderPos);
+            if (!pendingCut) {
+                idleFrames++;
+                // 无待办且已空等过一帧：直路径 cut 早应登记完，属真失败，不再空耗。
+                if (idleFrames > 1) {
+                    break;
+                }
+            } else {
+                idleFrames = 0;
+            }
+            yield return null;
+            elapsed += Time.unscaledDeltaTime;
+            obj = ResolveLastDiscardObject(discarderPos, claimedTile);
+        }
+
         if (obj == null) {
             int regTile = !string.IsNullOrEmpty(discarderPos)
                 && _lastDiscardTileIdByPlayer.TryGetValue(discarderPos, out int t) ? t : 0;
             Debug.LogWarning(
-                $"TryReturnLastCutTileForMeld: 未认到登记弃牌，放弃河牌回收 action={actionType}, "
-                + $"discarder={discarderPos}, claimed={claimedTile}, regTile={regTile}");
-            return;
+                $"ReturnLastCutTileForMeld: 未认到登记弃牌，放弃河牌回收 action={actionType}, "
+                + $"discarder={discarderPos}, claimed={claimedTile}, regTile={regTile}, "
+                + $"waited={elapsed:F2}s, pending={(!string.IsNullOrEmpty(discarderPos) && HasPendingHandAnimWork(discarderPos))}");
+            yield break;
         }
 
         // 停掉该打牌者的飞牌协程并清登记，避免被认走的牌仍在飞行/落到河里或被重复认走。
@@ -262,8 +300,17 @@ public partial class Game3DManager {
 
     /// <summary>吃碰明杠等：回收河牌切子并启动副露动画（不进入暗杠手牌队列）。</summary>
     private void StartMeldPresentation(string actionType, string playerPosition, int[] combinationMask, string discarderPosOverride = null, int claimedTileOverride = 0) {
-        TryReturnLastCutTileForMeld(actionType, discarderPosOverride, claimedTileOverride);
-        StartCoroutine(ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true));
+        StartCoroutine(MeldPresentationCoroutine(actionType, playerPosition, combinationMask, discarderPosOverride, claimedTileOverride));
+    }
+
+    private IEnumerator MeldPresentationCoroutine(
+        string actionType,
+        string playerPosition,
+        int[] combinationMask,
+        string discarderPosOverride,
+        int claimedTileOverride) {
+        yield return ReturnLastCutTileForMeldCoroutine(actionType, discarderPosOverride, claimedTileOverride);
+        yield return ActionAnimationCoroutine(playerPosition, actionType, combinationMask, true);
     }
 
     private IEnumerator RecordDiscardShowCardsCoroutine(string playerPosition, int tileId, bool fromDrawSlot, bool isRiichi) {
@@ -300,7 +347,7 @@ public partial class Game3DManager {
         PosPanel3D panel = GetPosPanel(playerPosition);
         // 透传 discarder+tile：回放路径不写 currentMeldDiscarderPos/lastDiscardPlayerPosition，
         // 必须显式传入才能正确认走「该家最新弃牌」并停掉其飞牌协程，避免被鸣牌仍落到河里。
-        TryReturnLastCutTileForMeld(actionType, discarderPos, claimedTile);
+        yield return ReturnLastCutTileForMeldCoroutine(actionType, discarderPos, claimedTile);
         if (removeDrawSlotFirst) {
             yield return RemoveRecordShowHandCardCoroutine(panel.ShowCardsPosition, drawSlotTileId, fromDrawSlot: true, playerPosition);
             ClearRecordPlayerDrawSlotState(playerPosition);

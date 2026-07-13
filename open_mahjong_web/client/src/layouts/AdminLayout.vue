@@ -5,6 +5,8 @@
       <el-menu :default-active="activeMenu" router class="admin-menu">
         <el-menu-item index="/admin">仪表盘</el-menu-item>
         <el-menu-item index="/admin/users">用户</el-menu-item>
+        <el-menu-item index="/admin/events">赛事</el-menu-item>
+        <el-menu-item index="/admin/event-applications">办赛申请</el-menu-item>
         <el-menu-item index="/admin/rank">段位</el-menu-item>
         <el-menu-item index="/admin/games">对局记录</el-menu-item>
         <el-menu-item index="/admin/game-control">对局管理</el-menu-item>
@@ -37,6 +39,8 @@ const auth = useAdminAuthStore()
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/admin/users')) return '/admin/users'
+  if (route.path.startsWith('/admin/event-applications')) return '/admin/event-applications'
+  if (route.path.startsWith('/admin/events')) return '/admin/events'
   if (route.path.startsWith('/admin/ip-bans')) return '/admin/ip-bans'
   return route.path
 })

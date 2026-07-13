@@ -53,6 +53,24 @@
         <span class="u-name">{{ playerInfo.user_settings?.username || '未知' }}</span>
         <span class="u-sep">·</span>
         <span class="u-id">ID {{ playerInfo.user_id }}</span>
+        <template v-if="playerRank">
+          <span class="u-sep">·</span>
+          <span class="u-rank">{{ playerRank.guobiao_rank }}</span>
+          <span class="u-pt">
+            <template v-if="playerRank.progress?.isMaxRank">
+              {{ formatPt(playerRank.guobiao_score) }} PT
+            </template>
+            <template v-else>
+              {{ formatPt(playerRank.guobiao_score) }} / {{ formatPt(playerRank.progress?.target) }} PT
+            </template>
+          </span>
+          <div v-if="playerRank.progress && !playerRank.progress.isMaxRank" class="u-pt-bar" :title="ptProgressTitle">
+            <div class="u-pt-fill" :style="{ width: `${playerRank.progress.percent}%` }" />
+          </div>
+          <span v-if="playerRank.progress && !playerRank.progress.isMaxRank" class="u-pt-pct">
+            {{ playerRank.progress.percent }}%
+          </span>
+        </template>
       </div>
 
       <!-- 第一行：规则 -->
@@ -66,15 +84,45 @@
         >{{ rule.label }}<span class="chip-count">{{ rule.count }}</span></button>
       </div>
 
-      <!-- 第二行：范围 总局数 / 天梯 / 自定义 -->
-      <div class="filter-row">
-        <button
-          v-for="s in SCOPE_OPTIONS"
-          :key="s.value"
-          class="chip"
-          :class="{ selected: scope === s.value }"
-          @click="selectScope(s.value)"
-        >{{ s.label }}<span class="chip-count">{{ scopeCount(s.value) }}</span></button>
+      <!-- 第二行：全部天梯 / 初级 / 中级 / 高级 / mcrpl / 自定义 / 比赛场 -->
+      <div class="filter-row with-date">
+        <div class="tier-group">
+          <button
+            v-for="s in SCENE_OPTIONS"
+            :key="s.value"
+            class="chip"
+            :class="{ selected: scene === s.value }"
+            @click="selectScene(s.value)"
+          >{{ s.label }}<span class="chip-count">{{ sceneCount(s.value) }}</span></button>
+          <el-select
+            v-if="scene === 'events'"
+            v-model="selectedEventId"
+            size="small"
+            clearable
+            filterable
+            placeholder="全部赛事"
+            class="event-select"
+            @change="onEventFilterChange"
+          >
+            <el-option
+              v-for="ev in eventOptions"
+              :key="ev.event_id"
+              :label="eventOptionLabel(ev)"
+              :value="ev.event_id"
+            />
+          </el-select>
+        </div>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          size="small"
+          range-separator="—"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          class="filter-date"
+          @change="onFilterChange"
+        />
       </div>
 
       <!-- 第三行：局制 全庄/东西/半庄/东风 -->
@@ -91,30 +139,6 @@
           :class="{ selected: length === l.value }"
           @click="selectLength(l.value)"
         >{{ l.label }}</button>
-      </div>
-
-      <!-- 第四行：场次等级 + 时间（自定义范围时自动亮起「自定义」） -->
-      <div class="filter-row with-date">
-        <div class="tier-group">
-          <button
-            v-for="t in TIER_ROW_OPTIONS"
-            :key="t.value"
-            class="chip"
-            :class="{ selected: tier === t.value }"
-            @click="selectTier(t.value)"
-          >{{ t.label }}</button>
-        </div>
-        <el-date-picker
-          v-model="dateRange"
-          type="daterange"
-          size="small"
-          range-separator="—"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          value-format="YYYY-MM-DD"
-          class="filter-date"
-          @change="onFilterChange"
-        />
       </div>
 
       <!-- 数据统计 -->
@@ -215,6 +239,11 @@
           empty-text="暂无对局记录"
         >
           <el-table-column type="selection" width="36" />
+          <el-table-column label="牌谱 ID" min-width="140">
+            <template #default="{ row }">
+              <span class="cell-game-id" :title="row.game_id">{{ row.game_id }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="时间" width="150">
             <template #default="{ row }">
               <span class="cell-time">{{ formatDate(row.created_at) }}</span>
@@ -333,13 +362,18 @@ const RULE_DEFS = [
   { key: 'riichi', label: '立直', statsField: 'riichi_stats', fanField: null },
   { key: 'qingque', label: '青雀', statsField: 'qingque_stats', fanField: 'qingque' },
   { key: 'classical', label: '古典', statsField: 'classical_stats', fanField: 'classical' },
-  { key: 'sichuan', label: '川麻', statsField: 'sichuan_stats', fanField: null }
+  { key: 'sichuan', label: '川麻', statsField: 'sichuan_stats', fanField: null },
+  { key: 'changsha', label: '长沙', statsField: 'changsha_stats', fanField: null },
 ]
 
-const SCOPE_OPTIONS = [
-  { value: 'all', label: '总局数' },
-  { value: 'rank', label: '天梯' },
-  { value: 'custom', label: '自定义' }
+const SCENE_OPTIONS = [
+  { value: 'rank', label: '全部天梯' },
+  { value: 'beginner', label: '初级' },
+  { value: 'intermediate', label: '中级' },
+  { value: 'advanced', label: '高级' },
+  { value: 'mcrpl', label: 'mcrpl' },
+  { value: 'custom', label: '自定义' },
+  { value: 'events', label: '比赛场' },
 ]
 
 const LENGTH_OPTIONS = [
@@ -349,13 +383,12 @@ const LENGTH_OPTIONS = [
   { value: '1', label: '东风战' }
 ]
 
-const TIER_ROW_OPTIONS = [
-  { value: 'beginner', label: '初级' },
-  { value: 'intermediate', label: '中级' },
-  { value: 'advanced', label: '高级' },
-  { value: 'mcrpl', label: 'mcrpl' },
-  { value: 'events', label: '比赛场' }
-]
+const TIER_LABELS = {
+  beginner: '初级',
+  intermediate: '中级',
+  advanced: '高级',
+  mcrpl: 'mcrpl',
+}
 
 const LENGTH_TO_GAME_TYPE = { '4': 'quanzhuang', '3': 'xifeng', '2': 'banzhuang', '1': 'dongfeng' }
 const MODE_LABELS = { '4/4': '全庄战', '3/4': '东西战', '2/4': '半庄战', '1/4': '东风战' }
@@ -368,12 +401,13 @@ const gameTypeLabel = (matchType) => {
 
 const sceneLabel = (row) => {
   if (row.room_type === 'custom') return '自定义'
-  if (row.room_type === 'events') return '比赛场'
+  if (row.room_type === 'events') {
+    if (row.event_name) return `比赛场 · ${row.event_name}`
+    if (row.event_id) return `比赛场 · ${row.event_id}`
+    return '比赛场'
+  }
   if (row.room_type === 'match') {
-    if (row.match_tier) {
-      const t = TIER_ROW_OPTIONS.find(x => x.value === row.match_tier)
-      return t ? t.label : row.match_tier
-    }
+    if (row.match_tier) return TIER_LABELS[row.match_tier] || row.match_tier
     return '天梯'
   }
   return row.room_type || row.rule || '-'
@@ -398,11 +432,35 @@ let searchSeq = 0
 const downloading = ref(false)
 const analyzing = ref(false)
 
+const playerRank = computed(() => playerInfo.value?.rank || null)
+const formatPt = (v) => {
+  if (v == null || Number.isNaN(Number(v))) return '-'
+  const n = Number(v)
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '')
+}
+const ptProgressTitle = computed(() => {
+  const p = playerRank.value?.progress
+  if (!p || p.isMaxRank) return ''
+  return `升段进度 ${formatPt(p.current)} / ${formatPt(p.target)}，还差 ${formatPt(p.remaining)} PT`
+})
+
 const currentRule = ref('guobiao')
-const scope = ref('all')
+const scene = ref('rank')
 const length = ref(null)
-const tier = ref(null)
+const selectedEventId = ref(null)
+const eventOptions = ref([])
 const dateRange = ref(null)
+
+/** scene → API 用的 scope / tier */
+const sceneToFilter = (s = scene.value) => {
+  if (s === 'rank') return { scope: 'rank', tier: null }
+  if (s === 'custom') return { scope: 'custom', tier: null }
+  if (s === 'events') return { scope: 'all', tier: 'events' }
+  return { scope: 'rank', tier: s }
+}
+
+const scope = computed(() => sceneToFilter().scope)
+const tier = computed(() => sceneToFilter().tier)
 
 // 每日分析结果：仅当当前筛选与已分析筛选一致时采用
 const analyzedResult = ref(null)
@@ -434,21 +492,36 @@ const sumGames = (stats) => (stats || []).reduce((s, x) => s + (x.total_games ||
 const rankStatsCache = ref({})
 const scopeCountsFromApi = ref(null)
 let rankStatsSeq = 0
+let scopeCountsSeq = 0
 
-const buildFilterKey = (opts = {}) => JSON.stringify({
-  user_id: opts.userId ?? playerInfo.value?.user_id ?? null,
-  rule: opts.rule ?? currentRule.value,
-  scope: opts.scope ?? scope.value,
-  length: opts.length !== undefined ? opts.length : length.value,
-  tier: opts.tier !== undefined ? opts.tier : tier.value,
-  date: opts.date !== undefined ? opts.date : dateRange.value,
-})
+const resolveScopeTier = (opts = {}) => {
+  if (opts.scope != null || opts.tier !== undefined) {
+    return {
+      scope: opts.scope ?? 'all',
+      tier: opts.tier !== undefined ? opts.tier : null,
+    }
+  }
+  return sceneToFilter(opts.scene ?? scene.value)
+}
+
+const buildFilterKey = (opts = {}) => {
+  const { scope: scopeVal, tier: tierVal } = resolveScopeTier(opts)
+  return JSON.stringify({
+    user_id: opts.userId ?? playerInfo.value?.user_id ?? null,
+    rule: opts.rule ?? currentRule.value,
+    scope: scopeVal,
+    length: opts.length !== undefined ? opts.length : length.value,
+    tier: tierVal,
+    event_id: opts.event_id !== undefined ? opts.event_id : selectedEventId.value,
+    date: opts.date !== undefined ? opts.date : dateRange.value,
+  })
+}
 
 const buildFilterPayload = (opts = {}) => {
-  const scopeVal = opts.scope ?? scope.value
-  const tierVal = opts.tier !== undefined ? opts.tier : tier.value
+  const { scope: scopeVal, tier: tierVal } = resolveScopeTier(opts)
   const lengthVal = opts.length !== undefined ? opts.length : length.value
   const dateVal = opts.date !== undefined ? opts.date : dateRange.value
+  const eventIdVal = opts.event_id !== undefined ? opts.event_id : selectedEventId.value
   const payload = { rule: opts.rule ?? currentRule.value }
   if (lengthVal) payload.game_type = LENGTH_TO_GAME_TYPE[lengthVal]
   if (dateVal && dateVal.length === 2) {
@@ -460,36 +533,54 @@ const buildFilterPayload = (opts = {}) => {
   if (tierVal) payload.tier = tierVal
   else if (scopeVal === 'custom') payload.tier = 'custom'
   else if (scopeVal === 'rank') payload.tier = 'rank'
+  if (tierVal === 'events' && eventIdVal) payload.event_id = eventIdVal
   return payload
 }
 
 const filterPayload = () => buildFilterPayload()
 
 // 按范围统计对局数（与对局记录 room_type 划分一致）
-const scopeCount = (s) => {
+// 国标 history 的 mode 带 _rank 表示匹配场局制桶；其他规则无匹配场，预存全部视为自定义
+const isGuobiaoMatchMode = (mode) => String(mode || '').endsWith('_rank')
+
+const sceneCount = (s) => {
   const c = scopeCountsFromApi.value
   if (c && c[s] != null) return c[s]
+  // API 仍返回 all；全部天梯对应 rank
+  if (s === 'rank' && c?.rank != null) return c.rank
   const stats = currentStats.value
-  if (s === 'all') return sumGames(stats)
-  if (s === 'rank') return sumGames(stats.filter(x => String(x.mode).endsWith('_rank')))
-  if (s === 'custom') return sumGames(stats.filter(x => !String(x.mode).endsWith('_rank')))
+  const rule = currentRule.value
+  if (rule !== 'guobiao') {
+    if (s === 'custom') return sumGames(stats)
+    return 0
+  }
+  if (s === 'rank') return sumGames(stats.filter((x) => isGuobiaoMatchMode(x.mode)))
+  if (s === 'custom') return sumGames(stats.filter((x) => !isGuobiaoMatchMode(x.mode)))
   return 0
 }
 
-// 预存统计：按 scope + length 过滤 history_stats
+// 预存统计：按 scope + length 过滤 history_stats（具体等级场无预存拆分）
 const filteredPrestoredStats = computed(() => {
   let rows = currentStats.value
-  if (scope.value === 'rank') rows = rows.filter(x => String(x.mode).endsWith('_rank'))
-  else if (scope.value === 'custom') rows = rows.filter(x => !String(x.mode).endsWith('_rank'))
+  const rule = currentRule.value
+  const scopeVal = scope.value
+  if (scopeVal === 'rank') {
+    rows = rule === 'guobiao' ? rows.filter((x) => isGuobiaoMatchMode(x.mode)) : []
+  } else if (scopeVal === 'custom') {
+    rows = rule === 'guobiao' ? rows.filter((x) => !isGuobiaoMatchMode(x.mode)) : rows
+  }
   if (length.value) {
     const base = `${length.value}/4`
-    rows = rows.filter(x => String(x.mode).replace(/_rank$/, '') === base)
+    rows = rows.filter((x) => String(x.mode).replace(/_rank$/, '') === base)
   }
   return rows
 })
 
-// 是否可用预存数据：tier 为空或为 custom（=自定义范围，已在预存内）
-const prestoredAvailable = computed(() => tier.value === null)
+// 是否可用预存数据：全部天梯 / 自定义（无具体等级场、比赛场）
+const prestoredAvailable = computed(() => {
+  const s = scene.value
+  return s === 'rank' || s === 'custom'
+})
 
 const filterKey = computed(() => buildFilterKey())
 
@@ -642,13 +733,14 @@ const switchRule = (rule) => {
   currentRule.value = rule
   analyzedResult.value = null
   rankStatsCache.value = {}
+  scopeCountsFromApi.value = null
   onFilterChange()
 }
 
-const selectScope = (s) => {
-  scope.value = s
-  // 范围切换时清掉场次等级（自定义范围本身即自定义房间，场次行不再含「自定义」选项）
-  tier.value = null
+const selectScene = (s) => {
+  scene.value = s
+  if (s === 'events') loadEventOptions()
+  else selectedEventId.value = null
   analyzedResult.value = null
   onFilterChange()
 }
@@ -659,15 +751,23 @@ const selectLength = (l) => {
   onFilterChange()
 }
 
-const selectTier = (t) => {
-  if (t === 'events') {
-    scope.value = 'all'
-    tier.value = 'events'
-  } else {
-    // 初级/中级/高级/mcrpl 均属天梯
-    scope.value = 'rank'
-    tier.value = t
+const eventOptionLabel = (ev) => {
+  const status = ev.status === 'closed' ? '（已关闭）' : ev.status === 'registered' ? '（已注册）' : ''
+  return `${ev.name}${status}`
+}
+
+const loadEventOptions = async () => {
+  try {
+    const resp = await axios.get('/api/player/events')
+    if (resp.data.success) {
+      eventOptions.value = resp.data.data?.items || []
+    }
+  } catch (_) {
+    eventOptions.value = []
   }
+}
+
+const onEventFilterChange = () => {
   analyzedResult.value = null
   onFilterChange()
 }
@@ -777,7 +877,6 @@ const fetchRankStatsIntoCache = async (opts = {}) => {
 const prefetchRankStats = () => {
   if (!playerInfo.value?.user_id) return Promise.resolve()
   return Promise.all([
-    fetchRankStatsIntoCache({ scope: 'all', tier: null, length: null, date: null }),
     fetchRankStatsIntoCache({ scope: 'rank', tier: null, length: null, date: null }),
     fetchRankStatsIntoCache({ scope: 'custom', tier: null, length: null, date: null }),
   ])
@@ -806,13 +905,13 @@ const loadScopeCounts = async () => {
     scopeCountsFromApi.value = null
     return
   }
-  const seq = rankStatsSeq
+  const seq = ++scopeCountsSeq
   try {
     const resp = await axios.get(`/api/player/scope-counts/${userId}`, { params: scopeCountsPayload() })
-    if (seq !== rankStatsSeq || playerInfo.value?.user_id !== userId) return
+    if (seq !== scopeCountsSeq || playerInfo.value?.user_id !== userId) return
     scopeCountsFromApi.value = resp.data.success ? resp.data.data : null
   } catch (_) {
-    if (playerInfo.value?.user_id === userId) scopeCountsFromApi.value = null
+    if (seq === scopeCountsSeq && playerInfo.value?.user_id === userId) scopeCountsFromApi.value = null
   }
 }
 
@@ -1035,6 +1134,7 @@ const searchPlayer = async (rawKey, isManual = true) => {
   rankStatsCache.value = {}
   scopeCountsFromApi.value = null
   rankStatsSeq += 1
+  scopeCountsSeq += 1
   gameRecords.value = []
   recentRecords.value = []
   recordsTotal.value = 0
@@ -1046,9 +1146,9 @@ const searchPlayer = async (rawKey, isManual = true) => {
       playerInfo.value = infoResp.data.data
       const defaultRule = RULE_DEFS.find(d => (playerInfo.value[d.statsField] || []).length > 0)
       currentRule.value = defaultRule ? defaultRule.key : 'guobiao'
-      scope.value = 'all'
+      scene.value = 'rank'
       length.value = null
-      tier.value = null
+      selectedEventId.value = null
       dateRange.value = null
       page.current = 1
       page.size = 20
@@ -1100,9 +1200,9 @@ const resetForm = () => {
   recordsTotal.value = 0
   searched.value = false
   currentRule.value = 'guobiao'
-  scope.value = 'all'
+  scene.value = 'rank'
   length.value = null
-  tier.value = null
+  selectedEventId.value = null
   dateRange.value = null
   analyzedResult.value = null
   rankStatsCache.value = {}
@@ -1231,6 +1331,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   font-size: 15px;
   border-bottom: 1px solid #eef0f3;
   padding-bottom: 10px;
@@ -1239,6 +1340,42 @@ onMounted(() => {
 .u-name { font-weight: 700; color: #1e293b; }
 .u-sep { color: #cbd5e1; }
 .u-id { font-family: 'Consolas', 'Menlo', monospace; color: #64748b; font-size: 13px; }
+.u-rank {
+  font-weight: 700;
+  color: #c2410c;
+  font-size: 13px;
+}
+.u-pt {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: #64748b;
+}
+.u-pt-bar {
+  width: 72px;
+  height: 6px;
+  background: #eef0f3;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.u-pt-fill {
+  height: 100%;
+  background: #f97316;
+  border-radius: 3px;
+  min-width: 0;
+  transition: width 0.2s ease;
+}
+.u-pt-pct {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.cell-game-id {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-all;
+}
 
 /* 筛选行 */
 .filter-row {
@@ -1252,6 +1389,7 @@ onMounted(() => {
   justify-content: space-between;
 }
 .tier-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.event-select { width: 200px; }
 .filter-date { width: 240px !important; }
 
 /* 统计区 */

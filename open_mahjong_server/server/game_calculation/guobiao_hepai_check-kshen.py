@@ -119,8 +119,8 @@ class Chinese_Hepai_Check:
         "gangshangkaihua":8,"qiangganghe":8,"pengpenghe":12,"hunyise":16,"sansesanbugao":4,"wumenqi":4,"quanqiuren":0,"shuangangang":0,"shuangjianke":0,
         "quandaiyao":12,"buqiuren":0,"shuangminggang":0,"hejuezhang":0,"jianke":4,"quanfengke":0,"menfengke":4,"menqianqing":4,
         "pinghe":2,"siguiyi":4,"shuangtongke":4,"shuanganke":4,"angang":0,"duanyao":2,"yibangao":4,"xixiangfeng":2,
-        "lianliu":0,"laoshaofu":0,"yaojiuke":0,"minggang":0,"queyimen":2,"wuzi":0,"bianzhang":2,
-        "qianzhang":2,"dandiaojiang":2,"zimo":2,"huapai":1,"mingangang":0,
+        "lianliu":0,"laoshaofu":0,"yaojiuke":0,"minggang":0,"queyimen":2,"wuzi":0,"bianzhang":0,
+        "qianzhang":0,"dandiaojiang":0,"zimo":2,"huapai":1,"mingangang":0,
 
         "anke":2,
         "gang":4,
@@ -180,7 +180,7 @@ class Chinese_Hepai_Check:
         "haidilaoyue":"海底捞月",
         "gangshangkaihua":"杠上开花",
         "qiangganghe":"抢杠和",
-        "pengpenghe":"碰碰和/对对和",
+        "pengpenghe":"碰碰和",
         "hunyise":"混一色",
         "sansesanbugao":"三色三步高",
         "wumenqi":"五门齐",
@@ -191,14 +191,14 @@ class Chinese_Hepai_Check:
         "buqiuren":"不求人",
         "shuangminggang":"双明杠",
         "hejuezhang":"和绝张",
-        "jianke":"役牌/箭刻",
+        "jianke":"役·箭刻",
         "quanfengke":"圈风刻",
-        "menfengke":"役牌/门风刻",
+        "menfengke":"役·门风刻",
         "menqianqing":"门前清",
         "pinghe":"平和",
         "siguiyi":"四归一",
-        "shuangtongke":"两同刻/双同刻",
-        "shuanganke":"暗刻×2/双暗刻",
+        "shuangtongke":"双同刻",
+        "shuanganke":"双暗刻",
         "angang":"暗杠",
         "duanyao":"断幺",
         "yibangao":"一般高",
@@ -286,7 +286,7 @@ class Chinese_Hepai_Check:
             if not player_tiles_list:
                 self.QBK_check(player_tiles,player_tiles_list)  # 全不靠检查
             if not player_tiles_list:
-                self.QD_check(player_tiles,player_tiles_list)  # 七对检查
+                self.QD_check(player_tiles,player_tiles_list)  # 七对子检查
         else:
             self.QBK_check(player_tiles,player_tiles_list)
         player_tiles_list.append(player_tiles)
@@ -357,7 +357,7 @@ class Chinese_Hepai_Check:
                 return False
             
         temp_player_tiles.complete_step = 14
-        temp_player_tiles.fan_list.append("qiduizi") # 七对
+        temp_player_tiles.fan_list.append("qiduizi") # 七对子
         player_tiles_list.append(temp_player_tiles)
         return False
 
@@ -942,9 +942,9 @@ class Chinese_Hepai_Check:
 
             for lst in [wan_list,bing_list,tiao_list]:
                 if len(lst) >= 2:
-                    for rank in range(1, 7):
-                        pair_count = min(lst.count(str(rank)), lst.count(str(rank + 3)))
-                        for _ in range(pair_count):
+                    for i in lst:
+                        i = int(i)
+                        if str(i + 3) in lst:
                             player_tiles.fan_list.append("lianliu") # 连六
                 min_count = min(lst.count("2"),lst.count("8"))
                 if min_count != 0:
@@ -993,11 +993,9 @@ class Chinese_Hepai_Check:
                     all_list.append(sign[1])
             
             if len(all_list) == 4:
-                if all(i in ("2","4","6","8") for i in all_list):
-                    if save_quetou_sign:
-                        quetou_id = int(save_quetou_sign[0])
-                        if quetou_id < 40 and quetou_id % 10 in (2, 4, 6, 8):
-                            player_tiles.fan_list.append("quanshuangke") # 全双刻
+                if all(i in ["2","4","6","8"] for i in all_list):
+                    if save_quetou_sign[0][1] in ["2","4","6","8"]:
+                        player_tiles.fan_list.append("quanshuangke") # 全双刻
 
             already_count_list = []
             self.debug_print(all_list)

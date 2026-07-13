@@ -14,18 +14,24 @@ public partial class NormalGameStateManager {
             }
             // 如果行动者是自己
             if (GetCardPlayer == "self"){
-                // 显示可用行动 开启倒计时
-                GameCanvas.Instance.ClearActionButton(); // 清空操作按钮 *有时候补花轮自己不补花，但是别人也不补，就出现两次按钮
-                GameCanvas.Instance.SetActionButton(allowActionList);
-                GameCanvas.Instance.LoadingRemianTime(remaining_time,roomStepTime);
+                // 清空操作按钮 *有时候补花轮自己不补花，但是别人也不补，就出现两次按钮
+                GameCanvas.Instance.ClearActionButton();
                 // 立直锁手 / 食替禁切：每次询问立刻刷新自家手牌的可点状态与变灰显示
-                GameCanvas.Instance.RefreshHandTileSelectability();
                 if (AutoAction.Instance != null) {
                     AutoAction.Instance.SetAutoCutLocked(IsSelfRiichi());
                 }
-                // 手牌询问：自动自摸 / 自动补花 / 自动出牌 任一开启则启动协程
-                if (AutoAction.Instance != null && (AutoAction.Instance.ShouldAutoWinTsumo() || AutoAction.Instance.IsAutoBuhua || AutoAction.Instance.IsAutoCut)){
-                    StartWaitAutoAction("AutoHandAction");
+                GameCanvas.Instance.RefreshHandTileSelectability();
+
+                // 全量自动（自摸/起手胡/补花）：不出按钮，仅延迟发网，避免闪按钮泄密
+                if (TryResolveImmediateAutoHand(out string autoHandAction, out float autoHandDelay)) {
+                    StartDelayedAutoChoose(autoHandAction, autoHandDelay);
+                }
+                else {
+                    GameCanvas.Instance.SetActionButton(allowActionList);
+                    GameCanvas.Instance.LoadingRemianTime(remaining_time, roomStepTime);
+                    if (ShouldStartAutoCut()) {
+                        StartWaitAutoCut();
+                    }
                 }
                 // 询问操作时隐藏提示块（实时观战保持与切牌后一致的听牌提示）
                 if (!IsRealtimeSpectator) {
@@ -52,12 +58,15 @@ public partial class NormalGameStateManager {
         // 询问鸣牌操作 鸣牌操作的操作方一定是"self"
         else if (SwitchType == "askMingPaiAction"){
             GameCanvas.Instance.ClearActionButton();
-            GameCanvas.Instance.SetActionButton(allowActionList);
-            // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
-            GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
-            // 鸣牌询问：自动过牌 / 自动胡牌 / 不点和 / 牌张设置 / 任一鸣牌过滤项 开启则启动协程
-            if (AutoAction.Instance.IsAutoPass || AutoAction.Instance.IsAutoHepai || AutoAction.Instance.IsNoRon || AutoAction.Instance.ShouldAutoPassForCurrentDiscard() || AutoAction.Instance.HasAnyTilePassMingPaiOption()){
-                StartWaitAutoAction("AutoMingPaiAction");
+            // 全量自动（牌张跳过 / 自动和 / 筛光后 pass）：不出按钮，避免闪按钮泄密
+            // pass 立即发网；自动和保留短延迟。半自动仍显示服务端全集按钮，不做 UI 过滤
+            if (TryResolveFullAutoMingPai(out string autoMingPaiAction, out float autoMingPaiDelay)) {
+                StartDelayedAutoChoose(autoMingPaiAction, autoMingPaiDelay);
+            }
+            else {
+                GameCanvas.Instance.SetActionButton(allowActionList);
+                // 战术鸣牌打断窗口：remaining_time 即为 grace 秒数，不再叠加步时（避免显示 5+5）
+                GameCanvas.Instance.LoadingRemianTime(remaining_time, isTacticalRecheck ? 0 : roomStepTime);
             }
             IsSelfActionRequired = true;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseAskOther);

@@ -455,8 +455,7 @@ async def wait_action(self):
                         delay = compute_protected_meld_delay(self)
                         if delay > 0:
                             await asyncio.sleep(delay)
-                    # 和牌 （荣和）
-                    self.player_list[player_index].hand_tiles.append(tile_id) # 将和牌牌加入手牌最后一张
+                    # 荣和：不写入手牌。正确和牌在 check_hepai 确认后再 append；错和仅展示层拼和牌张。
                     self.hu_class = action_type
                     self.game_status = "check_hepai"
                     logger.info(f"处理和牌操作: player_index={player_index}, action_type={action_type}, hu_class={self.hu_class}, game_status={self.game_status}, tile_id={tile_id}")

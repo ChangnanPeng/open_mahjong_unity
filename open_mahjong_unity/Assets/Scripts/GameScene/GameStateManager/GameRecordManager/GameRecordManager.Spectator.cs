@@ -54,6 +54,12 @@ public partial class GameRecordManager {
         _delayedSpectatorGamestateId = "";
     }
 
+    /// <summary>延时观战推送是否属于当前会话（message_info.title = gamestate_id）。</summary>
+    public bool IsCurrentDelayedSpectator(string gamestateId) {
+        return !string.IsNullOrEmpty(_delayedSpectatorGamestateId)
+            && _delayedSpectatorGamestateId == gamestateId;
+    }
+
     /// <summary>
     /// 客户端已放弃延时观战但服务端可能仍保留观战连接时，主动请求移除。
     /// </summary>
