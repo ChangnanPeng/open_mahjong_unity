@@ -184,59 +184,7 @@
 
           <el-button type="danger" plain @click="kickUser" :loading="kicking">踢下线</el-button>
 
-          <el-button @click="$router.push(`/admin/rank?userId=${detail.user.user_id}`)">编辑段位</el-button>
-
         </div>
-
-      </el-card>
-
-
-
-      <el-card v-if="!detail.user.is_tourist" class="block">
-
-        <template #header>改名</template>
-
-        <p class="rename-hint">规则与游戏内一致：最多 16 个字符，中文计 2、英文/数字计 1，总权重 2～20。历史牌谱仍显示对局时的旧用户名。</p>
-
-        <el-input
-
-          v-model="renameForm.new_username"
-
-          clearable
-
-          placeholder="新用户名"
-
-          style="max-width: 280px; margin-right: 8px"
-
-          maxlength="16"
-
-          show-word-limit
-
-        />
-
-        <el-input
-
-          v-model="renameForm.reason"
-
-          clearable
-
-          placeholder="变更原因（必填）"
-
-          style="max-width: 280px; margin-right: 8px"
-
-        />
-
-        <el-button type="primary" @click="renameUser" :loading="renaming">保存新用户名</el-button>
-
-      </el-card>
-
-
-
-      <el-card v-if="detail.rank_data" class="block">
-
-        <template #header>段位</template>
-
-        {{ detail.rank_data.guobiao_rank }} / {{ detail.rank_data.guobiao_score }} PT
 
       </el-card>
 
@@ -244,11 +192,99 @@
 
       <el-card class="block">
 
-        <template #header>重置密码</template>
+        <template #header>改名与密码</template>
 
-        <el-input v-model="newPassword" type="password" show-password placeholder="新密码（至少6位）" style="max-width: 240px" />
+        <template v-if="!detail.user.is_tourist">
 
-        <el-button type="warning" style="margin-left: 8px" @click="resetPassword">重置</el-button>
+          <p class="rename-hint">改名规则与游戏内一致：最多 16 个字符，中文计 2、英文/数字计 1，总权重 2～20。当前仅更新账号表；历史牌谱按对局时用户名快照展示。</p>
+
+          <div class="credential-row">
+
+            <span class="credential-label">改名</span>
+
+            <el-input
+
+              v-model="renameForm.new_username"
+
+              clearable
+
+              placeholder="新用户名"
+
+              style="max-width: 220px"
+
+              maxlength="16"
+
+              show-word-limit
+
+            />
+
+            <el-input
+
+              v-model="renameForm.reason"
+
+              clearable
+
+              placeholder="变更原因（必填）"
+
+              style="max-width: 220px"
+
+            />
+
+            <el-button type="primary" @click="renameUser" :loading="renaming">保存新用户名</el-button>
+
+          </div>
+
+        </template>
+
+        <div class="credential-row">
+
+          <span class="credential-label">密码</span>
+
+          <el-input
+
+            v-model="newPassword"
+
+            type="password"
+
+            show-password
+
+            placeholder="新密码（至少6位）"
+
+            style="max-width: 220px"
+
+          />
+
+          <el-button type="warning" @click="resetPassword">重置密码</el-button>
+
+        </div>
+
+      </el-card>
+
+
+
+      <el-card class="block">
+
+        <template #header>段位</template>
+
+        <div class="rank-row">
+
+          <span v-if="detail.rank_data">
+
+            {{ detail.rank_data.guobiao_rank }} / {{ detail.rank_data.guobiao_score }} PT
+
+          </span>
+
+          <span v-else class="rank-empty">暂无段位数据</span>
+
+          <div class="rank-actions">
+
+            <el-button @click="$router.push(`/admin/rank?userId=${detail.user.user_id}`)">编辑段位</el-button>
+
+            <el-button type="danger" plain :loading="resettingRank" @click="resetRank">重置段位</el-button>
+
+          </div>
+
+        </div>
 
       </el-card>
 
@@ -372,6 +408,8 @@ const saving = ref(false)
 const kicking = ref(false)
 
 const renaming = ref(false)
+
+const resettingRank = ref(false)
 
 const detail = ref(null)
 
@@ -765,6 +803,62 @@ async function renameUser() {
 
 
 
+async function resetRank() {
+
+  const { value: reason } = await ElMessageBox.prompt('重置原因', '重置段位', {
+
+    type: 'warning',
+
+    confirmButtonText: '确定重置',
+
+    cancelButtonText: '取消',
+
+  }).catch(() => null)
+
+  if (!reason?.trim()) return
+
+  resettingRank.value = true
+
+  try {
+
+    const res = await adminApi.post(`/rank/${route.params.userId}/reset`, {
+
+      reason: reason.trim(),
+
+    })
+
+    const data = res.data.data
+
+    if (detail.value) {
+
+      detail.value.rank_data = {
+
+        ...(detail.value.rank_data || {}),
+
+        guobiao_rank: data.guobiao_rank,
+
+        guobiao_score: data.guobiao_score,
+
+      }
+
+    }
+
+    ElMessage.success('段位已重置为 10级')
+
+  } catch (e) {
+
+    ElMessage.error(e.response?.data?.message || '重置失败')
+
+  } finally {
+
+    resettingRank.value = false
+
+  }
+
+}
+
+
+
 async function banLoginIp(row) {
 
   const { value: reason } = await ElMessageBox.prompt(
@@ -908,6 +1002,70 @@ onMounted(load)
   font-size: 13px;
 
   line-height: 1.5;
+
+}
+
+.credential-row {
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 8px;
+
+  margin-bottom: 12px;
+
+}
+
+.credential-row:last-child {
+
+  margin-bottom: 0;
+
+}
+
+.credential-label {
+
+  width: 40px;
+
+  flex-shrink: 0;
+
+  color: #606266;
+
+  font-size: 13px;
+
+}
+
+.rank-row {
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  justify-content: flex-start;
+
+  gap: 12px;
+
+}
+
+.rank-empty {
+
+  color: #909399;
+
+  font-size: 13px;
+
+}
+
+.rank-actions {
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 8px;
 
 }
 

@@ -1,136 +1,114 @@
 <template>
-  <el-menu
-    :default-active="activeMenu"
-    class="nav-menu"
-    mode="horizontal"
-    router
-    background-color="#545c64"
-    text-color="#fff"
-    active-text-color="#ffd04b"
-  >
-    <div class="nav-container">
-      <div class="nav-left">
-        <el-menu-item index="/" class="logo">
-          <img class="logo-img" src="/logo.svg" width="32" height="32" alt="OpenMahjong" />
-          <span class="logo-text">salasasa.cn</span>
-        </el-menu-item>
-
-        <el-menu-item index="/game-unity">
-          <el-icon><VideoPlay /></el-icon>
-          <span>对战平台</span>
-        </el-menu-item>
-
-        <el-menu-item index="/mobile-download">
-          <el-icon><Iphone /></el-icon>
-          <span>手机版</span>
-        </el-menu-item>
-
-        <el-menu-item index="/github">
-          <el-icon><Link /></el-icon>
-          <span>GitHub</span>
-        </el-menu-item>
-
-        <el-menu-item index="/player-data">
-          <el-icon><User /></el-icon>
-          <span>玩家/平台数据站</span>
-        </el-menu-item>
-
-        <el-menu-item index="/paili">
-          <el-icon><Histogram /></el-icon>
-          <span>牌理</span>
-        </el-menu-item>
-
-        <el-menu-item index="/chinese">
-          <el-icon><Operation /></el-icon>
-          <span>国标计算器</span>
-        </el-menu-item>
-
-        <el-menu-item index="/rulebook">
-          <el-icon><Reading /></el-icon>
-          <span>规则书</span>
-        </el-menu-item>
-
-        <el-menu-item index="/seed-verify">
-          <el-icon><Key /></el-icon>
-          <span>种子验证</span>
-        </el-menu-item>
-
-        <el-menu-item index="/docs">
-          <el-icon><Document /></el-icon>
-          <span>开发手册</span>
-        </el-menu-item>
-      </div>
-    </div>
-  </el-menu>
+  <nav class="topnav">
+    <template v-for="item in items" :key="item.label + (item.to || item.href)">
+      <a
+        v-if="item.href"
+        class="nav-link"
+        :href="item.href"
+        target="_blank"
+        rel="noopener noreferrer"
+      >{{ item.label }}</a>
+      <router-link
+        v-else
+        :to="item.to"
+        class="nav-link"
+        :class="{ on: isActive(item) }"
+      >{{ item.label }}</router-link>
+    </template>
+    <div class="nav-spacer" />
+    <router-link
+      v-if="isLoggedIn"
+      to="/account"
+      class="nav-link auth"
+      :class="{ on: route.path === '/account' }"
+    >{{ displayName }}</router-link>
+    <router-link
+      v-else
+      to="/login?redirect=/account"
+      class="nav-link auth"
+      :class="{ on: route.path === '/login' }"
+    >登录</router-link>
+  </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
-import {
-  VideoPlay,
-  User,
-  Histogram,
-  Operation,
-  Reading,
-  Document,
-  Link,
-  Key,
-  Iphone,
-} from '@element-plus/icons-vue'
+import { usePlayerAuthStore } from '@/stores/playerAuth'
 
 const route = useRoute()
+const auth = usePlayerAuthStore()
+const { username, userId, loaded } = storeToRefs(auth)
+const isLoggedIn = computed(() => auth.isLoggedIn)
+const displayName = computed(() => username.value || (userId.value != null ? `用户${userId.value}` : '账户'))
 
-const activeMenu = computed(() => {
+const STEAM_STORE_URL = 'https://store.steampowered.com/app/4565740/Salasasa/'
+
+const items = [
+  { to: '/', label: '首页', match: (p) => p === '/' || p === '' },
+  { to: '/events', label: '比赛', match: (p) => p.startsWith('/events') },
+  { to: '/game-unity', label: '进入平台', match: (p) => p.startsWith('/game-unity') },
+  { href: STEAM_STORE_URL, label: 'Steam商店' },
+  { to: '/player-data', label: '历史记录', match: (p) => p === '/player-data' || p === '/player-data/' },
+  { to: '/player-data/platform', label: '数据统计', match: (p) => p.includes('/platform') },
+  { to: '/paili', label: '牌理' },
+  { to: '/chinese', label: '国标计算器' },
+  { to: '/rulebook', label: '规则书', match: (p) => p.startsWith('/rulebook') },
+  { to: '/seed-verify', label: '种子验证' },
+  { to: '/mobile-download', label: '手机版' },
+  { to: '/docs', label: '开发手册' },
+  { to: '/github', label: 'GitHub' },
+]
+
+const isActive = (item) => {
+  if (item.href) return false
   const p = route.path || '/'
-  if (p === '/' || p === '') return '/'
-  if (p.startsWith('/rulebook')) return '/rulebook'
-  if (p === '/github') return '/github'
-  if (p.startsWith('/player-data')) return '/player-data'
-  if (p === '/mobile-download') return '/mobile-download'
-  return p
+  if (item.match) return item.match(p)
+  return p === item.to
+}
+
+onMounted(() => {
+  if (!loaded.value) auth.fetchMe()
 })
 </script>
 
 <style scoped>
-.nav-menu {
-  border-bottom: none;
-}
-
-.nav-container {
+.topnav {
+  background: #1a1a1a;
+  color: #ddd;
   display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.nav-left {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
-}
-
-.logo {
-  font-size: 18px;
-  font-weight: bold;
-  display: inline-flex;
   align-items: center;
+  padding: 0 20px;
+  min-height: 54px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
-.logo-img {
-  margin-right: 10px;
-  vertical-align: middle;
-  border-radius: 6px;
-  flex-shrink: 0;
+.nav-spacer {
+  flex: 1;
+  min-width: 8px;
 }
 
-.logo-text {
-  line-height: 1;
+.nav-link {
+  color: #bbb;
+  padding: 14px 14px;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.el-menu-item .el-icon {
-  margin-right: 4px;
+.nav-link:hover,
+.nav-link.on {
+  color: #fff;
+  background: #2a2a2a;
+}
+
+.nav-link.auth {
+  font-weight: 600;
+  color: #9cf;
 }
 </style>

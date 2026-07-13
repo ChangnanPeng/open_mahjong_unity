@@ -627,6 +627,7 @@ class FriendManager:
             hepai_limit=getattr(game_state, "hepai_limit", 8),
             open_cuohe=getattr(game_state, "open_cuohe", False),
             tactical_call=getattr(game_state, "tactical_call", False),
+            claim_protection=getattr(game_state, "claim_protection", True),
             isPlayerSetRandomSeed=getattr(game_state, "isPlayerSetRandomSeed", False),
             players_info=players_info,
             self_hand_tiles=None,
@@ -637,6 +638,7 @@ class FriendManager:
             hepai_way=getattr(game_state, "hepai_way", None),
             red_dora=getattr(game_state, "red_dora", None),
             view_player_index=host_player_index,
+            blood_battle=getattr(game_state, "blood_battle", None),
         )
         await conn.websocket.send_json(Response(
             type=response_type,

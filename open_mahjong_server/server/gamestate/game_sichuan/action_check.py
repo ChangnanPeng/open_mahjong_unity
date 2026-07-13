@@ -148,6 +148,11 @@ def check_action_hand_action(self, player_index, is_get_gang_tile=False, is_firs
     """摸牌后检查本家操作：自摸/暗杠/加杠/切牌。
     定缺约束：手牌仍含定缺花色时须优先切定缺牌、不可和牌，但仍可对非定缺花色暗杠与加杠。"""
     temp_action_dict: Dict[int, list] = {0: [], 1: [], 2: [], 3: []}
+    # 清除本家旧和牌结果，避免杠后无自摸时仍残留 is_zimo，导致切牌误记顺和上限
+    if getattr(self, "sichuan_hu_results", None) is None:
+        self.sichuan_hu_results = {}
+    else:
+        self.sichuan_hu_results.pop(player_index, None)
     player = self.player_list[player_index]
     dingque = getattr(player, "dingque_suit", 0)
     has_dingque_in_hand = dingque in (1, 2, 3) and any(_suit(t) == dingque for t in player.hand_tiles)

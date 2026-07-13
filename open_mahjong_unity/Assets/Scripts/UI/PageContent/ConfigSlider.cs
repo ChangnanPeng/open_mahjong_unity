@@ -19,12 +19,21 @@ public class ConfigSlider : MonoBehaviour {
         slider.minValue = 0;
         slider.maxValue = 100;
         slider.wholeNumbers = true;
-        
-        int currentVolume = GetVolume();
-        slider.value = currentVolume; // 初始化滑动条的值
-        valueText.text = $"{currentVolume}%"; // 初始化valueText的值
-        
+        SyncFromConfig();
+        slider.onValueChanged.RemoveListener(OnValueChanged);
         slider.onValueChanged.AddListener(OnValueChanged);
+    }
+
+    /// <summary>
+    /// 从 ConfigManager 刷新滑动条显示，不触发写回。
+    /// </summary>
+    public void SyncFromConfig() {
+        if (slider == null) return;
+        int currentVolume = GetVolume();
+        slider.SetValueWithoutNotify(currentVolume);
+        if (valueText != null) {
+            valueText.text = $"{currentVolume}%";
+        }
     }
 
     // 获取当前音量

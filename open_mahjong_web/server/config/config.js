@@ -100,6 +100,42 @@ function loadAdminConfig() {
 
 const adminConfig = loadAdminConfig();
 
+// 比赛管理后台：复用超管 JWT 密钥，通过 aud=event-admin 区分令牌
+function loadEventAdminConfig() {
+  const jwtExpiresSec = parseInt(
+    process.env.EVENT_ADMIN_JWT_EXPIRES_SEC || String(adminConfig.jwtExpiresSec),
+    10
+  );
+  if (Number.isNaN(jwtExpiresSec) || jwtExpiresSec <= 0) {
+    throw new Error('EVENT_ADMIN_JWT_EXPIRES_SEC 必须是正整数');
+  }
+  return {
+    jwtSecret: (process.env.EVENT_ADMIN_JWT_SECRET || adminConfig.jwtSecret).trim(),
+    jwtExpiresSec,
+    audience: 'event-admin',
+  };
+}
+
+const eventAdminConfig = loadEventAdminConfig();
+
+// 普通玩家 Web 登录：复用超管密钥，通过 aud=player 区分令牌
+function loadPlayerAuthConfig() {
+  const jwtExpiresSec = parseInt(
+    process.env.PLAYER_JWT_EXPIRES_SEC || String(adminConfig.jwtExpiresSec),
+    10
+  );
+  if (Number.isNaN(jwtExpiresSec) || jwtExpiresSec <= 0) {
+    throw new Error('PLAYER_JWT_EXPIRES_SEC 必须是正整数');
+  }
+  return {
+    jwtSecret: (process.env.PLAYER_JWT_SECRET || adminConfig.jwtSecret).trim(),
+    jwtExpiresSec,
+    audience: 'player',
+  };
+}
+
+const playerAuthConfig = loadPlayerAuthConfig();
+
 function loadBotApiConfig() {
   const jwtSecret = process.env.BOT_API_JWT_SECRET;
   if (!jwtSecret || !String(jwtSecret).trim()) {
@@ -111,6 +147,28 @@ function loadBotApiConfig() {
 }
 
 const botApiConfig = loadBotApiConfig();
+
+function loadSmtpConfig() {
+  const host = (process.env.SMTP_HOST || 'smtp-relay.brevo.com').trim();
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = (process.env.SMTP_USER || '').trim();
+  const pass = (process.env.SMTP_PASS || '').trim();
+  const fromEmail = (process.env.SMTP_FROM_EMAIL || user || '').trim();
+  const fromName = (process.env.SMTP_FROM_NAME || 'salasasa').trim();
+  const enabled = !!(user && pass && fromEmail);
+  return {
+    enabled,
+    host,
+    port: Number.isNaN(port) ? 587 : port,
+    secure: process.env.SMTP_SECURE === 'true' || port === 465,
+    user,
+    pass,
+    fromEmail,
+    fromName,
+  };
+}
+
+const smtpConfig = loadSmtpConfig();
 
 const devFrontendUrl = 'http://localhost:5173';
 
@@ -126,8 +184,11 @@ function printDebugConfig() {
   console.log(`API 地址: ${apiBase}/api`);
   console.log(`管理后台: ${frontendUrl}/admin/login`);
   console.log(`管理后台 API: ${apiBase}/api/admin`);
+  console.log(`比赛管理后台: ${frontendUrl}/event-admin/login`);
+  console.log(`比赛管理 API: ${apiBase}/api/event-admin`);
   console.log(`计算服务器: ${calcServerConfig.baseUrl}`);
   console.log(`管理员用户 ID: ${[...adminConfig.userIds].join(', ')}`);
+  console.log(`SMTP 邮件: ${smtpConfig.enabled ? `已启用 (${smtpConfig.fromEmail})` : '未配置'}`);
 }
 
 // ==================== 日志输出 ====================
@@ -161,6 +222,15 @@ module.exports = {
 
   // 管理后台
   admin: adminConfig,
+
+  // 比赛管理后台（赛事主管理员 / 赛事子管理员）
+  eventAdmin: eventAdminConfig,
+
+  // 普通玩家 Web 登录
+  playerAuth: playerAuthConfig,
+
+  // 邮件（Brevo SMTP 等）
+  smtp: smtpConfig,
 
   // QQ 机器人等第三方 Bot API
   botApi: botApiConfig,

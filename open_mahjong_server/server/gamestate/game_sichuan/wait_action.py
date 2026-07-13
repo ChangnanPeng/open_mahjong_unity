@@ -341,8 +341,12 @@ async def wait_action(self):
             combination_target = ""
             if action_data:
                 refresh_waiting_tiles(self, player_index)
-                if action_type in ("peng", "gang") and apply_passed_win_shunhe(
-                    self, [player_index] if player_has_ron_hu_result(self, player_index) else []
+                passed_hu_for_claim = (
+                    action_type in ("peng", "gang") and player_has_ron_hu_result(self, player_index)
+                )
+                # 杠代替和：杠后摸牌会 clear_shunhe，此处先记上限供杠前抢杠窗口外的一致性
+                if action_type == "gang" and passed_hu_for_claim and apply_passed_win_shunhe(
+                    self, [player_index]
                 ):
                     await broadcast_refresh_player_tag_list(self)
                 if action_type == "peng":
@@ -360,6 +364,13 @@ async def wait_action(self):
                         combination_mask = [0, tile_id, 0, tile_id, 1, tile_id]
                     elif relative_position == "top":
                         combination_mask = [0, tile_id, 1, tile_id, 0, tile_id]
+                    # SBR：碰代替和后须仍处于可和牌状态，本次放弃才构成顺和
+                    if passed_hu_for_claim:
+                        refresh_waiting_tiles(self, player_index)
+                        if self.player_list[player_index].waiting_tiles and apply_passed_win_shunhe(
+                            self, [player_index]
+                        ):
+                            await broadcast_refresh_player_tag_list(self)
 
                 elif action_type == "gang":
                     if self.player_list[player_index].hand_tiles.count(tile_id) < 3:

@@ -32,9 +32,20 @@ adminApi.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       setAdminToken(null)
+      try {
+        const { useAdminAuthStore } = require('@/stores/adminAuth')
+        const store = useAdminAuthStore()
+        if (store.token) {
+          store.token = ''
+          store.userId = null
+          store.username = ''
+        }
+      } catch (_) {
+        /* pinia may not be ready */
+      }
       const path = window.location.pathname
       if (path.startsWith('/admin') && !path.startsWith('/admin/login')) {
-        window.location.href = '/admin/login'
+        window.location.href = '/admin/login?redirect=/admin'
       }
     }
     return Promise.reject(err)

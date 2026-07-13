@@ -56,7 +56,7 @@ async def broadcast_game_start(self):
         'tactical_call': getattr(self, 'tactical_call', False), # 战术鸣牌
         'claim_protection': getattr(self, 'claim_protection', False), # 鸣牌保护
         'isPlayerSetRandomSeed': self.isPlayerSetRandomSeed, # 是否玩家设置了随机种子
-        'players_info': [] # ↓玩家信息
+        'players_info': [], # ↓玩家信息
     }
     from ..public.game_record_manager import build_player_entry_order_fields
     base_game_info.update(build_player_entry_order_fields(self))
@@ -540,11 +540,11 @@ async def broadcast_result(self,
             if "offline" in current_player.tag_list:
                 logger.info(f"玩家 {current_player.username} 已掉线，跳过广播")
                 continue
-            
+
             # 机器人占用 user_id < 10 的保留段，无需网络广播
             if current_player.user_id < 10:
                 continue
-            
+
             if current_player.user_id in self.game_server.user_id_to_connection:
                 player_conn = self.game_server.user_id_to_connection[current_player.user_id]
 

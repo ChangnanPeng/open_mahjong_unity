@@ -22,18 +22,25 @@ import AppFooter from '@/components/AppFooter.vue'
 <style scoped>
 .default-layout {
   min-height: 100vh;
-  background: transparent;
+  background: #f5f5f5;
 }
 
 .layout-header {
   padding: 0;
   height: auto;
   background: transparent;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 .layout-main {
-  padding: 20px;
+  padding: 20px 16px 48px;
   flex: 1;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .layout-footer {

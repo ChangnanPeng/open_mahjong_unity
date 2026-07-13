@@ -186,8 +186,8 @@ public class Kshen_Hepai_Check {
         { "gangshangkaihua", 8 }, { "qiangganghe", 8 }, { "pengpenghe", 12 }, { "hunyise", 16 }, { "sansesanbugao", 4 }, { "wumenqi", 4 }, { "quanqiuren", 0 }, { "shuangangang", 0 }, { "shuangjianke", 0 },
         { "quandaiyao", 12 }, { "buqiuren", 0 }, { "shuangminggang", 0 }, { "hejuezhang", 0 }, { "jianke", 4 }, { "quanfengke", 0 }, { "menfengke", 4 }, { "menqianqing", 4 },
         { "pinghe", 2 }, { "siguiyi", 4 }, { "shuangtongke", 4 }, { "shuanganke", 4 }, { "angang", 0 }, { "duanyao", 2 }, { "yibangao", 4 }, { "xixiangfeng", 2 },
-        { "lianliu", 0 }, { "laoshaofu", 0 }, { "yaojiuke", 0 }, { "minggang", 0 }, { "queyimen", 2 }, { "wuzi", 0 }, { "bianzhang", 2 },
-        { "qianzhang", 2 }, { "dandiaojiang", 2 }, { "zimo", 2 }, { "huapai", 1 }, { "mingangang", 0 },
+        { "lianliu", 0 }, { "laoshaofu", 0 }, { "yaojiuke", 0 }, { "minggang", 0 }, { "queyimen", 2 }, { "wuzi", 0 }, { "bianzhang", 0 },
+        { "qianzhang", 0 }, { "dandiaojiang", 0 }, { "zimo", 2 }, { "huapai", 1 }, { "mingangang", 0 },
         { "anke", 2 }, { "gang", 4 }, { "qingquandaiyao", 24 }, { "quandan", 12 }, { "quanshuang", 24 }, { "silianke", 120 },
         { "jingtongshuangxitongke", 16 }, { "jingtongliangbangao", 32 }, { "jingtongshuanglonghui", 32 },
         };
@@ -204,12 +204,12 @@ public class Kshen_Hepai_Check {
         { "santongke", "三同刻" }, { "sananke", "三暗刻" }, { "quanbukao", "全不靠" }, { "zuhelong", "组合龙" }, { "dayuwu", "大于五" },
         { "xiaoyuwu", "小于五" }, { "sanfengke", "三风刻" }, { "hualong", "花龙" }, { "tuibudao", "推不倒" }, { "sansesantongshun", "三色三同顺" },
         { "sansesanjiegao", "三色连刻" }, { "wufanhe", "无番和" }, { "miaoshouhuichun", "妙手回春" }, { "haidilaoyue", "海底捞月" },
-        { "gangshangkaihua", "杠上开花" }, { "qiangganghe", "抢杠和" }, { "pengpenghe", "碰碰和/对对和" }, { "hunyise", "混一色" },
+        { "gangshangkaihua", "杠上开花" }, { "qiangganghe", "抢杠和" }, { "pengpenghe", "碰碰和" }, { "hunyise", "混一色" },
         { "sansesanbugao", "三色三步高" }, { "wumenqi", "五门齐" }, { "quanqiuren", "全求人" }, { "shuangangang", "双暗杠" },
         { "shuangjianke", "双箭刻" }, { "quandaiyao", "混全带幺" }, { "buqiuren", "不求人" }, { "shuangminggang", "双明杠" },
-        { "hejuezhang", "和绝张" }, { "jianke", "役牌/箭刻" }, { "quanfengke", "圈风刻" }, { "menfengke", "役牌/门风刻" },
-        { "menqianqing", "门前清" }, { "pinghe", "平和" }, { "siguiyi", "四归一" }, { "shuangtongke", "两同刻/双同刻" },
-        { "shuanganke", "暗刻×2/双暗刻" }, { "angang", "暗杠" }, { "duanyao", "断幺" }, { "yibangao", "一般高" }, { "xixiangfeng", "喜相逢" },
+        { "hejuezhang", "和绝张" }, { "jianke", "役·箭刻" }, { "quanfengke", "圈风刻" }, { "menfengke", "役·门风刻" },
+        { "menqianqing", "门前清" }, { "pinghe", "平和" }, { "siguiyi", "四归一" }, { "shuangtongke", "双同刻" },
+        { "shuanganke", "双暗刻" }, { "angang", "暗杠" }, { "duanyao", "断幺" }, { "yibangao", "一般高" }, { "xixiangfeng", "喜相逢" },
         { "lianliu", "连六" }, { "laoshaofu", "老少副" }, { "yaojiuke", "幺九刻" }, { "minggang", "明杠" }, { "queyimen", "缺一门" },
         { "wuzi", "无字" }, { "bianzhang", "独听·边张" }, { "qianzhang", "独听·嵌张" }, { "dandiaojiang", "独听·单钓" },
         { "zimo", "自摸" }, { "huapai", "花牌" }, { "mingangang", "明暗杠" },
@@ -1120,18 +1120,15 @@ public class Kshen_Hepai_Check {
                     }
                 }
 
-                // 根据同色手牌标记的距离判断 连六 老少副
-                // 连六按顺子对计数：仅当两侧起始点各有多余顺子时才复计（如 123123456456 计 2 次，123123456 只计 1 次）
+                // 根据同色手牌标记的距离判断 连六 老少副（与 guobiao_hepai_check-kshen.py 一致）
                 foreach (var list in suit_list)
                 {
                     if (list.Count >= 2)
                     {
-                        for (int rank = 1; rank <= 6; rank++)
+                        foreach (var item in list)
                         {
-                            int pair_count = Math.Min(
-                                list.Count(x => x == rank.ToString()),
-                                list.Count(x => x == (rank + 3).ToString()));
-                            for (int j = 0; j < pair_count; j++)
+                            int i = int.Parse(item);
+                            if (list.Contains((i + 3).ToString()))
                                 player_tiles.fan_list.Add("lianliu"); // 连六
                         }
                         int min_count = Math.Min(list.Count(x => x == "2"), list.Count(x => x == "8"));
@@ -1234,12 +1231,10 @@ public class Kshen_Hepai_Check {
                 {
                     if (all_list.All(i => new[] { "2", "4", "6", "8" }.Contains(i)))
                     {
-                        if (save_quetou_sign.Count > 0)
+                        if (save_quetou_sign.Count > 0 &&
+                            new[] { "2", "4", "6", "8" }.Contains(save_quetou_sign[0][1].ToString()))
                         {
-                            int quetouId = int.Parse(save_quetou_sign[0]);
-                            int quetouRank = quetouId % 10;
-                            if (quetouId < 40 && (quetouRank == 2 || quetouRank == 4 || quetouRank == 6 || quetouRank == 8))
-                                player_tiles.fan_list.Add("quanshuangke"); // 全双刻
+                            player_tiles.fan_list.Add("quanshuangke"); // 全双刻
                         }
                     }
                 }

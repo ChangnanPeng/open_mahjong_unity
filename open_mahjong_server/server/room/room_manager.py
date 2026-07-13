@@ -70,8 +70,85 @@ class RoomManager:
             )
         return None
 
+    def _normalize_event_id(self, event_id) -> Optional[str]:
+        if event_id is None:
+            return None
+        text = str(event_id).strip()
+        return text or None
+
+    def _validate_event_for_room(self, event_id: Optional[str], user_id: Optional[int] = None) -> Optional[Response]:
+        """校验赛事可建房。user_id 有值时额外校验该用户为赛事管理员。"""
+        if not event_id:
+            return None
+        event = self.game_server.db_manager.get_event(event_id)
+        if not event:
+            return Response(type="tips", success=False, message="赛事不存在")
+        if event.get("status") != "active":
+            status = event.get("status") or ""
+            if status == "registered":
+                msg = "赛事尚未开启，无法创建比赛房间"
+            elif status == "closed":
+                msg = "赛事已关闭，无法创建比赛房间"
+            else:
+                msg = "赛事未激活，无法创建比赛房间"
+            return Response(type="tips", success=False, message=msg)
+        if user_id is not None:
+            role = self.game_server.db_manager.get_event_admin_role(event_id, user_id)
+            if not role:
+                return Response(type="tips", success=False, message="您没有该赛事的管理权限")
+        return None
+
+    def _apply_event_fields(self, room_data: dict, event_id: Optional[str]) -> None:
+        if not event_id:
+            return
+        room_data["room_type"] = "events"
+        room_data["event_id"] = event_id
+        room_data["persist_empty"] = True
+
+    def _is_persist_empty_room(self, room_data: dict) -> bool:
+        return bool(
+            room_data.get("persist_empty")
+            or room_data.get("room_type") == "events"
+        )
+
+    def _clear_empty_host(self, room_data: dict) -> None:
+        """空房间无房主；第一个加入的真人由 _sync_room_host 指定。
+        host_user_id 用 0 而非 null，避免 Unity 端 int 反序列化失败。
+        """
+        if not room_data.get("player_list"):
+            room_data["host_user_id"] = 0
+            room_data["host_name"] = ""
+
+    def _normalize_host_user_id(self, room_data: dict) -> None:
+        """保证下发给客户端的 host_user_id 为 int（空房为 0）。"""
+        if room_data.get("host_user_id") is None:
+            room_data["host_user_id"] = 0
+        if not room_data.get("player_list"):
+            room_data["host_user_id"] = 0
+            room_data.setdefault("host_name", "")
+
+    def get_room_list(self, show_tip: bool = False) -> Response:
+        try:
+            room_list = []
+            for room_id, room_data in self.rooms.items():
+                self._normalize_host_user_id(room_data)
+                room_list.append(room_data)
+            return Response(
+                type="room/get_room_list",
+                success=True,
+                message="获取房间列表成功",
+                room_list=room_list,
+                show_tip=show_tip
+            )
+        except Exception as e:
+            return Response(
+                type="error_message",
+                success=False,
+                message=f"获取房间列表失败: {str(e)}"
+            )
+
     async def create_GB_room(self, player_id: str, room_name: str, gameround: int, 
-                           password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "guobiao/standard", hepai_limit: int = 8, tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, cuohe_type: int = 0) -> Response:
+                           password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "guobiao/standard", hepai_limit: int = 8, tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, cuohe_type: int = 0, event_id: Optional[str] = None) -> Response:
         try:
             # 检查玩家是否存在
             if player_id not in self.game_server.players:
@@ -93,6 +170,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username  # 获取房主名（用于显示）
 
             # 获取房主的设置信息
@@ -170,6 +251,7 @@ class RoomManager:
                 "host_name": host_name, # 房主名（用于显示）
                 "is_game_running": False, # 游戏是否正在运行
             }
+            self._apply_event_fields(room_data, event_id)
 
             # 将房间数据尾 添加到room_data中
             room_data.update(validated_config.dict())
@@ -202,7 +284,7 @@ class RoomManager:
 
     async def create_Qingque_room(self, player_id: str, room_name: str, gameround: int,
                                   password: str, roundTimerValue: int, stepTimerValue: int,
-                                  tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True) -> Response:
+                                  tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, event_id: Optional[str] = None) -> Response:
         """
         创建青雀房间。
         青雀规则不支持错和，open_cuohe 参数会被忽略，统一按 False 处理。
@@ -228,6 +310,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username  # 获取房主名（用于显示）
 
             # 获取房主的设置信息
@@ -300,6 +386,7 @@ class RoomManager:
                 "host_name": host_name, # 房主名（用于显示）
                 "is_game_running": False, # 游戏是否正在运行
             }
+            self._apply_event_fields(room_data, event_id)
 
             # 将房间数据尾 添加到room_data中
             room_data.update(validated_config.dict())
@@ -342,7 +429,8 @@ class RoomManager:
                                    initial_hu_liu_liu_shun: bool = True,
                                    initial_hu_san_tong: bool = True,
                                    bird_count: int = 2,
-                                   dealer_bird: bool = True) -> Response:
+                                   dealer_bird: bool = True,
+                                   event_id: Optional[str] = None) -> Response:
         """创建长沙麻将房间。当前接入经典双鸟规则。"""
         try:
             if player_id not in self.game_server.players:
@@ -355,6 +443,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username
 
             host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
@@ -415,6 +507,7 @@ class RoomManager:
                 "host_name": host_name,
                 "is_game_running": False,
             }
+            self._apply_event_fields(room_data, event_id)
 
             room_data.update(validated_config.dict())
             room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
@@ -438,7 +531,7 @@ class RoomManager:
 
     async def create_Classical_room(self, player_id: str, room_name: str, gameround: int,
                                     password: str, roundTimerValue: int, stepTimerValue: int,
-                                    tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True) -> Response:
+                                    tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True, event_id: Optional[str] = None) -> Response:
         """创建古典麻将房间"""
         try:
             if player_id not in self.game_server.players:
@@ -451,6 +544,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username
 
             host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
@@ -503,6 +600,7 @@ class RoomManager:
                 "host_name": host_name,
                 "is_game_running": False,
             }
+            self._apply_event_fields(room_data, event_id)
 
             room_data.update(validated_config.dict())
             room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
@@ -529,7 +627,7 @@ class RoomManager:
                                   password: str, roundTimerValue: int, stepTimerValue: int,
                                   tips: bool, random_seed: int = 0, sub_rule: str = "sichuan/standard",
                                   tourist_limit: bool = False, allow_spectator: bool = True,
-                                  tactical_call: bool = False, blood_battle: bool = True, claim_protection: bool = True) -> Response:
+                                  tactical_call: bool = False, blood_battle: bool = True, claim_protection: bool = True, event_id: Optional[str] = None) -> Response:
         """创建四川麻将（血战到底）房间。blood_battle 为可选开关。"""
         try:
             if player_id not in self.game_server.players:
@@ -542,6 +640,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username
 
             host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
@@ -596,6 +698,7 @@ class RoomManager:
                 "host_name": host_name,
                 "is_game_running": False,
             }
+            self._apply_event_fields(room_data, event_id)
 
             room_data.update(validated_config.dict())
             room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
@@ -630,7 +733,8 @@ class RoomManager:
                                  open_tobi: bool = True,
                                  hepai_way: str = "head_bump",
                                  tourist_limit: bool = False,
-                                 allow_spectator: bool = True) -> Response:
+                                 allow_spectator: bool = True,
+                                 event_id: Optional[str] = None) -> Response:
         """创建立直麻将房间"""
         try:
             if player_id not in self.game_server.players:
@@ -643,6 +747,10 @@ class RoomManager:
             blocked = self._reject_room_entry_conflicts(host_user_id, "创建房间")
             if blocked:
                 return blocked
+            event_id = self._normalize_event_id(event_id)
+            event_blocked = self._validate_event_for_room(event_id, host_user_id)
+            if event_blocked:
+                return event_blocked
             host_name = player.username
 
             host_settings = self.game_server.db_manager.get_user_settings(host_user_id)
@@ -702,6 +810,7 @@ class RoomManager:
                 "host_name": host_name,
                 "is_game_running": False,
             }
+            self._apply_event_fields(room_data, event_id)
 
             room_data.update(validated_config.dict())
             room_data["is_player_set_random_seed"] = validated_config.random_seed != 0
@@ -847,6 +956,9 @@ class RoomManager:
             # 更新玩家信息
             player.current_room_id = room_id
 
+            # 空比赛房：第一个加入的真人成为房主
+            self._sync_room_host(room_data)
+
             # 广播房间信息
             await self._broadcast_room_info(room_id)
 
@@ -904,20 +1016,35 @@ class RoomManager:
             if "player_settings" in room_data and player.user_id in room_data["player_settings"]:
                 del room_data["player_settings"][player.user_id]
 
-            # 如果房间空了就删除
+            # 比赛场空房保留；普通房空了或仅剩机器人则销毁
             if len(room_data["player_list"]) == 0:
-                # 调用 destroy_room 方法进行房间清理
+                if self._is_persist_empty_room(room_data):
+                    self._clear_empty_host(room_data)
+                    await self._broadcast_room_info(room_id)
+                    return Response(
+                        type="room/leave_room_done",
+                        success=True,
+                        message="离开房间成功"
+                    )
                 await self.destroy_room(room_id)
                 return Response(
                     type="room/leave_room_done",
                     success=True,
                     message="房间已解散"
                 )
-            
+
             # 检查剩余玩家是否都是机器人（user_id <= 10）
             all_bots = all(user_id <= 10 for user_id in room_data["player_list"])
             if all_bots:
-                # 如果剩下的玩家都是机器人，也销毁房间
+                if self._is_persist_empty_room(room_data):
+                    self._remove_all_bots_from_room(room_data)
+                    self._clear_empty_host(room_data)
+                    await self._broadcast_room_info(room_id)
+                    return Response(
+                        type="room/leave_room_done",
+                        success=True,
+                        message="离开房间成功"
+                    )
                 await self.destroy_room(room_id)
                 return Response(
                     type="room/leave_room_done",
@@ -928,6 +1055,14 @@ class RoomManager:
             # 有人退出后清理全部机器人，再同步新房主，避免机器人排在 player_list 首位
             self._remove_all_bots_from_room(room_data)
             if len(room_data["player_list"]) == 0:
+                if self._is_persist_empty_room(room_data):
+                    self._clear_empty_host(room_data)
+                    await self._broadcast_room_info(room_id)
+                    return Response(
+                        type="room/leave_room_done",
+                        success=True,
+                        message="离开房间成功"
+                    )
                 await self.destroy_room(room_id)
                 return Response(
                     type="room/leave_room_done",
@@ -1127,8 +1262,16 @@ class RoomManager:
                 except Exception as e:
                     logger.error(f"向被移除玩家 user_id={target_user_id} 发送消息失败: {e}")
 
-            # 如果房间空了就销毁
+            # 如果房间空了：比赛场保留，普通房销毁
             if len(room_data["player_list"]) == 0:
+                if self._is_persist_empty_room(room_data):
+                    self._clear_empty_host(room_data)
+                    await self._broadcast_room_info(room_id)
+                    return Response(
+                        type="tips",
+                        success=True,
+                        message="玩家已移除"
+                    )
                 await self.destroy_room(room_id)
                 return Response(
                     type="tips",
@@ -1299,7 +1442,7 @@ class RoomManager:
         room_data = self.rooms[room_id]
         # 确保准备列表存在，使客户端始终能收到该字段
         room_data.setdefault("ready_list", [])
-        
+        self._normalize_host_user_id(room_data)        
         response = Response(
             type = "room/refresh_room_info",
             success = True,
@@ -1318,6 +1461,164 @@ class RoomManager:
                     logger.debug(f"广播成功")
                 except Exception as e:
                     logger.error(f"广播给玩家 user_id={user_id} 失败: {e}")
+
+
+    async def create_empty_event_room(self, event_id: str, room_rule: str, room_config: dict,
+                                      password: str = "", created_by: Optional[int] = None) -> Response:
+        """管理端创建比赛场空房间（无房主，第一个加入的真人成为房主）。"""
+        event_id = self._normalize_event_id(event_id)
+        event_blocked = self._validate_event_for_room(event_id, None)
+        if event_blocked:
+            return event_blocked
+
+        rule = (room_rule or "").strip()
+        rule_defaults = {
+            "guobiao": ("guobiao/standard", "guobiao"),
+            "qingque": ("qingque/standard", "guobiao"),
+            "classical": ("classical/standard", "guobiao"),
+            "riichi": ("riichi/standard", "riichi"),
+            "sichuan": ("sichuan/standard", "sichuan"),
+            "changsha": ("changsha/classic_double_bird", "changsha"),
+        }
+        if rule not in rule_defaults:
+            return Response(type="tips", success=False, message=f"不支持的规则: {rule}")
+
+        default_sub, _validator_key = rule_defaults[rule]
+        sub_rule = room_config.get("sub_rule") or default_sub
+        tips = bool(room_config.get("tips", False))
+        tourist_limit = bool(room_config.get("tourist_limit", False))
+        allow_spectator = bool(room_config.get("allow_spectator", True))
+        has_password = bool(password)
+
+        base_config = {
+            "room_name": room_config.get("room_name") or f"赛事房间-{event_id[-6:]}",
+            "game_round": int(room_config.get("game_round", 4)),
+            "round_timer": int(room_config.get("round_timer", 20)),
+            "step_timer": int(room_config.get("step_timer", 5)),
+            "random_seed": int(room_config.get("random_seed", 0) or 0),
+        }
+        try:
+            if rule == "guobiao":
+                validated = self.room_validators["guobiao"](
+                    **base_config,
+                    open_cuohe=bool(room_config.get("open_cuohe", False)),
+                    cuohe_type=int(room_config.get("cuohe_type", 0) or 0),
+                    tactical_call=bool(room_config.get("tactical_call", False)),
+                    claim_protection=bool(room_config.get("claim_protection", True)),
+                )
+                hepai_limit = max(1, min(64, int(room_config.get("hepai_limit", 8))))
+            elif rule == "qingque":
+                validated = self.room_validators["guobiao"](
+                    **base_config,
+                    open_cuohe=False,
+                    tactical_call=bool(room_config.get("tactical_call", False)),
+                    claim_protection=bool(room_config.get("claim_protection", True)),
+                )
+                hepai_limit = 1
+            elif rule == "classical":
+                validated = self.room_validators["guobiao"](
+                    **base_config,
+                    open_cuohe=False,
+                )
+                hepai_limit = 1
+            elif rule == "riichi":
+                validated = self.room_validators["riichi"](
+                    **base_config,
+                    open_cuohe=bool(room_config.get("open_cuohe", False)),
+                    hepai_limit=max(1, min(64, int(room_config.get("hepai_limit", 1)))),
+                    red_dora=bool(room_config.get("red_dora", True)),
+                    allow_kuikae=bool(room_config.get("allow_kuikae", False)),
+                    open_xiru=bool(room_config.get("open_xiru", True)),
+                    open_tobi=bool(room_config.get("open_tobi", True)),
+                    hepai_way=room_config.get("hepai_way") or "multi_ron",
+                )
+                hepai_limit = None
+            elif rule == "sichuan":
+                validated = self.room_validators["sichuan"](
+                    **base_config,
+                    tactical_call=bool(room_config.get("tactical_call", False)),
+                    blood_battle=bool(room_config.get("blood_battle", True)),
+                    claim_protection=bool(room_config.get("claim_protection", True)),
+                )
+                hepai_limit = 1
+            else:
+                validated = self.room_validators["changsha"](
+                    **base_config,
+                    open_cuohe=False,
+                    tactical_call=bool(room_config.get("tactical_call", False)),
+                    claim_protection=bool(room_config.get("claim_protection", True)),
+                    open_kong_replacement_count=int(room_config.get("open_kong_replacement_count", 2)),
+                    initial_hu_si_xi=bool(room_config.get("initial_hu_si_xi", True)),
+                    initial_hu_ban_ban_hu=bool(room_config.get("initial_hu_ban_ban_hu", True)),
+                    initial_hu_que_yi_se=bool(room_config.get("initial_hu_que_yi_se", True)),
+                    initial_hu_liu_liu_shun=bool(room_config.get("initial_hu_liu_liu_shun", True)),
+                    initial_hu_san_tong=bool(room_config.get("initial_hu_san_tong", True)),
+                    bird_count=int(room_config.get("bird_count", 2)),
+                    dealer_bird=bool(room_config.get("dealer_bird", True)),
+                )
+                hepai_limit = 1
+        except Exception as e:
+            return Response(type="tips", success=False, message=f"房间配置无效: {e}")
+
+        room_id = self._generate_room_id()
+        room_data = {
+            "room_id": room_id,
+            "room_type": "custom",
+            "room_rule": rule,
+            "sub_rule": sub_rule,
+            "tourist_limit": tourist_limit,
+            "allow_spectator": allow_spectator,
+            "max_player": 4,
+            "player_list": [],
+            "player_settings": {},
+            "ready_list": [],
+            "has_password": has_password,
+            "tips": tips,
+            "show_moqie_hint": False,
+            "host_user_id": 0,
+            "host_name": "",
+            "is_game_running": False,
+            "created_by_admin": created_by,
+        }
+        if hepai_limit is not None:
+            room_data["hepai_limit"] = hepai_limit
+        self._apply_event_fields(room_data, event_id)
+        room_data.update(validated.dict())
+        room_data["is_player_set_random_seed"] = validated.random_seed != 0
+
+        self.rooms[room_id] = room_data
+        if has_password:
+            self.room_passwords[room_id] = password
+        await self._broadcast_room_info(room_id)
+        return Response(
+            type="room/create_room_done",
+            success=True,
+            message="空房间创建成功",
+            room_info=room_data,
+        )
+
+    def list_event_rooms(self, event_id: str) -> list:
+        event_id = self._normalize_event_id(event_id)
+        if not event_id:
+            return []
+        items = []
+        for room_data in self.rooms.values():
+            if room_data.get("event_id") == event_id:
+                items.append(room_data)
+        return items
+
+    async def admin_destroy_event_room(self, room_id: str, event_id: Optional[str] = None) -> Response:
+        if room_id not in self.rooms:
+            return Response(type="tips", success=False, message="房间不存在")
+        room_data = self.rooms[room_id]
+        if room_data.get("room_type") != "events":
+            return Response(type="tips", success=False, message="不是比赛场房间")
+        if event_id and room_data.get("event_id") != event_id:
+            return Response(type="tips", success=False, message="房间不属于该赛事")
+        if room_data.get("is_game_running"):
+            return Response(type="tips", success=False, message="对局进行中，请先结束对局再删除房间")
+        await self.destroy_room(room_id)
+        return Response(type="tips", success=True, message="房间已删除")
 
     async def destroy_room(self, room_id: str):
         """销毁房间并广播离开房间消息给所有玩家"""

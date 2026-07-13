@@ -6,6 +6,7 @@ const {
   querySceneTotals,
   querySceneTotalsFans,
   querySceneDailyGames,
+  queryHomeHierarchyStats,
 } = require('../services/platformStats');
 
 function defaultDateRange(asOfDate, days = 30) {
@@ -57,6 +58,25 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('platform stats error:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+/** 首页：规则 → 匹配/自定义 → 局制 → 等级场 */
+router.get('/home-stats', async (req, res) => {
+  try {
+    const asOfDate = await getAsOfStatDate();
+    const data = await queryHomeHierarchyStats();
+    res.json({
+      success: true,
+      data,
+      meta: {
+        as_of_date: asOfDate,
+        ...(data.meta || {}),
+      },
+    });
+  } catch (error) {
+    console.error('platform home-stats error:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });
   }
 });

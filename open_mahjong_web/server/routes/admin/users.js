@@ -187,11 +187,11 @@ router.get('/:userId', async (req, res) => {
         [userId]
       ),
       pool.query(
-        `SELECT DISTINCT gpr.game_id, gr.created_at, gpr.room_type, gpr.rule, gpr.sub_rule, gpr.match_type
+        `SELECT gpr.game_id, gr.created_at, gpr.room_type, gpr.rule, gpr.sub_rule, gpr.match_type
          FROM game_player_records gpr
          JOIN game_records gr ON gr.game_id = gpr.game_id
          WHERE gpr.user_id = $1
-         ORDER BY gpr.game_id DESC
+         ORDER BY gr.created_at DESC NULLS LAST, gpr.game_id DESC
          LIMIT 10`,
         [userId]
       ),

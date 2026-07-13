@@ -24,6 +24,14 @@ public class RoomItem : MonoBehaviour {
     [SerializeField] private TMP_Text touristLimitText;   // 限制游客
     [SerializeField] private TMP_Text hepaiLimitText;     // 起和番
 
+    [Header("房间样式：上半 / 下半 Image，普通房与比赛场各两色")]
+    [SerializeField] private Image upperPartImage;
+    [SerializeField] private Image lowerPartImage;
+    [SerializeField] private Color normalUpperColor = Color.white;
+    [SerializeField] private Color normalLowerColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+    [SerializeField] private Color eventUpperColor = new Color(1f, 0.82f, 0.35f, 1f);
+    [SerializeField] private Color eventLowerColor = new Color(1f, 0.72f, 0.2f, 1f);
+
     private void Start() {
         // 监听房间元素的点击按钮事件
         joinButton.onClick.AddListener(JoinClick);
@@ -46,10 +54,12 @@ public class RoomItem : MonoBehaviour {
         int gameRound = roomData.game_round;
         bool hasPw = roomData.has_password;
         string roomType = roomData.room_type ?? "";
+        string roomRule = roomData.room_rule ?? "";
         string subRule = roomData.sub_rule ?? "";
         bool isRunning = roomData.is_game_running;
         bool tipsOn = roomData.tips;
         bool openCuohe = roomData.open_cuohe;
+        bool isEventRoom = roomType == "events" || !string.IsNullOrEmpty(roomData.event_id);
 
         this.roomId = rid;
         this.needPassword = hasPw;
@@ -65,6 +75,8 @@ public class RoomItem : MonoBehaviour {
 
         // 规则：用 sub_rule 经 RuleNameDictionary 显示
         playRule.text = RuleNameDictionary.GetWholeName(subRule);
+
+        ApplyRoomStyle(isEventRoom);
 
         // 可选字段：允许观战
         if (allowSpectatorText != null) {
@@ -86,10 +98,10 @@ public class RoomItem : MonoBehaviour {
             }
         }
 
-        // 可选字段：起和番（国标有效，无此字段或非国标时隐藏）
+        // 可选字段：起和番（国标有效）
         if (hepaiLimitText != null) {
             try {
-                if (roomType == "guobiao") {
+                if (roomRule == "guobiao" || roomType == "guobiao") {
                     int hepai = roomData.hepai_limit;
                     hepaiLimitText.text = "起和番:" + (hepai > 0 ? hepai.ToString() : "8");
                     hepaiLimitText.gameObject.SetActive(true);
@@ -108,6 +120,13 @@ public class RoomItem : MonoBehaviour {
         }
         if (tipsText != null) tipsText.text = tipsOn ? "提示:开" : "提示:关";
         if (cuoheText != null) cuoheText.text = openCuohe ? "错和:开" : "错和:关";
+    }
+
+    private void ApplyRoomStyle(bool isEventRoom) {
+        Color upper = isEventRoom ? eventUpperColor : normalUpperColor;
+        Color lower = isEventRoom ? eventLowerColor : normalLowerColor;
+        if (upperPartImage != null) upperPartImage.color = upper;
+        if (lowerPartImage != null) lowerPartImage.color = lower;
     }
 
     private void JoinClick() {

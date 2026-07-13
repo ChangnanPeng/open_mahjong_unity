@@ -47,16 +47,24 @@ def clear_shunhe(player) -> bool:
 
 
 def record_skipped_win_fan(player, passed_fan: int) -> bool:
-    """记录跳过和牌番数；听牌时立即生效，否则待听牌出牌后生效。返回 tag 是否变化。"""
+    """记录跳过和牌番数；听牌时立即生效，否则待听牌出牌后生效。返回 tag 是否变化。
+
+    已生效时取 max，避免多次放弃时用更低番覆盖、或误用残留结果抬高/压低上限。
+    """
+    try:
+        passed_fan = int(passed_fan)
+    except (TypeError, ValueError):
+        passed_fan = 0
     active_cap = getattr(player, "shunhe_passed_max_fan", None)
     if active_cap is not None:
-        player.shunhe_passed_max_fan = passed_fan
+        player.shunhe_passed_max_fan = max(int(active_cap), passed_fan)
         return sync_shunhe_tag(player)
     if player.waiting_tiles:
         player.shunhe_passed_max_fan = passed_fan
         player.shunhe_skipped_fan = None
         return sync_shunhe_tag(player)
-    player.shunhe_skipped_fan = passed_fan
+    pending = getattr(player, "shunhe_skipped_fan", None)
+    player.shunhe_skipped_fan = passed_fan if pending is None else max(int(pending), passed_fan)
     return False
 
 
@@ -67,14 +75,21 @@ def activate_shunhe_if_tenpai_discard(player, was_tenpai: bool) -> bool:
     skipped = getattr(player, "shunhe_skipped_fan", None)
     if skipped is None:
         return False
-    player.shunhe_passed_max_fan = skipped
+    active_cap = getattr(player, "shunhe_passed_max_fan", None)
+    player.shunhe_passed_max_fan = skipped if active_cap is None else max(int(active_cap), int(skipped))
     player.shunhe_skipped_fan = None
     return sync_shunhe_tag(player)
 
 
 def is_blocked_by_shunhe(player, win_fan: int) -> bool:
+    """仅拦截点炮/抢杠且番数 ≤ 已放弃番数；更高番仍可和。"""
     skipped_fan = getattr(player, "shunhe_passed_max_fan", None)
-    return skipped_fan is not None and win_fan <= skipped_fan
+    if skipped_fan is None:
+        return False
+    try:
+        return int(win_fan) <= int(skipped_fan)
+    except (TypeError, ValueError):
+        return False
 
 
 def ron_hu_eligible_indexes(game_state) -> list:

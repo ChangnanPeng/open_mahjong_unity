@@ -22,6 +22,7 @@ public class Riichi_Create_RoomConfig {
     public bool OpenXiru { get; set; }
     public bool OpenTobi { get; set; }
     public string HepaiWay { get; set; }
+    public string EventId { get; set; }
 
     public bool Validate(out string error, bool passwordToggle, bool setRandomSeedToggle) {
         if (string.IsNullOrEmpty(RoomName)) {

@@ -1223,8 +1223,15 @@ class ChangshaGameState:
         )
 
         has_ai_player = any(player.user_id <= 10 for player in self.player_list)
-        if has_ai_player:
+        if self.room_type == "events":
+            logger.info(f'比赛场对局，仅保存牌谱，跳过统计数据保存，game_id: {game_id}')
+        elif has_ai_player:
             logger.info(f'游戏记录包含AI玩家，跳过统计数据保存，game_id: {game_id}')
+        elif game_id and hasattr(self.db_manager, "store_changsha_game_stats"):
+            total_rounds = len(self.game_record.get("game_round", {}))
+            self.db_manager.store_changsha_game_stats(
+                game_id, self.player_list, self.room_type, self.max_round, total_rounds
+            )
 
         # 结束游戏生命周期：使用统一的清理方法
         await self.game_server.gamestate_manager.cleanup_game_state_complete(gamestate_id=self.gamestate_id)
