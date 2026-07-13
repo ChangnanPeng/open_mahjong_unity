@@ -461,3 +461,5 @@ class Response(BaseModel):
     sticker_info: Optional[Sticker_info] = None
     # 房间对局投票暂停/结束：投票状态同步（phase/vote_type/agree/refuse/total/countdown/votes/reason）
     vote_info: Optional[Dict] = None
+    # 赛事：当前用户可管理的 active 赛事列表 [{event_id, name, status, role}, ...]
+    event_list: Optional[List[Dict]] = None

@@ -76,6 +76,7 @@ public class AppConfigPanel : MonoBehaviour {
 
     private void OnEnable() {
         ApplyTargetFrameRateDropdownVisibility();
+        SyncVolumeSlidersFromConfig();
         SyncGameplayDropdownsFromConfig();
     }
 
@@ -84,6 +85,13 @@ public class AppConfigPanel : MonoBehaviour {
         musicVolumeSlider.Init();
         soundEffectVolumeSlider.Init();
         voiceVolumeSlider.Init();
+    }
+
+    private void SyncVolumeSlidersFromConfig() {
+        masterVolumeSlider?.SyncFromConfig();
+        musicVolumeSlider?.SyncFromConfig();
+        soundEffectVolumeSlider?.SyncFromConfig();
+        voiceVolumeSlider?.SyncFromConfig();
     }
 
     private void InitializeGameplayDropdownOptions() {

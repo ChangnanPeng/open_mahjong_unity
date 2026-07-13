@@ -53,6 +53,9 @@ open_mahjong_server/logs/
 # Web项目：只忽略不需要的文件和目录
 open_mahjong_web/node_modules/*
 open_mahjong_web/client/node_modules/*
+open_mahjong_web/.env
+open_mahjong_web/.env.local
+open_mahjong_web/.env.*.local
 
 # 不忽略.gitignore
 !.gitignore

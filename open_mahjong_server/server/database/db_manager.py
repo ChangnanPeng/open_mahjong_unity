@@ -507,6 +507,31 @@ class DatabaseManager:
                 );
             """)
 
+            # 创建表 changsha_history_stats（长沙麻将基础统计）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS changsha_history_stats (
+                    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    rule VARCHAR(10) NOT NULL,
+                    mode VARCHAR(20) NOT NULL,
+                    total_games INT NOT NULL DEFAULT 0,
+                    total_rounds INT NOT NULL DEFAULT 0,
+                    win_count INT NOT NULL DEFAULT 0,
+                    self_draw_count INT NOT NULL DEFAULT 0,
+                    deal_in_count INT NOT NULL DEFAULT 0,
+                    total_fan_score INT NOT NULL DEFAULT 0,
+                    total_win_turn INT NOT NULL DEFAULT 0,
+                    total_fangchong_score INT NOT NULL DEFAULT 0,
+                    first_place_count INT NOT NULL DEFAULT 0,
+                    second_place_count INT NOT NULL DEFAULT 0,
+                    third_place_count INT NOT NULL DEFAULT 0,
+                    fourth_place_count INT NOT NULL DEFAULT 0,
+                    fulu_round_count INT NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, rule, mode)
+                );
+            """)
+
             # users 表迁移：is_mcrpl_qualified、sponsor_expires_at（赞助到期时间，NULL 表示非赞助或已过期）
             for col_name, col_def in [
                 ("is_mcrpl_qualified", "BOOLEAN NOT NULL DEFAULT FALSE"),
@@ -877,6 +902,62 @@ class DatabaseManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (stat_date, match_tier, rule, fan_field)
                 );
+            """)
+
+            # 比赛场：赛事实体与管理员（room_type='events' + event_id）
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS events (
+                    event_id   VARCHAR(32) PRIMARY KEY,
+                    name       VARCHAR(128) NOT NULL,
+                    status     VARCHAR(16) NOT NULL DEFAULT 'registered',
+                    created_by BIGINT NOT NULL,
+                    closed_at  TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT events_status_chk CHECK (status IN ('registered', 'active', 'closed'))
+                );
+            """)
+            cursor.execute("SAVEPOINT sp_events_reopen;")
+            try:
+                cursor.execute(
+                    "ALTER TABLE events ADD COLUMN reopen_requested BOOLEAN NOT NULL DEFAULT FALSE;"
+                )
+            except Error as e:
+                if getattr(e, "pgcode", None) == "42701":
+                    cursor.execute("ROLLBACK TO SAVEPOINT sp_events_reopen;")
+                else:
+                    raise
+            cursor.execute("SAVEPOINT sp_events_status_chk;")
+            try:
+                cursor.execute("ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_chk;")
+                cursor.execute(
+                    "ALTER TABLE events ADD CONSTRAINT events_status_chk "
+                    "CHECK (status IN ('registered', 'active', 'closed'));"
+                )
+            except Error:
+                cursor.execute("ROLLBACK TO SAVEPOINT sp_events_status_chk;")
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_events_status
+                ON events(status);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_events_created_at
+                ON events(created_at DESC);
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS event_admins (
+                    event_id   VARCHAR(32) NOT NULL REFERENCES events(event_id) ON DELETE CASCADE,
+                    user_id    BIGINT NOT NULL,
+                    role       VARCHAR(16) NOT NULL,
+                    added_by   BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (event_id, user_id),
+                    CONSTRAINT event_admins_role_chk CHECK (role IN ('owner', 'admin'))
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_event_admins_user
+                ON event_admins(user_id);
             """)
 
             conn.commit() # 提交
@@ -2202,6 +2283,89 @@ class DatabaseManager:
                 cursor.close()
                 self._put_connection(conn)
 
+    def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
+        """按 event_id 取赛事实体；不存在返回 None。"""
+        if not event_id:
+            return None
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                """
+                SELECT event_id, name, status, created_by, closed_at, created_at, updated_at
+                FROM events WHERE event_id = %s
+                """,
+                (event_id,),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Error as e:
+            logger.error(f'get_event 失败: {e}')
+            if conn:
+                conn.rollback()
+            return None
+        finally:
+            if conn:
+                cursor.close()
+                self._put_connection(conn)
+
+    def get_event_admin_role(self, event_id: str, user_id: int) -> Optional[str]:
+        """返回用户在赛事中的角色 owner/admin；无权限返回 None。"""
+        if not event_id or not user_id:
+            return None
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT role FROM event_admins
+                WHERE event_id = %s AND user_id = %s
+                """,
+                (event_id, user_id),
+            )
+            row = cursor.fetchone()
+            return row[0] if row else None
+        except Error as e:
+            logger.error(f'get_event_admin_role 失败: {e}')
+            if conn:
+                conn.rollback()
+            return None
+        finally:
+            if conn:
+                cursor.close()
+                self._put_connection(conn)
+
+    def list_user_active_events(self, user_id: int) -> List[Dict[str, Any]]:
+        """列出用户可管理且 status=active 的赛事。"""
+        if not user_id:
+            return []
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(
+                """
+                SELECT e.event_id, e.name, e.status, ea.role
+                FROM event_admins ea
+                INNER JOIN events e ON e.event_id = ea.event_id
+                WHERE ea.user_id = %s AND e.status = 'active'
+                ORDER BY e.created_at DESC
+                """,
+                (user_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+        except Error as e:
+            logger.error(f'list_user_active_events 失败: {e}')
+            if conn:
+                conn.rollback()
+            return []
+        finally:
+            if conn:
+                cursor.close()
+                self._put_connection(conn)
+
 
 # 挂载国标麻将相关方法到 DatabaseManager 类
 from .guobiao.store_guobiao import store_guobiao_game_record, store_guobiao_game_stats, store_guobiao_fan_stats
@@ -2229,10 +2393,11 @@ from .sichuan.store_sichuan import store_sichuan_game_record
 
 DatabaseManager.store_sichuan_game_record = store_sichuan_game_record
 
-# 挂载长沙麻将相关方法到 DatabaseManager 类（牌谱写通用表，无需专用统计表）
-from .changsha.store_changsha import store_changsha_game_record
+# 挂载长沙麻将相关方法到 DatabaseManager 类
+from .changsha.store_changsha import store_changsha_game_record, store_changsha_game_stats
 
 DatabaseManager.store_changsha_game_record = store_changsha_game_record
+DatabaseManager.store_changsha_game_stats = store_changsha_game_stats
 
 from .riichi.store_riichi import store_riichi_game_record, store_riichi_game_stats, store_riichi_fan_stats
 from .riichi.get_riichi_stats import get_riichi_stats

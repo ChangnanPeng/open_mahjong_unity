@@ -7,6 +7,8 @@ const {
   fetchPlayerRankStats,
   buildRecordFilters,
   buildRecordMeta,
+  listPublicEvents,
+  fetchPublicEventDetail,
   LIST_PAGE_MAX,
 } = require('../services/playerPublicApi');
 const {
@@ -52,6 +54,30 @@ const analyzeLimiter = createWindowLimiter({
 
 router.get('/info/:key', playerQueryLimiter, handlePlayerInfo);
 router.get('/records/:key', playerQueryLimiter, handlePlayerRecords);
+
+// 历史赛事列表（含已关闭），供比赛场筛选下拉
+router.get('/events', async (req, res) => {
+  try {
+    const items = await listPublicEvents();
+    res.json({ success: true, data: { items } });
+  } catch (error) {
+    console.error('player events list:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
+
+router.get('/events/:eventId', async (req, res) => {
+  try {
+    const detail = await fetchPublicEventDetail(req.params.eventId);
+    if (!detail) {
+      return res.status(404).json({ success: false, message: '赛事不存在' });
+    }
+    res.json({ success: true, data: detail });
+  } catch (error) {
+    console.error('player events detail:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  }
+});
 
 // 单局牌谱下载：直接返回原始 record JSON
 router.get('/record/:gameId', downloadLimiter, async (req, res) => {
@@ -301,7 +327,7 @@ router.get('/hot', async (req, res) => {
 // 顺位统计：与对局记录列表同源（game_player_records.rank）
 router.get('/rank-stats/:key', playerQueryLimiter, handlePlayerRankStats);
 
-// 范围对局数：总局数 / 天梯 / 自定义（与对局记录 room_type 划分一致）
+// 范围对局数：全部 / 天梯 / 初级 / 中级 / 高级 / mcrpl / 自定义 / 比赛场
 router.get('/scope-counts/:key', playerQueryLimiter, async (req, res) => {
   try {
     const userId = await resolveUserId(req.params.key);
@@ -315,19 +341,27 @@ router.get('/scope-counts/:key', playerQueryLimiter, async (req, res) => {
       date_from: req.query.date_from || null,
       date_to: req.query.date_to || null,
     };
-    const [allRow, rankRow, customRow] = await Promise.all([
-      fetchPlayerRankStats(userId, base),
-      fetchPlayerRankStats(userId, { ...base, tier: 'rank' }),
-      fetchPlayerRankStats(userId, { ...base, tier: 'custom' }),
-    ]);
-    res.json({
-      success: true,
-      data: {
-        all: allRow.total_games,
-        rank: rankRow.total_games,
-        custom: customRow.total_games,
-      },
+    const sceneKeys = ['rank', 'custom', 'beginner', 'intermediate', 'advanced', 'mcrpl', 'events'];
+    const tierByScene = {
+      rank: 'rank',
+      custom: 'custom',
+      beginner: 'beginner',
+      intermediate: 'intermediate',
+      advanced: 'advanced',
+      mcrpl: 'mcrpl',
+      events: 'events',
+    };
+    const results = await Promise.all(
+      sceneKeys.map((key) => {
+        const tier = tierByScene[key];
+        return fetchPlayerRankStats(userId, { ...base, tier });
+      })
+    );
+    const data = {};
+    sceneKeys.forEach((key, i) => {
+      data[key] = results[i].total_games;
     });
+    res.json({ success: true, data });
   } catch (error) {
     console.error('scope-counts:', error);
     res.status(500).json({ success: false, message: '服务器内部错误' });

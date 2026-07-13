@@ -146,10 +146,13 @@ public partial class GameRecordManager : MonoBehaviour {
     }
 
     /// <summary>
-    /// 荣和 tick 推演：去掉未切摸牌位并写入和牌张，与服务器 hand_tiles.append 对齐。
+    /// 荣和 tick 推演：正确和牌写入和牌张；国标错和续局不写入手牌（展示由 BuildDisplayHand 拼）。
     /// </summary>
     private void ApplyRecordRonHuToHandState(List<string> tick, string action) {
         if (action != "hu_first" && action != "hu_second" && action != "hu_third") {
+            return;
+        }
+        if (HuFanContainsCuohe(ParseHuFanList(tick, 3))) {
             return;
         }
         int hepaiPlayerIndex = ParseTickInt(tick, 1);

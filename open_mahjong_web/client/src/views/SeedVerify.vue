@@ -1,14 +1,13 @@
 <!-- 随机种子验证：输入对局结束公布的主种子，在浏览器内复现随机座位与每一局的配牌/牌山 -->
 <template>
   <div class="seed-verify">
-    <div class="page-header">
+    <header class="page-banner">
       <h1>随机种子验证</h1>
-      <p class="subtitle">
-        对局开始前服务器公布 承诺值 = SHA256(主种子 + 盐值)，对局结束后公布主种子与盐值。
-        在此输入主种子即可在本地复现整场对局的随机座位与每一局的配牌、牌山，验证服务器未在中途更换种子。
-        所有计算均在浏览器内完成，不经过服务器。
+      <p>
+        对局开始前服务器公布承诺值 = SHA256(主种子 + 盐值)，对局结束后公布主种子与盐值。
+        在此本地复现随机座位与每局配牌，验证服务器未中途更换种子。计算均在浏览器内完成。
       </p>
-    </div>
+    </header>
 
     <section class="card main-card">
       <header class="card-header"><span>输入</span></header>
@@ -224,32 +223,47 @@ function notation(t) {
 
 <style scoped>
 .seed-verify {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 16px;
+  --accent: #e6a23c;
+  --accent-deep: #c0841a;
+  color: #333;
 }
 
-.page-header h1 {
+.page-banner {
+  background: var(--accent);
+  color: #fff;
+  padding: 22px 20px;
+}
+
+.page-banner h1 {
   margin: 0 0 6px;
-  font-size: 22px;
-  color: #fff;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.25);
+  font-size: 1.45rem;
+  font-weight: 700;
 }
 
-.subtitle {
-  color: #fff;
+.page-banner p {
+  margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  margin: 0 0 14px;
   opacity: 0.95;
 }
 
 .card {
   background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  border-top: 0;
   padding: 14px 16px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
+}
+
+.card + .card,
+.main-card + .card,
+.card + .banner-card {
+  margin-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.main-card {
+  border-top: 0;
 }
 
 .card-header {
@@ -258,6 +272,10 @@ function notation(t) {
   align-items: center;
   font-weight: 600;
   margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  color: var(--accent-deep);
+  font-size: 13px;
 }
 
 .row {
@@ -289,6 +307,7 @@ function notation(t) {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  border-top: 1px solid #e0e0e0;
 }
 
 .banner-card.ok {
@@ -322,8 +341,7 @@ function notation(t) {
   height: 24px;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  background: #545c64;
+  background: var(--accent-deep);
   color: #fff;
   font-size: 13px;
 }

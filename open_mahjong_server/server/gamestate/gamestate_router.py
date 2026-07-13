@@ -270,6 +270,9 @@ async def handle_add_spectator(game_server, Connect_id: str, message: dict, webs
             )
             await websocket.send_json(response.dict(exclude_none=True))
             return
+
+        # 同一用户只能挂一场延时观战，避免多场推流串台
+        await game_server.gamestate_manager.remove_spectator_from_all_games(user_id)
         
         # 添加观战玩家
         await guobiao_game_state.add_spectator(user_id, player_connection)

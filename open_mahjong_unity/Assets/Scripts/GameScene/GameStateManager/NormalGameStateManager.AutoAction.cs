@@ -10,6 +10,10 @@ public partial class NormalGameStateManager {
         "hu", "hu_first", "hu_second", "hu_third"
     };
 
+    private static readonly string[] HandActionsBlockingAutoCut = {
+        "buzhang", "angang", "jiagang", "hu_self", "initial_hu", "sea_bottom", "buhua"
+    };
+
     /// <summary>取消未完成的自动操作协程，避免手动/自动 ChooseAction 后过期协程再次 ClearAction。</summary>
     public void CancelWaitAutoAction(string reason) {
         if (waitAutoActionCoroutine == null) {
@@ -20,9 +24,14 @@ public partial class NormalGameStateManager {
         Debug.Log($"[AutoAction] 取消 WaitAutoAction | 原因={reason}");
     }
 
-    private void StartWaitAutoAction(string action) {
+    private void StartDelayedAutoChoose(string actionType, float delaySeconds) {
         CancelWaitAutoAction("新协程启动");
-        waitAutoActionCoroutine = StartCoroutine(WaitAutoAction(action));
+        waitAutoActionCoroutine = StartCoroutine(DelayedAutoChoose(actionType, delaySeconds));
+    }
+
+    private void StartWaitAutoCut() {
+        CancelWaitAutoAction("新协程启动");
+        waitAutoActionCoroutine = StartCoroutine(WaitAutoCut());
     }
 
     private void ClearWaitAutoActionCoroutineRef() {
@@ -39,7 +48,7 @@ public partial class NormalGameStateManager {
 
     /// <summary>
     /// 鸣牌询问：应用「不吃/不碰/不明杠」及「不点和」逐项过滤后，仍可供选择的操作（不含 pass）。
-    /// 「不点和」会将荣和纳入 pass 判定；若该牌同时有可用的未过滤鸣牌（如可碰且未开「不碰」），则保留点和等待玩家。
+    /// 仅用于判定是否「全部跳过」可自动 pass；不做 UI 过滤。
     /// </summary>
     private static List<string> BuildRemainingActionsAfterMeldFilter(List<string> source) {
         List<string> remaining = new List<string>(source);
@@ -99,6 +108,92 @@ public partial class NormalGameStateManager {
         return BuildRemainingActionsAfterMeldFilter(allowActions).Count == 0;
     }
 
+    /// <summary>
+    /// 鸣牌询问是否可在显示按钮前全量自动处理。
+    /// 优先级：牌张跳过 → 自动和 → 鸣牌过滤后无剩余项则 pass。
+    /// pass 立即发网（delay=0）；自动和保留短延迟。半自动返回 false，UI 显示服务端全集按钮。
+    /// </summary>
+    private bool TryResolveFullAutoMingPai(out string actionType, out float delaySeconds) {
+        actionType = null;
+        delaySeconds = 0f;
+        if (IsRealtimeSpectator || AutoAction.Instance == null) {
+            return false;
+        }
+
+        // 1. 牌张设置命中：不询问任何操作（含荣和）
+        if (AutoAction.Instance.ShouldAutoPassForCurrentDiscard()) {
+            actionType = "pass";
+            return true;
+        }
+
+        // 2. 自动和牌（受不点和/不抢杠约束）
+        string huAction = GetFirstHuAction(allowActionList);
+        if (!string.IsNullOrEmpty(huAction)) {
+            bool shouldAutoWin = IsQiangGangAsk
+                ? AutoAction.Instance.ShouldAutoWinRobKong()
+                : AutoAction.Instance.ShouldAutoWinRon();
+            if (shouldAutoWin) {
+                actionType = huAction;
+                delaySeconds = 0.2f;
+                return true;
+            }
+        }
+
+        // 3. 全部可操作项被筛光 → 自动 pass
+        if (ShouldAutoPassMingPaiAsk(allowActionList)) {
+            actionType = "pass";
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 手牌询问是否可在显示按钮前立刻自动处理（自摸/起手胡/补花）。
+    /// 自动出牌仍需手牌 UI，不走此路径。
+    /// </summary>
+    private bool TryResolveImmediateAutoHand(out string actionType, out float delaySeconds) {
+        actionType = null;
+        delaySeconds = 0.2f;
+        if (IsRealtimeSpectator || AutoAction.Instance == null) {
+            return false;
+        }
+
+        if (allowActionList.Contains("initial_hu") && AutoAction.Instance.IsAutoHepai) {
+            actionType = "initial_hu";
+            return true;
+        }
+
+        if (allowActionList.Contains("hu_self")
+            && AutoAction.Instance.ShouldAutoWinTsumo()
+            && !AutoAction.Instance.ShouldAutoPassForCurrentDraw()) {
+            actionType = "hu_self";
+            return true;
+        }
+
+        if (allowActionList.Contains("buhua") && AutoAction.Instance.IsAutoBuhua) {
+            actionType = "buhua";
+            delaySeconds = 0.3f;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>是否应在已显示按钮后挂起自动摸切协程。</summary>
+    private bool ShouldStartAutoCut() {
+        if (IsRealtimeSpectator || AutoAction.Instance == null || !AutoAction.Instance.IsAutoCut) {
+            return false;
+        }
+        if (HandActionsBlockingAutoCut.Any(allowActionList.Contains)) {
+            return false;
+        }
+        if (lastDealTileType == "deal_gang_tile") {
+            return false;
+        }
+        return true;
+    }
+
     /// <summary>自家当前摸入牌 id：优先 lastDealTileId，否则回退 2D 摸牌区标记。</summary>
     public int GetCurrentDrawTileId() {
         if (lastDealTileId > 0) {
@@ -113,116 +208,35 @@ public partial class NormalGameStateManager {
         return 0;
     }
 
-    /// <summary>
-    /// 等待并执行自动操作协程。
-    /// AutoMingPaiAction（他人切牌/加杠后的鸣牌询问）优先级：
-    ///   1. 牌张设置命中 → 直接 pass（含荣和，最高优先级）
-    ///   2. 自动和牌（受不点和/不抢杠约束）
-    ///   3. 鸣牌过滤 +「不点和」后无任何剩余可操作项 → 自动 pass
-    ///   4. 仍有剩余项（含手动和牌或与未过滤鸣牌并存的点和）→ 不自动操作，等待玩家
-    /// AutoHandAction（自己回合手牌询问）优先级：
-    ///   1. 牌张设置命中摸入牌 → 跳过自动自摸
-    ///   2. 自动自摸（受不自摸约束） 3. 自动补花 4. 自动出牌
-    /// </summary>
-    private IEnumerator WaitAutoAction(string action){
-        if (IsRealtimeSpectator) {
-            yield break;
-        }
-
+    /// <summary>延迟发送已决议的自动操作；期间不创建操作按钮。</summary>
+    private IEnumerator DelayedAutoChoose(string actionType, float delaySeconds) {
         try {
-            // 鸣牌操作自动执行
-            if (action == "AutoMingPaiAction"){
-                string actualHupaiAction = GetFirstHuAction(allowActionList);
-                bool hasHuAction = !string.IsNullOrEmpty(actualHupaiAction);
-
-                // 牌张设置最优先：命中牌张时不询问任何操作（含荣和）
-                if (AutoAction.Instance.ShouldAutoPassForCurrentDiscard()){
-                    yield return new WaitForSeconds(0.2f);
-                    GameCanvas.Instance.ChooseAction("pass", 0);
-                    yield break;
-                }
-
-                // 自动和牌
-                if (hasHuAction){
-                    bool isQiangGangAsk = Instance != null && IsQiangGangAsk;
-                    bool shouldAutoWin = isQiangGangAsk
-                        ? AutoAction.Instance.ShouldAutoWinRobKong()
-                        : AutoAction.Instance.ShouldAutoWinRon();
-                    if (shouldAutoWin){
-                        yield return new WaitForSeconds(0.2f);
-                        GameCanvas.Instance.ChooseAction(actualHupaiAction, 0);
-                        yield break;
-                    }
-                }
-
-                // 鸣牌过滤 +「不点和」：全部可操作项被筛光才自动 pass
-                if (ShouldAutoPassMingPaiAsk(allowActionList)) {
-                    yield return new WaitForSeconds(0.2f);
-                    GameCanvas.Instance.ChooseAction("pass", 0);
-                    yield break;
-                }
-
+            if (IsRealtimeSpectator) {
+                yield break;
+            }
+            if (delaySeconds > 0f) {
+                yield return new WaitForSeconds(delaySeconds);
+            }
+            else {
                 yield return null;
             }
+            GameCanvas.Instance.ChooseAction(actionType, 0);
+        }
+        finally {
+            ClearWaitAutoActionCoroutineRef();
+        }
+    }
 
-            // 手牌操作自动执行
-            else if (action == "AutoHandAction"){
-                // 起手胡询问：自动胡牌开启时接受，否则等待玩家手动选择
-                if (allowActionList.Contains("initial_hu")){
-                    if (AutoAction.Instance.IsAutoHepai){
-                        yield return new WaitForSeconds(0.2f);
-                        GameCanvas.Instance.ChooseAction("initial_hu", 0);
-                        yield break;
-                    }
-                }
-
-                // 如果允许操作列表有hu_self
-                if (allowActionList.Contains("hu_self")){
-                    // 自动胡牌开启、未勾选「不自摸」、且摸入牌未命中「不询问」列表时执行自动自摸
-                    if (AutoAction.Instance.ShouldAutoWinTsumo()
-                        && !AutoAction.Instance.ShouldAutoPassForCurrentDraw()){
-                        yield return new WaitForSeconds(0.2f);
-                        GameCanvas.Instance.ChooseAction("hu_self", 0);
-                        yield break;
-                    }
-                }
-
-                // 如果允许操作列表有buhua
-                if (allowActionList.Contains("buhua")){
-                    // 如果开启自动补花，则执行自动补花
-                    if (AutoAction.Instance.IsAutoBuhua){
-                        yield return new WaitForSeconds(0.3f);
-                        GameCanvas.Instance.ChooseAction("buhua", 0);
-                        yield break;
-                    }
-                }
-
-                List<string> allowActionWithoutCut = new List<string>{"buzhang","angang","jiagang","hu_self","initial_hu","sea_bottom","buhua"};
-                // 如果允许操作列表有除去cut的其他操作 则转到玩家操作
-                if (allowActionWithoutCut.Any(allowActionList.Contains)){
-                    yield return null;
-                }
-                // 如果上次摸牌类型是杠牌，不执行自动出牌
-                else if (lastDealTileType == "deal_gang_tile"){
-                    yield return null;
-                }
-                // 如果没有，则执行自动出牌
-                else{
-                    if (AutoAction.Instance.IsAutoCut){
-                        float autoCutDelay = AutoAction.Instance.IsAutoCutLocked ? 0.3f : 0.5f;
-                        yield return new WaitForSeconds(autoCutDelay);
-                        if (!GameCanvas.Instance.TriggerMoqieHandCardClick()) {
-                            Debug.LogWarning("自动出牌失败：手牌容器中没有可出的牌");
-                        }
-                    }
-                    else{
-                        yield return null;
-                    }
-                }
+    /// <summary>已显示按钮后的自动摸切（立直锁切等）。</summary>
+    private IEnumerator WaitAutoCut() {
+        try {
+            if (IsRealtimeSpectator || AutoAction.Instance == null || !AutoAction.Instance.IsAutoCut) {
+                yield break;
             }
-
-            else{
-                Debug.LogWarning($"未知操作: {action}");
+            float autoCutDelay = AutoAction.Instance.IsAutoCutLocked ? 0.3f : 0.5f;
+            yield return new WaitForSeconds(autoCutDelay);
+            if (!GameCanvas.Instance.TriggerMoqieHandCardClick()) {
+                Debug.LogWarning("自动出牌失败：手牌容器中没有可出的牌");
             }
         }
         finally {

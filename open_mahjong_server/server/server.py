@@ -15,6 +15,7 @@ from .gamestate.gamestate_router import handle_gamestate_message
 from .database.data_router import handle_data_message
 from .match.match_router import handle_match_message
 from .friend.friend_router import handle_friend_message
+from .event.event_router import handle_event_message
 from .friend.friend_manager import FriendManager
 from .gamestate.gamestate_manager import GameStateManager
 from .database.db_manager import DatabaseManager
@@ -309,27 +310,27 @@ class GameServer:
             logging.info(f"已存储{'游客' if is_tourist else '玩家'} user_id={user_id}, username={username} 的会话数据")
 
     # 创建国标房间
-    async def create_GB_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "guobiao/standard", hepai_limit: int = 8, tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, cuohe_type: int = 0) -> Response:
-        return await self.room_manager.create_GB_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, open_cuohe, sub_rule, hepai_limit, tourist_limit, allow_spectator, tactical_call, claim_protection, cuohe_type)
+    async def create_GB_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, open_cuohe: bool = False, sub_rule: str = "guobiao/standard", hepai_limit: int = 8, tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, cuohe_type: int = 0, event_id=None) -> Response:
+        return await self.room_manager.create_GB_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, open_cuohe, sub_rule, hepai_limit, tourist_limit, allow_spectator, tactical_call, claim_protection, cuohe_type, event_id)
 
     # 创建青雀房间
-    async def create_Qingque_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True) -> Response:
-        return await self.room_manager.create_Qingque_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, False, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection)
+    async def create_Qingque_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "qingque/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, event_id=None) -> Response:
+        return await self.room_manager.create_Qingque_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, False, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, event_id)
 
     # 创建长沙麻将房间
-    async def create_Changsha_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, open_kong_replacement_count: int = 2, initial_hu_si_xi: bool = True, initial_hu_ban_ban_hu: bool = True, initial_hu_que_yi_se: bool = True, initial_hu_liu_liu_shun: bool = True, initial_hu_san_tong: bool = True, bird_count: int = 2, dealer_bird: bool = True) -> Response:
-        return await self.room_manager.create_Changsha_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, open_kong_replacement_count, initial_hu_si_xi, initial_hu_ban_ban_hu, initial_hu_que_yi_se, initial_hu_liu_liu_shun, initial_hu_san_tong, bird_count, dealer_bird)
+    async def create_Changsha_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "changsha/classic_double_bird", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, claim_protection: bool = True, open_kong_replacement_count: int = 2, initial_hu_si_xi: bool = True, initial_hu_ban_ban_hu: bool = True, initial_hu_que_yi_se: bool = True, initial_hu_liu_liu_shun: bool = True, initial_hu_san_tong: bool = True, bird_count: int = 2, dealer_bird: bool = True, event_id=None) -> Response:
+        return await self.room_manager.create_Changsha_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, claim_protection, open_kong_replacement_count, initial_hu_si_xi, initial_hu_ban_ban_hu, initial_hu_que_yi_se, initial_hu_liu_liu_shun, initial_hu_san_tong, bird_count, dealer_bird, event_id)
 
     # 创建古典麻将房间
-    async def create_Classical_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True) -> Response:
-        return await self.room_manager.create_Classical_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator)
+    async def create_Classical_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "classical/standard", tourist_limit: bool = False, allow_spectator: bool = True, event_id=None) -> Response:
+        return await self.room_manager.create_Classical_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, event_id)
 
-    async def create_Riichi_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "riichi/standard", open_cuohe: bool = False, hepai_limit: int = 1, red_dora: bool = True, allow_kuikae: bool = False, open_xiru: bool = True, open_tobi: bool = True, hepai_way: str = "head_bump", tourist_limit: bool = False, allow_spectator: bool = True) -> Response:
-        return await self.room_manager.create_Riichi_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, open_cuohe, hepai_limit, red_dora, allow_kuikae, open_xiru, open_tobi, hepai_way, tourist_limit, allow_spectator)
+    async def create_Riichi_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "riichi/standard", open_cuohe: bool = False, hepai_limit: int = 1, red_dora: bool = True, allow_kuikae: bool = False, open_xiru: bool = True, open_tobi: bool = True, hepai_way: str = "head_bump", tourist_limit: bool = False, allow_spectator: bool = True, event_id=None) -> Response:
+        return await self.room_manager.create_Riichi_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, open_cuohe, hepai_limit, red_dora, allow_kuikae, open_xiru, open_tobi, hepai_way, tourist_limit, allow_spectator, event_id)
 
     # 创建四川麻将（血战到底）房间
-    async def create_Sichuan_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "sichuan/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, blood_battle: bool = True, claim_protection: bool = True) -> Response:
-        return await self.room_manager.create_Sichuan_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, blood_battle, claim_protection)
+    async def create_Sichuan_room(self, Connect_id: str, room_name: str, gameround: int, password: str, roundTimerValue: int, stepTimerValue: int, tips: bool, random_seed: int = 0, sub_rule: str = "sichuan/standard", tourist_limit: bool = False, allow_spectator: bool = True, tactical_call: bool = False, blood_battle: bool = True, claim_protection: bool = True, event_id=None) -> Response:
+        return await self.room_manager.create_Sichuan_room(Connect_id, room_name, gameround, password, roundTimerValue, stepTimerValue, tips, random_seed, sub_rule, tourist_limit, allow_spectator, tactical_call, blood_battle, claim_protection, event_id)
 
     # 获取房间列表
     def get_room_list(self, show_tip: bool = False) -> Response:
@@ -412,10 +413,12 @@ from .webapi.calc import register_calc_routes
 from .webapi.admin_message import register_admin_message_routes
 from .webapi.admin_user import register_admin_user_routes
 from .webapi.admin_game import register_admin_game_routes
+from .webapi.admin_event_room import register_admin_event_room_routes
 register_calc_routes(app, game_server)
 register_admin_message_routes(app, game_server)
 register_admin_user_routes(app, game_server)
 register_admin_game_routes(app, game_server)
+register_admin_event_room_routes(app, game_server)
 
 @app.websocket("/game/{Connect_id}")
 async def message_input(websocket: WebSocket, Connect_id: str):
@@ -510,6 +513,9 @@ async def message_input(websocket: WebSocket, Connect_id: str):
             elif message.get("type", "").startswith("room/"):
                 # 房间相关消息，交由房间路由处理器处理
                 await handle_room_message(game_server, Connect_id, message, websocket)
+
+            elif message.get("type", "").startswith("event/"):
+                await handle_event_message(game_server, Connect_id, message, websocket)
 
             # 检查是否是游戏状态相关消息（type 字段以 "gamestate/" 开头）
             elif message.get("type", "").startswith("gamestate/"):

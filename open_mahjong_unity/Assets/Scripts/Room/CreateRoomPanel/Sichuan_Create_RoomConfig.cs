@@ -17,6 +17,7 @@ public class Sichuan_Create_RoomConfig {
     public bool AllowSpectator { get; set; }
     public bool TacticalCall { get; set; }
     public bool BloodBattle { get; set; }
+    public string EventId { get; set; }
 
     public bool Validate(out string error, bool passwordToggle, bool setRandomSeedToggle) {
         if (string.IsNullOrEmpty(RoomName)) {

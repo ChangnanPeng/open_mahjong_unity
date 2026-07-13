@@ -71,6 +71,10 @@ public class RoomListPanel : MonoBehaviour {
         if (LobbyStateGuard.BlockIfInMatchQueueForRoom()) {
             return;
         }
+        if (LobbyStateGuard.IsInRoom) {
+            NotificationManager.Instance.ShowTip("join_room", false, "请先退出当前房间");
+            return;
+        }
         if (string.IsNullOrEmpty(RoomIdInput.text)) {
             NotificationManager.Instance.ShowTip("tips",false,"房间ID不能为空");
             return;
@@ -123,6 +127,10 @@ public class RoomListPanel : MonoBehaviour {
     // 如果需要密码 则打开密码输入面板 并保存roomId 否则直接调用joinRoom
     public void JoinClicked(string roomId, bool needPassword) {
         if (LobbyStateGuard.BlockIfInMatchQueueForRoom()) {
+            return;
+        }
+        if (LobbyStateGuard.IsInRoom) {
+            NotificationManager.Instance.ShowTip("join_room", false, "请先退出当前房间");
             return;
         }
         if (needPassword) {
