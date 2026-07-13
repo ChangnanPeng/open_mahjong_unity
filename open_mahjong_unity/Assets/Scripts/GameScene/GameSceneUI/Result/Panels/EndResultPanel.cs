@@ -816,6 +816,7 @@ public class EndResultPanel : MonoBehaviour {
         TotalFan.text = "0番";
         TotalScore.text = "0点";
         TotalLimitDisplay.gameObject.SetActive(false);
+        RebuildTotalPanelLayout();
     }
 
     private static string FormatScoreWithDiff(int before, int after) {
@@ -951,6 +952,7 @@ public class EndResultPanel : MonoBehaviour {
                 TotalScore.text = $"{huScore}点";
             }
             TotalLimitDisplay.gameObject.SetActive(false);
+            RebuildTotalPanelLayout();
             return;
         }
 
@@ -981,6 +983,30 @@ public class EndResultPanel : MonoBehaviour {
         bool showLimit = isClassical && huScore >= 300;
         TotalLimitDisplay.gameObject.SetActive(showLimit);
         if (showLimit) TotalLimitDisplay.text = "满贯";
+        RebuildTotalPanelLayout();
+    }
+
+    /// <summary>
+    /// 同帧切换结算文字时，子级 ContentSizeFitter 会晚于父级 HorizontalLayoutGroup 更新。
+    /// 先由内向外刷新当前参与布局的文字宽度，再让父布局按最新宽度重新定位，
+    /// 避免连续结算页沿用上一页宽度而发生重叠或异常间距。
+    /// </summary>
+    private void RebuildTotalPanelLayout() {
+        RebuildActiveTotalTextLayout(TotalFu);
+        RebuildActiveTotalTextLayout(TotalFan);
+        RebuildActiveTotalTextLayout(TotalScore);
+        RebuildActiveTotalTextLayout(TotalLimitDisplay);
+
+        if (FanCountTotalPanel != null
+            && FanCountTotalPanel.activeInHierarchy
+            && FanCountTotalPanel.transform is RectTransform totalPanelRect) {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(totalPanelRect);
+        }
+    }
+
+    private static void RebuildActiveTotalTextLayout(TextMeshProUGUI text) {
+        if (text == null || !text.gameObject.activeInHierarchy) return;
+        LayoutRebuilder.ForceRebuildLayoutImmediate(text.rectTransform);
     }
 
     /// <summary>
