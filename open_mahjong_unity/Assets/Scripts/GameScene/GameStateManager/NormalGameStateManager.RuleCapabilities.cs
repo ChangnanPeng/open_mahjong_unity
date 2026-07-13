@@ -1,4 +1,17 @@
 public partial class NormalGameStateManager {
+    private const int LegacyJiandanScoreDisplayMultiplier = 6;
+
+    /// <summary>
+    /// Clear server-provided rule capabilities when leaving a game session so
+    /// the persistent manager cannot leak them into a later rule or record.
+    /// </summary>
+    public void ResetRuleCapabilities() {
+        handEndMode = "first_win";
+        winnerTarget = 1;
+        handFlow = null;
+        presentationProfile = null;
+    }
+
     /// <summary>
     /// Whether a winner leaves an otherwise continuing hand. The server profile
     /// is authoritative; the Sichuan fallback keeps older servers compatible.
@@ -27,6 +40,21 @@ public partial class NormalGameStateManager {
             return presentationProfile.score_display_multiplier;
         }
         return 1;
+    }
+
+    /// <summary>
+    /// Resolve a result-panel multiplier from the rule being displayed. This
+    /// prevents a profile retained by the live-game manager from affecting a
+    /// record that belongs to another rule.
+    /// </summary>
+    public int ScoreDisplayMultiplierForRule(string rule) {
+        bool isJiandan = rule == "jiandan"
+            || (!string.IsNullOrEmpty(rule) && rule.StartsWith("jiandan/"));
+        if (!isJiandan) return 1;
+        if (presentationProfile != null && presentationProfile.score_display_multiplier > 0) {
+            return presentationProfile.score_display_multiplier;
+        }
+        return LegacyJiandanScoreDisplayMultiplier;
     }
 
     public bool UsesDrawSlotWinTile() {

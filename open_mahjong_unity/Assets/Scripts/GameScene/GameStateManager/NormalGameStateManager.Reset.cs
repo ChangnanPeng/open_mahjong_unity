@@ -23,6 +23,7 @@ public partial class NormalGameStateManager {
         chiCandidates.Clear();
         IsQiangGangAsk = false;
         pendingAskFromJiagang = false;
+        ResetRuleCapabilities();
         roomRule = null;
         subRule = null;
 

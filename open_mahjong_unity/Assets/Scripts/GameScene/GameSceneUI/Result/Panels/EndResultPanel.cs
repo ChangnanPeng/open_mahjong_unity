@@ -99,12 +99,17 @@ public class EndResultPanel : MonoBehaviour {
 
     public bool IsAwaitingRecordResultConfirm => currentState == StateRecord && gameObject.activeSelf;
 
-    /// <summary>中断番种渐显/确认倒计时等局内结算协程（四川终局步间切换时调用）。</summary>
-    public void StopActivePresentation() {
+    private void StopShowResultPresentation() {
         if (showResultCoroutine != null) {
             StopCoroutine(showResultCoroutine);
             showResultCoroutine = null;
         }
+        suppressNextGameConfirmNetworkSend = false;
+    }
+
+    /// <summary>中断番种渐显/确认倒计时等局内结算协程（四川终局步间切换时调用）。</summary>
+    public void StopActivePresentation() {
+        StopShowResultPresentation();
     }
 
     private void Awake() {
@@ -154,20 +159,14 @@ public class EndResultPanel : MonoBehaviour {
     }
 
     public void StartShowResult(int hepai_player_index, Dictionary<int, int> player_to_score, int hu_score, string[] hu_fan, string hu_class, int[] hepai_player_hand, int[] hepai_player_huapai, int[][] hepai_player_combination_mask, int? base_fu = null, string[] fu_fan_list = null, RiichiEndResultExtras riichiExtras = null) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         InitializeShowResult(hepai_player_index, player_to_score, hu_score, hu_fan, hu_class, hepai_player_hand, hepai_player_huapai, hepai_player_combination_mask, riichiExtras);
         showResultCoroutine = StartCoroutine(PlayShowResultRoutine(hu_score, hu_fan, base_fu, fu_fan_list, riichiExtras,
             RoundEndTiming.HuConfirmCountdownSeconds, resumeSichuanContinueAfterClose: false));
     }
 
     public void PrepareShowResult(int hepai_player_index, Dictionary<int, int> player_to_score, int hu_score, string[] hu_fan, string hu_class, int[] hepai_player_hand, int[] hepai_player_huapai, int[][] hepai_player_combination_mask, RiichiEndResultExtras riichiExtras = null, Dictionary<int, int> scoreChanges = null, bool suppressHandReveal = false, EndResultTileLayout tileLayout = EndResultTileLayout.HuWithWinTile) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         InitializeShowResult(hepai_player_index, player_to_score, hu_score, hu_fan, hu_class, hepai_player_hand, hepai_player_huapai, hepai_player_combination_mask, riichiExtras, scoreChanges, suppressHandReveal, tileLayout);
     }
 
@@ -179,10 +178,7 @@ public class EndResultPanel : MonoBehaviour {
     public void PlayPreparedShowResult(int hu_score, string[] hu_fan, int? base_fu, string[] fu_fan_list,
         RiichiEndResultExtras riichiExtras, float confirmCountdownSeconds, bool resumeSichuanContinueAfterClose,
         bool allowConfirmClick = true) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         showResultCoroutine = StartCoroutine(PlayShowResultRoutine(
             hu_score, hu_fan, base_fu, fu_fan_list, riichiExtras, confirmCountdownSeconds,
             resumeSichuanContinueAfterClose, allowConfirmClick));
@@ -207,10 +203,7 @@ public class EndResultPanel : MonoBehaviour {
     }
 
     public IEnumerator CoPlaySichuanSettleHuRoutine(int huScore, string[] huFan, bool isFinalPanel) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         showResultCoroutine = StartCoroutine(PlayShowResultRoutine(
             huScore, huFan, null, null, null,
             RoundEndTiming.HuConfirmCountdownSeconds,
@@ -222,10 +215,7 @@ public class EndResultPanel : MonoBehaviour {
     }
 
     public IEnumerator CoPlayJiandanSettleHuRoutine(int huScore, string[] huFan, bool isFinalPanel) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         showResultCoroutine = StartCoroutine(PlayJiandanSettleHuRoutine(huScore, huFan, isFinalPanel));
         yield return showResultCoroutine;
         showResultCoroutine = null;
@@ -323,10 +313,7 @@ public class EndResultPanel : MonoBehaviour {
         int[] hepai_player_hand, int[] hepai_player_huapai, int[][] hepai_player_combination_mask,
         Dictionary<int, int> player_to_score_before, Dictionary<int, int> player_to_score_after, bool isSpectator = false,
         int? base_fu = null, string[] fu_fan_list = null, RiichiEndResultExtras riichiExtras = null) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         DisplayRecordResult(hepai_player_index, hu_score, hu_fan, hu_class, roomType,
             indexToPosition, positionToUsername, hepai_player_hand, hepai_player_huapai, hepai_player_combination_mask,
             player_to_score_before, player_to_score_after, isSpectator, base_fu, fu_fan_list, riichiExtras);
@@ -340,6 +327,7 @@ public class EndResultPanel : MonoBehaviour {
 
     public void InitializeShowResult(int hepai_player_index, Dictionary<int, int> player_to_score, int hu_score, string[] hu_fan, string hu_class, int[] hepai_player_hand, int[] hepai_player_huapai, int[][] hepai_player_combination_mask, RiichiEndResultExtras riichiExtras = null, Dictionary<int, int> scoreChanges = null, bool suppressHandReveal = false, EndResultTileLayout tileLayout = EndResultTileLayout.HuWithWinTile) {
         currentState = StateGame;
+        suppressNextGameConfirmNetworkSend = false;
         gameObject.SetActive(true);
         ResetPanelContentVisibility();
         endButtonConfirmed = false;
@@ -510,6 +498,7 @@ public class EndResultPanel : MonoBehaviour {
         Dictionary<int, int> player_to_score_before, Dictionary<int, int> player_to_score_after, bool isSpectator = false,
         int? base_fu = null, string[] fu_fan_list = null, RiichiEndResultExtras riichiExtras = null) {
         currentState = StateRecord;
+        suppressNextGameConfirmNetworkSend = false;
         gameObject.SetActive(true);
         ResetPanelContentVisibility();
         endButtonConfirmed = false;
@@ -766,10 +755,7 @@ public class EndResultPanel : MonoBehaviour {
     /// 四川流局（旧批量演出用，保留供牌谱等场景调用）。
     /// </summary>
     public void ShowSichuanLiujuStatus(int playerIndex, Dictionary<int, int> player_to_score, string statusLabel, int[] hand) {
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         currentState = StateGame;
         gameObject.SetActive(true);
         ResetPanelContentVisibility();
@@ -986,7 +972,7 @@ public class EndResultPanel : MonoBehaviour {
         }
 
         int scoreMultiplier = NormalGameStateManager.Instance != null
-            ? NormalGameStateManager.Instance.ScoreDisplayMultiplier()
+            ? NormalGameStateManager.Instance.ScoreDisplayMultiplierForRule(rule)
             : (isJiandan ? 6 : 1);
         TotalScore.text = isChangsha
             ? $"{huScore}分"
@@ -1055,10 +1041,7 @@ public class EndResultPanel : MonoBehaviour {
     }
 
     public void ClearEndResultPanel(){
-        if (showResultCoroutine != null) {
-            StopCoroutine(showResultCoroutine);
-            showResultCoroutine = null;
-        }
+        StopShowResultPresentation();
         currentState = StateNone;
         // 新一局：清空准备缓存与被检查高亮，座位配色复位
         cachedReadyStatus.Clear();
