@@ -42,7 +42,7 @@ public partial class BoardCanvas {
         }
 
         if (targetImage == null) {
-            remiansTilesText.text = $"浣?{remainTiles}";
+            remiansTilesText.text = $"余:{remainTiles}";
             return;
         }
 

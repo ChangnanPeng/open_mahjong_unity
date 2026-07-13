@@ -9,7 +9,8 @@ public partial class NormalGameStateManager {
         ClearPendingSichuanContinue();
         lastAskHandPlayerIndex = -1;
         string incomingGamestateId = gameInfo?.gamestate_id;
-        if (string.IsNullOrEmpty(gamestateId) || gamestateId != incomingGamestateId) {
+        bool isNewMatch = string.IsNullOrEmpty(gamestateId) || gamestateId != incomingGamestateId;
+        if (isNewMatch) {
             ClearRoundSettlementHistory();
         }
         if (!IsRealtimeSpectator) {
@@ -28,6 +29,16 @@ public partial class NormalGameStateManager {
         Game3DManager.Instance.Clear3DTile(); // 清空3D手牌
 
         InitializeSetInfo(gameInfo); // 初始化对局数据
+        if (!isNewMatch) {
+            int scoreRows = 0;
+            foreach (var info in player_to_info.Values) {
+                if (info.score_history != null) scoreRows = Mathf.Max(scoreRows, info.score_history.Count);
+            }
+            if (roundSettlementHistory.Count != scoreRows) {
+                // 同一场对局重连时，局部快照不能与服务端计分行安全对齐；清空后由牌谱回退展示。
+                ClearRoundSettlementHistory();
+            }
+        }
         GameCanvas.Instance.InitializeUIInfo(gameInfo,indexToPosition); // 初始化面板信息
         BoardCanvas.Instance.InitializeBoardInfo(gameInfo,indexToPosition); // 初始化桌面信息
         RestoreSichuanDingque(gameInfo); // 四川：重连/进局中时恢复各家定缺标记

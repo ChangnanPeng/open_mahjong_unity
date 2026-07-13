@@ -131,28 +131,25 @@ public static class ScoreHistorySettlementHelper {
         }
 
         int settlementCount = roundSettlements.Count;
-        if (settlementCount == 0) return null;
+        if (settlementCount == 0 || scoreHistoryCount <= 0) return null;
+        if (roundIndex < 0 || roundIndex >= scoreHistoryCount) return null;
 
-        if (scoreHistoryCount > 0 && roundIndex == scoreHistoryCount - 1) {
-            return roundSettlements[settlementCount - 1];
-        }
-        if (settlementCount == scoreHistoryCount && roundIndex >= 0 && roundIndex < settlementCount) {
+        if (settlementCount == scoreHistoryCount) {
             return roundSettlements[roundIndex];
         }
+
         if (scoreHistoryCount > settlementCount) {
+            // 重连后仅有尾部若干快照：只映射到 score_history 末尾对应行，
+            // 避免唯一快照同时出现在第一行与最后一行。
             int settlementIndex = roundIndex - (scoreHistoryCount - settlementCount);
             if (settlementIndex >= 0 && settlementIndex < settlementCount) {
                 return roundSettlements[settlementIndex];
             }
-            if (roundIndex >= 0 && roundIndex < settlementCount) {
-                return roundSettlements[roundIndex];
-            }
             return null;
         }
-        if (roundIndex >= 0 && roundIndex < settlementCount) {
-            return roundSettlements[roundIndex];
-        }
-        return null;
+
+        // settlementCount > scoreHistoryCount：陈旧本地快照只允许按有效计分行索引读取。
+        return roundSettlements[roundIndex];
     }
 
     public static string BuildAllFansText(string subRule, RoundSettlementSnapshot snapshot) {

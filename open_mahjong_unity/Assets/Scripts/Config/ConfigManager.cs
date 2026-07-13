@@ -21,12 +21,7 @@ public class ConfigManager : MonoBehaviour {
     public static string mobileDownloadUrl;
 
     static ConfigManager() {
-#if UNITY_EDITOR
-        bool useLocalServer = true;
-#else
-        bool useLocalServer = Debug;
-#endif
-        if (useLocalServer) {
+        if (Debug) {
             // 开发接口地址
             gameUrl = "ws://localhost:8081/game"; // 游戏服务器地址(连接到OMU服务器)
             chatUrl = "ws://localhost:8083/chat"; // 聊天服务器地址(连接到OMUChat服务器)

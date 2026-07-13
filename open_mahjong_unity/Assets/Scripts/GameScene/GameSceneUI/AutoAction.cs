@@ -161,13 +161,15 @@ public class AutoAction : MonoBehaviour{
         SetTextActive(autoBuhuaText, ShouldShowBuhuaAutoActionButton());
     }
 
-    /// <summary>无补花流程的规则（长沙/四川等）隐藏自动补花按钮。</summary>
+    /// <summary>无补花流程的规则（长沙/四川/简单）隐藏自动补花按钮。</summary>
     private static bool ShouldShowBuhuaAutoActionButton() {
         NormalGameStateManager gsm = NormalGameStateManager.Instance;
         if (gsm == null || string.IsNullOrEmpty(gsm.roomRule)) {
             return true;
         }
-        return gsm.roomRule != "changsha" && gsm.roomRule != "sichuan";
+        return gsm.roomRule != "changsha"
+            && gsm.roomRule != "sichuan"
+            && gsm.roomRule != "jiandan";
     }
 
     private void SetOtherActionPanelVisible(bool visible) {
