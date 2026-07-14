@@ -49,6 +49,7 @@ public class PlayerInfoPanel : MonoBehaviour {
     private PlayerStatsInfo[] riichiStats;
     private PlayerStatsInfo[] qingqueStats;
     private PlayerStatsInfo[] classicalStats;
+    private PlayerStatsInfo[] jiandanStats;
     
     // 保存汇总番种统计数据（由服务器返回）
     private Dictionary<string, int> guobiaoTotalFanStats;
@@ -56,6 +57,7 @@ public class PlayerInfoPanel : MonoBehaviour {
     private Dictionary<string, int> riichiTotalFanStats;
     private Dictionary<string, int> qingqueTotalFanStats;
     private Dictionary<string, int> classicalTotalFanStats;
+    private Dictionary<string, int> jiandanTotalFanStats;
 
     private bool _shownOnce;
     private string _currentUsername;
@@ -134,10 +136,12 @@ public class PlayerInfoPanel : MonoBehaviour {
         riichiStats = null;
         qingqueStats = null;
         classicalStats = null;
+        jiandanStats = null;
         guobiaoTotalFanStats = null;
         riichiTotalFanStats = null;
         qingqueTotalFanStats = null;
         classicalTotalFanStats = null;
+        jiandanTotalFanStats = null;
         guobiaoRankedFanStats = null;
 
         // 默认加载国标数据
@@ -248,6 +252,21 @@ public class PlayerInfoPanel : MonoBehaviour {
         }
     }
 
+    // 接收简单麻将统计数据
+    public void OnJiandanStatsReceived(bool success, string message, RuleStatsResponse ruleStats) {
+        if (!success || ruleStats == null) {
+            NotificationManager.Instance.ShowTip("获取数据", false, message ?? "获取简单麻将统计数据失败");
+            return;
+        }
+
+        jiandanStats = ruleStats.history_stats ?? new PlayerStatsInfo[0];
+        jiandanTotalFanStats = ruleStats.total_fan_stats;
+
+        if (CurrentShowRule == "Other") {
+            RefreshCurrentRuleDisplay();
+        }
+    }
+
     // 切换国标场次分类（自定义 / 天梯）
     private void OnSwitchGuobiaoCategoryButtonClick(string category){
         if (CurrentShowRule != "guobiao") return;
@@ -286,9 +305,10 @@ public class PlayerInfoPanel : MonoBehaviour {
             DataNetworkManager.Instance?.GetRiichiStats(currentUserId.ToString());
             return;
         }
-        else if (rule == "Other" && (qingqueStats == null || classicalStats == null)){
+        else if (rule == "Other" && (qingqueStats == null || classicalStats == null || jiandanStats == null)){
             if (qingqueStats == null) DataNetworkManager.Instance?.GetQingqueStats(currentUserId.ToString());
             if (classicalStats == null) DataNetworkManager.Instance?.GetClassicalStats(currentUserId.ToString());
+            if (jiandanStats == null) DataNetworkManager.Instance?.GetJiandanStats(currentUserId.ToString());
             return;
         }
         
@@ -490,6 +510,45 @@ public class PlayerInfoPanel : MonoBehaviour {
                 PlayerInfoEntry classicalEntry = classicalEntryObject.GetComponent<PlayerInfoEntry>();
                 classicalEntry.SetPlayerInfoEntry("mode", this, stat);
             }
+
+            // 简单麻将数据（同在 Other 标签下）
+            string[] jiandanModes = {"4/4", "3/4", "2/4", "1/4"};
+            Dictionary<string, PlayerStatsInfo> jiandanStatsDict = new Dictionary<string, PlayerStatsInfo>();
+            if (jiandanStats != null) {
+                foreach (var stat in jiandanStats) {
+                    if (stat?.mode != null) {
+                        jiandanStatsDict[stat.mode] = stat;
+                    }
+                }
+            }
+
+            for (int i = 0; i < jiandanModes.Length; i++) {
+                string mode = jiandanModes[i];
+                jiandanStatsDict.TryGetValue(mode, out PlayerStatsInfo stat);
+                if (stat == null) {
+                    stat = new PlayerStatsInfo {
+                        rule = "jiandan",
+                        mode = mode,
+                        total_games = 0,
+                        total_rounds = 0,
+                        win_count = 0,
+                        self_draw_count = 0,
+                        deal_in_count = 0,
+                        total_fan_score = 0,
+                        total_win_turn = 0,
+                        total_fangchong_score = 0,
+                        first_place_count = 0,
+                        second_place_count = 0,
+                        third_place_count = 0,
+                        fourth_place_count = 0,
+                        fulu_round_count = 0
+                    };
+                }
+
+                GameObject jiandanEntryObject = Instantiate(PlayerInfoEntryPrefab, RecordEntryContainer);
+                PlayerInfoEntry jiandanEntry = jiandanEntryObject.GetComponent<PlayerInfoEntry>();
+                jiandanEntry.SetPlayerInfoEntry("mode", this, stat);
+            }
         }
 
         // 在尾部显示番数总计
@@ -505,6 +564,14 @@ public class PlayerInfoPanel : MonoBehaviour {
                 : "国标番数总计（自定义）";
             if (guobiaoFan != null) {
                 AppendFanStatsEntry(fanStatsRule, fanLabel, guobiaoFan);
+            }
+        }
+        else if (CurrentShowRule == "Other") {
+            if (totalFanStats != null) {
+                AppendFanStatsEntry("qingque", null, totalFanStats);
+            }
+            if (jiandanTotalFanStats != null) {
+                AppendFanStatsEntry("jiandan", null, jiandanTotalFanStats);
             }
         }
         else if (totalFanStats != null) {
@@ -753,6 +820,8 @@ public class PlayerInfoPanel : MonoBehaviour {
             currentFanDict = RankConfig.QingqueFanTranslation;
         } else if (stats?.rule == "riichi") {
             currentFanDict = RankConfig.RiichiFanTranslation;
+        } else if (stats?.rule == "jiandan") {
+            currentFanDict = FanTextDictionary.FanNameToDisplayJiandan;
         }
 
         // 显示所有番种，包括值为0的

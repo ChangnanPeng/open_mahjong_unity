@@ -575,6 +575,7 @@ public class NetworkManager : MonoBehaviour {
                 case "data/get_riichi_stats":
                 case "data/get_qingque_stats":
                 case "data/get_classical_stats":
+                case "data/get_jiandan_stats":
                 case "data/get_leaderboard":
                 case "data/get_rank_record_list":
                     DataNetworkManager.Instance?.HandleDataMessage(response);
