@@ -94,7 +94,7 @@ namespace Qingque13.Core
         public void SetWinningType(QingqueWinType type)
         {
             winType = type;
-            
+
             // Update concealed flags on triplets in decompositions
             foreach (var decomp in decompositions)
             {
@@ -104,8 +104,8 @@ namespace Qingque13.Core
                     if (meld.Type != QingqueMeldType.Triplet) continue;
                     if (meld.Fixed) continue;
 
-                    bool concealed = winType.IsSelfDrawn || 
-                                   meld.Tile != winTile || 
+                    bool concealed = winType.IsSelfDrawn ||
+                                   meld.Tile != winTile ||
                                    closedCounter.Count(meld.Tile) == 4;
 
                     decomp.Melds[i] = new QingqueMeld(meld.Tile, QingqueMeldType.Triplet, concealed, false);
@@ -121,10 +121,10 @@ namespace Qingque13.Core
         private void DecomposeInit()
         {
             decompositions = new List<QingqueDecomposition>();
-            
+
             // Check for seven pairs first
             CheckSevenPairs();
-            
+
             var queue = new Queue<(QingqueDecomposition decomp, byte index)>();
             queue.Enqueue((new QingqueDecomposition(this), 0));
 
@@ -159,8 +159,8 @@ namespace Qingque13.Core
                     var tile = QingqueTile.AllTiles[i];
                     if (counter.Count(tile) >= 3)
                     {
-                        bool concealed = winType.IsSelfDrawn || 
-                                       tile != winTile || 
+                        bool concealed = winType.IsSelfDrawn ||
+                                       tile != winTile ||
                                        closedCounter.Count(tile) == 4;
                         var triplet = new QingqueMeld(tile, QingqueMeldType.Triplet, concealed, false);
                         int nextIndex = (int)i * 2;
@@ -176,9 +176,9 @@ namespace Qingque13.Core
                     var tile = QingqueTile.NumberedTiles[i];
                     var tile1 = new QingqueTile((byte)(tile.Value - 1));
                     var tile2 = new QingqueTile((byte)(tile.Value + 1));
-                    
-                    if (counter.Count(tile) > 0 && 
-                        counter.Count(tile1) > 0 && 
+
+                    if (counter.Count(tile) > 0 &&
+                        counter.Count(tile1) > 0 &&
                         counter.Count(tile2) > 0)
                     {
                         var sequence = new QingqueMeld(tile, QingqueMeldType.Sequence, false, false);
@@ -188,7 +188,7 @@ namespace Qingque13.Core
                 }
             }
         }
-        
+
         /// <summary>
         /// Checks if the hand is seven pairs (all closed, 7 different pairs).
         /// C++ ref: verifier is_seven_pairs
@@ -197,11 +197,11 @@ namespace Qingque13.Core
         {
             // Seven pairs must have all closed melds (no chows/pons/kongs)
             if (openMelds.Count > 0) return;
-            
+
             // closedCounter already includes winning tile (added in constructor)
             // Must have exactly 14 tiles
             if (closedCounter.Count() != 14) return;
-            
+
             // All tiles must appear an even number of times (pairs)
             // C++: for (tile_t ti : tile_set::all_tiles) if (h.counter().count(ti) & 1) return false;
             var pairs = new List<QingqueTile>();
@@ -209,7 +209,7 @@ namespace Qingque13.Core
             {
                 byte count = closedCounter.Count(tile);
                 if ((count & 1) != 0) return; // Must be even (0, 2, or 4)
-                
+
                 if (count == 2) pairs.Add(tile);
                 else if (count == 4)
                 {
@@ -217,7 +217,7 @@ namespace Qingque13.Core
                     pairs.Add(tile); // Double pair
                 }
             }
-            
+
             // Must have exactly 7 pairs
             if (pairs.Count == 7)
             {
@@ -228,7 +228,7 @@ namespace Qingque13.Core
         public override string ToString()
         {
             var parts = new List<string>();
-            
+
             // Open melds
             foreach (var meld in openMelds)
             {
@@ -238,7 +238,7 @@ namespace Qingque13.Core
             // Closed tiles (excluding winning tile)
             var closedTiles = closedCounter.GetTiles(true);
             var tilesExceptWinning = closedTiles.Where(t => t != winTile || closedTiles.Count(x => x == t) > 1).ToList();
-            
+
             if (tilesExceptWinning.Count > 0)
             {
                 parts.Add(new QingqueTileCounter(tilesExceptWinning).ToString());

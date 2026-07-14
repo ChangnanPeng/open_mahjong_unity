@@ -15,7 +15,7 @@ public partial class Game3DManager : MonoBehaviour
         Transform SetParent = null; // 设置父对象
         PosPanel3D panel = GetPosPanel(playerIndex);
         if (panel == null) yield break;
-        
+
         if (playerIndex == "self")
         {
             rotation = Quaternion.Euler(90, 0, 180); // 获取卡牌旋转角度
@@ -54,7 +54,7 @@ public partial class Game3DManager : MonoBehaviour
         List<int> SetTileList = new List<int>();
         List<int> SignDirectionList = new List<int>();
 
-        // 解码 combination_mask：[方向, 牌id, 方向, 牌id, ...]；牌 id 可为 0（国标暗杠脱敏占位）
+        // 解码 combination_mask：[方向, 牌id, 方向, 牌id, ...]；牌 id 可为 0（国标暗杠占位）
         for (int i = 0; i + 1 < combination_mask.Length; i += 2) {
             SignDirectionList.Add(combination_mask[i]);
             SetTileList.Add(combination_mask[i + 1]);
@@ -74,9 +74,14 @@ public partial class Game3DManager : MonoBehaviour
                 {
                     GameObject cardObj;
                     int jiagangTileId = SetTileList[i];
-                    // 碰时按归一化河牌 id 存位置；加杠时用 mask 里 flag=1 的河牌 id 归一化后查表（105/15 等同）
+                    // 碰时按归一化河牌 id 存位置；加杠必须用 mask 里 flag=1 的河牌 id 查表（105/15 等同），不可回退到加杠张。
                     int? riverTileId = GameRecordMeldCodec.ExtractTileByFlag(combination_mask, 1);
-                    int lookupKey = GameRecordMeldCodec.NormalizeMeldsLookupTileId(riverTileId ?? jiagangTileId);
+                    if (riverTileId == null || riverTileId.Value < 10) {
+                        Debug.LogError(
+                            $"加杠 mask 缺少 flag=1 河牌 id: player={playerIndex}, jiagangTileId={jiagangTileId}, mask=[{string.Join(",", combination_mask ?? System.Array.Empty<int>())}]");
+                        continue;
+                    }
+                    int lookupKey = GameRecordMeldCodec.NormalizeMeldsLookupTileId(riverTileId.Value);
                     if (!pengToJiagangPosDict.TryGetValue(lookupKey, out Vector3 TempPositionpoint)) {
                         Debug.LogError($"加杠位置未找到: lookupKey={lookupKey}, jiagangTileId={jiagangTileId}, riverTileId={riverTileId}");
                         continue;
@@ -91,19 +96,18 @@ public partial class Game3DManager : MonoBehaviour
                         continue;
                     }
                     // 注册到悬停管理器
-                    if (Card3DHoverManager.Instance != null)
-                    {
-                        Card3DHoverManager.Instance.RegisterCard(cardObj, jiagangTileId);
-                    }
+
+                    Card3DHoverManager.Instance.RegisterCard(cardObj, jiagangTileId);
+
                     // 设置父对象
                     cardObj.transform.SetParent(SetParent, worldPositionStays: true);
-                    lastCutJiagang3DObject = cardObj;
+                    RegisterLastJiagang(playerIndex, cardObj, jiagangTileId);
                     // 加杠动画：将加杠牌移动到3个卡牌宽度以左，然后移回原位
                     if (doAnimation)
                     {
                         StartCoroutine(MoveCardAnimation(cardObj, SetDirection, cardWidth, playerIndex));
                     }
-                    
+
                     // 每创建一张卡牌等待一帧，避免单帧创建太多对象
                     if (i < SetTileList.Count - 1)
                     {
@@ -172,15 +176,13 @@ public partial class Game3DManager : MonoBehaviour
                     continue;
                 }
                 // 注册到悬停管理器
-                if (Card3DHoverManager.Instance != null)
-                {
-                    Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
-                }
+
+                Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
+
                 // 设置父对象
                 cardObj.transform.SetParent(SetParent, worldPositionStays: true);
-                if (MahjongObjectPool.Instance != null) {
-                    MahjongObjectPool.Instance.RefreshTileCollider(cardObj);
-                }
+
+                MahjongObjectPool.Instance.RefreshTileCollider(cardObj);
 
                 Tile3D tile3D = cardObj.GetComponent<Tile3D>();
                 tile3D?.ApplyCombinationPeekState(tileId, SignDirectionList[i]);
@@ -214,11 +216,9 @@ public partial class Game3DManager : MonoBehaviour
 
     private int GetPlayerCombinationCount(string playerPosition) {
         // 如果是牌谱模式，则返回牌谱模式下的组合数
-        if (GameRecordManager.Instance != null && GameRecordManager.Instance.gameObject.activeSelf) {
+        if (GameRecordManager.Instance.gameObject.activeSelf) {
             return GameRecordManager.Instance.recordPlayer_to_info[playerPosition].combinationTiles.Count;
         }
         return NormalGameStateManager.Instance.player_to_info[playerPosition].combination_tiles.Count;
     }
 }
-
-

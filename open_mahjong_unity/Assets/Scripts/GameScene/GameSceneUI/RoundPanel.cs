@@ -16,8 +16,6 @@ public class RoundPanel : MonoBehaviour, IPointerClickHandler {
     [SerializeField] private RiichiRoundPanel riichiRoundPanel;
     [SerializeField] private CommitmentSaltDetailPanel commitmentSaltDetailPanel;
 
-    private GameInfo _cachedGameInfo;
-    private string _cachedRoomRule;
     private string _cachedCommitment = "";
     private string _cachedSalt = "";
     private string _cachedMasterSeed = "";
@@ -42,8 +40,6 @@ public class RoundPanel : MonoBehaviour, IPointerClickHandler {
     /// 初始化轮数面板：根据房间规则切换 Simple / Riichi。
     /// </summary>
     public void UpdateRoomInfo(GameInfo gameInfo, string roomRule, string masterSeed = null) {
-        _cachedGameInfo = gameInfo;
-        _cachedRoomRule = roomRule;
         _cachedCommitment = gameInfo?.commitment ?? "";
         _cachedSalt = gameInfo?.salt ?? "";
         _cachedMasterSeed = masterSeed ?? "";
@@ -81,7 +77,7 @@ public class RoundPanel : MonoBehaviour, IPointerClickHandler {
     }
 
     private void CancelCommitmentSaltDetail() {
-        CoroutineManager.Instance?.StopNamed(CoroutineKeys.CommitmentSaltHide);
+        CoroutineManager.Instance.StopNamed(CoroutineKeys.CommitmentSaltHide);
         commitmentSaltDetailPanel?.HideImmediate();
     }
 

@@ -9,12 +9,12 @@ namespace Qingque13.Criteria
     public class MixedTripleTripletCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedTripleTriplet;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var melds = decomposition.Melds;
             byte count = 0;
-            
+
             for (int i = 0; i < melds.Count; i++)
             {
                 for (int j = i + 1; j < melds.Count; j++)
@@ -24,10 +24,10 @@ namespace Qingque13.Criteria
             }
             return count == 3;
         }
-        
+
         private bool IsMixedDoubleTriplet(QingqueMeld a, QingqueMeld b)
         {
-            if (a.Type == QingqueMeldType.Sequence || b.Type == QingqueMeldType.Sequence) 
+            if (a.Type == QingqueMeldType.Sequence || b.Type == QingqueMeldType.Sequence)
                 return false;
             if (a.Tile.GetSuitType() == b.Tile.GetSuitType()) return false;
             return a.Tile.Num() == b.Tile.Num();

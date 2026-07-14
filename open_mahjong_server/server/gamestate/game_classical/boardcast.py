@@ -330,6 +330,7 @@ async def broadcast_do_action(
     combination_target: str = None,
     combination_mask: List[int] = None,
     is_mo_gang: bool = None,
+    cut_from_player: int = None,
     ):
     self.server_action_tick += 1
     if hasattr(self, "_ask_broadcast_time"):
@@ -371,6 +372,7 @@ async def broadcast_do_action(
                         combination_mask=combination_mask,
                         combination_target=combination_target,
                         is_mo_gang=is_mo_gang,
+                        cut_from_player=cut_from_player,
                     )
                 )
                 await player_conn.websocket.send_json(response.dict(exclude_none=True))

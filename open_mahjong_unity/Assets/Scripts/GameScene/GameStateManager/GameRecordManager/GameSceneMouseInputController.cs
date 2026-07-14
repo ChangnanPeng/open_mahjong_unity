@@ -92,7 +92,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
         // 乃至轮到自己时都不强制收回；立起态只在立起其它牌 / 确认出牌 / 该牌被销毁时才落下。
         TileCard.ClearPendingPointerState();
         // 同步中止尚未松手的拖拽/按压会话，避免左右键同时点击、回合切换时某张牌被永久绑定为 dragCard 无法出牌。
-        HandCardDragController.Instance?.AbortActivePress($"ClearStaleHandInput:{reason}");
+        HandCardDragController.Instance.AbortActivePress($"ClearStaleHandInput:{reason}");
         Debug.Log($"[HandInput] 清理输入缓存 | 原因={reason} | phase={actionInputPhase}");
     }
 
@@ -108,7 +108,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
         if (IsPointerOverExcludeRect()) return;
 
         if (state == StateRecord) {
-            if (GameRecordManager.Instance != null && GameRecordManager.Instance.BlocksRecordNavigation) {
+            if (GameRecordManager.Instance.BlocksRecordNavigation) {
                 return;
             }
             if (Input.GetMouseButtonDown(0)) {
@@ -140,7 +140,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
     /// </summary>
     private void TryDisarmHandSelectionOnClickOutside() {
         if (!Input.GetMouseButtonDown(0)) return;
-        if (ConfigManager.Instance == null || !ConfigManager.Instance.IsHandCutConfirmEnabled) return;
+        if (!ConfigManager.Instance.IsHandCutConfirmEnabled) return;
         HandCardSelectionController selection = HandCardSelectionController.Instance;
         if (selection == null) return;
         if (IsPointerOverSelfHandCard()) return;
@@ -323,7 +323,7 @@ public class GameSceneMouseInputController : MonoBehaviour {
         }
 
         if (state == StateRecord) {
-            if (GameRecordManager.Instance != null && GameRecordManager.Instance.BlocksRecordNavigation) {
+            if (GameRecordManager.Instance.BlocksRecordNavigation) {
                 return;
             }
             if (eventData.button == PointerEventData.InputButton.Left) {
@@ -357,7 +357,6 @@ public class GameSceneMouseInputController : MonoBehaviour {
     }
 
     private void TrySendPassFromShortcut(string source) {
-        if (GameCanvas.Instance == null) return;
         if (!NormalGameStateManager.Instance.allowActionList.Contains("pass")) return;
         GameCanvas.Instance.TrySendPassFromShortcut();
         MarkRightHoldShortcutConsumed(source);
@@ -375,17 +374,14 @@ public class GameSceneMouseInputController : MonoBehaviour {
     }
 
     private bool HasCutPermission() {
-        NormalGameStateManager gsm = NormalGameStateManager.Instance;
-        return gsm != null && gsm.allowActionList.Contains("cut");
+        return NormalGameStateManager.Instance.allowActionList.Contains("cut");
     }
 
     private bool HasPassPermission() {
-        NormalGameStateManager gsm = NormalGameStateManager.Instance;
-        return gsm != null && gsm.allowActionList.Contains("pass");
+        return NormalGameStateManager.Instance.allowActionList.Contains("pass");
     }
 
     private bool IsPointerOverSelfHandCard() {
-        return GameCanvas.Instance != null
-            && GameCanvas.Instance.IsPointerOverSelfHandCard(Input.mousePosition);
+        return GameCanvas.Instance.IsPointerOverSelfHandCard(Input.mousePosition);
     }
 }

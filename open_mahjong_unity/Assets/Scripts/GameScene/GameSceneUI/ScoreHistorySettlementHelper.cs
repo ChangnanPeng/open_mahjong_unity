@@ -131,7 +131,7 @@ public static class ScoreHistorySettlementHelper {
         int scoreHistoryCount,
         IReadOnlyList<RoundSettlementSnapshot> roundSettlements) {
         if (roundSettlements == null || roundSettlements.Count == 0) {
-            var live = NormalGameStateManager.Instance?.roundSettlementHistory;
+            var live = NormalGameStateManager.Instance.roundSettlementHistory;
             if (live == null || live.Count == 0) return null;
             roundSettlements = live;
         }
@@ -235,8 +235,7 @@ public static class ScoreHistorySettlementHelper {
         int winnerDelta = 0;
         if (scoreChanges != null && hepaiPlayerIndex >= 0) {
             int originalPlayerIndex = hepaiPlayerIndex;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {
@@ -286,8 +285,7 @@ public static class ScoreHistorySettlementHelper {
         int winnerDelta = 0;
         if (scoreChanges != null && hepaiPlayerIndex.HasValue) {
             int originalPlayerIndex = hepaiPlayerIndex.Value;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex.Value, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {
@@ -337,8 +335,7 @@ public static class ScoreHistorySettlementHelper {
         }
         if (scoreChanges != null && hepaiPlayerIndex.HasValue) {
             int originalPlayerIndex = hepaiPlayerIndex.Value;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex.Value, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {
@@ -373,18 +370,6 @@ public static class ScoreHistorySettlementHelper {
         if (string.IsNullOrEmpty(fanKey)) return "";
         int star = fanKey.IndexOf('*');
         return star >= 0 ? fanKey.Substring(0, star) : fanKey;
-    }
-
-    private static int ParseFanNumericValue(string subRule, string fanKey) {
-        string display = FanTextDictionary.GetFanDisplayText(subRule, fanKey);
-        if (display == "满贯" || display == "役满") return 10000;
-        if (display.EndsWith("番") && int.TryParse(display.Replace("番", ""), out int val)) {
-            return val;
-        }
-        if (display.EndsWith("符") && int.TryParse(display.Replace("符", ""), out int fuVal)) {
-            return fuVal;
-        }
-        return 0;
     }
 
     public static int CalculateSichuanFanTotal(string subRule, string[] huFan) {

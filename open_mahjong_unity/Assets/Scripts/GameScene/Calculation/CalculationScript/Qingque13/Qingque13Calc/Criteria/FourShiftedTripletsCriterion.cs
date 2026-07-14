@@ -10,12 +10,12 @@ namespace Qingque13.Criteria
     public class FourShiftedTripletsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.FourShiftedTriplets;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             var melds = decomposition.Melds;
-            
+
             foreach (var suit in new[] { QingqueTile.SuitType.M, QingqueTile.SuitType.P, QingqueTile.SuitType.S })
             {
                 for (byte num = 1; num <= 6; num++) // 1-6 to allow 4 consecutive
@@ -26,7 +26,7 @@ namespace Qingque13.Criteria
             }
             return false;
         }
-        
+
         private bool ContainsTriplets(List<QingqueMeld> melds, QingqueTile.SuitType suit, params byte[] nums)
         {
             foreach (var n in nums)
@@ -34,8 +34,8 @@ namespace Qingque13.Criteria
                 bool found = false;
                 foreach (var meld in melds)
                 {
-                    if ((meld.Type == QingqueMeldType.Triplet || meld.Type == QingqueMeldType.Kong) && 
-                        meld.Tile.GetSuitType() == suit && 
+                    if ((meld.Type == QingqueMeldType.Triplet || meld.Type == QingqueMeldType.Kong) &&
+                        meld.Tile.GetSuitType() == suit &&
                         meld.Tile.Num() == n)
                     {
                         found = true;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,7 +10,7 @@ public class ConfigManager : MonoBehaviour {
     public static ConfigManager Instance { get; private set; }
 
     public static bool Debug = true;
-    
+
     public static string webUrl;
     public static string gameUrl;
     public static string chatUrl;
@@ -133,7 +133,7 @@ public class ConfigManager : MonoBehaviour {
         Instance = this;
         // 供 WebGL 的 JS 插件 SendMessage 定位用
         gameObject.name = "GlobalConfig";
-        
+
         // 加载用户配置
         MasterVolume = PlayerPrefs.GetInt(KEY_MASTER_VOLUME, DEFAULT_VOLUME);
         MusicVolume = PlayerPrefs.GetInt(KEY_MUSIC_VOLUME, DEFAULT_VOLUME);

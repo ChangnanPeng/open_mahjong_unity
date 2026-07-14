@@ -9,11 +9,11 @@ namespace Qingque13.Criteria
     public class ThreeWindTripletsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeWindTriplets;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             byte windTripletCount = 0;
             foreach (var meld in decomposition.Melds)
             {
@@ -24,7 +24,7 @@ namespace Qingque13.Criteria
                     windTripletCount++;
                 }
             }
-            
+
             return windTripletCount >= 3;
         }
     }

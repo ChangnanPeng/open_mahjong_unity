@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class MixedOneNumberCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedOneNumber;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();

@@ -27,6 +27,6 @@ public class LadderRecordItemPrefab : MonoBehaviour {
 
     private void OnViewRecord() {
         if (string.IsNullOrEmpty(_gameId)) return;
-        DataNetworkManager.Instance?.GetRecordById(_gameId);
+        DataNetworkManager.Instance.GetRecordById(_gameId);
     }
 }

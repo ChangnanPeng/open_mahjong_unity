@@ -59,4 +59,4 @@ public class GB_Create_RoomConfig {
         error = null;
         return true;
     }
-} 
+}

@@ -1,6 +1,4 @@
-using System.Collections;
 using System.Collections.Generic;
-using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -50,11 +48,9 @@ public partial class GameCanvas : MonoBehaviour {
     private int _currentRemainingTime;
     private int _currentCutTime;
 
-
-
     [Header("游戏配置模块")]
     private bool isArranged = false; // 是否已经排列过手牌
-    
+
     // 手牌处理队列管理
     private Queue<System.Func<Coroutine>> changeHandCardQueue = new Queue<System.Func<Coroutine>>();
     private bool isChangeHandCardProcessing = false;
@@ -74,7 +70,7 @@ public partial class GameCanvas : MonoBehaviour {
     private Coroutine _sortMainHandCoroutine;
     private Coroutine _discardLayoutCoroutine;
     private bool _isScoreRecordOpen;
-    
+
     private void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -93,7 +89,7 @@ public partial class GameCanvas : MonoBehaviour {
         if (handCardSelectionController == null) {
             handCardSelectionController = gameObject.AddComponent<HandCardSelectionController>();
         }
-        // 获取tileCardPrefab的宽度 
+        // 获取tileCardPrefab的宽度
         tileCardWidth = tileCardPrefab.GetComponent<RectTransform>().rect.width;
 
         // 计分板开关按钮：点击切换打开/关闭，并同步按钮文本
@@ -135,7 +131,7 @@ public partial class GameCanvas : MonoBehaviour {
     /// </summary>
     public void ResetForExit() {
         ClearHandCardQueue();
-        HandCardSelectionController.Instance?.DisarmAll();
+        HandCardSelectionController.Instance.DisarmAll();
         for (int i = handCardsContainer.childCount - 1; i >= 0; i--) {
             Destroyer.Instance.AddToDestroyer(handCardsContainer.GetChild(i));
         }
@@ -172,7 +168,7 @@ public partial class GameCanvas : MonoBehaviour {
         playerLeftPanel?.SetDingque(0);
         playerTopPanel?.SetDingque(0);
         playerRightPanel?.SetDingque(0);
-        HandCardSelectionController.Instance?.DisarmAll();
+        HandCardSelectionController.Instance.DisarmAll();
         // 清空手牌容器 - 倒序遍历避免SetParent影响
         for (int i = handCardsContainer.childCount - 1; i >= 0; i--){
             Transform child = handCardsContainer.GetChild(i);
@@ -235,7 +231,7 @@ public partial class GameCanvas : MonoBehaviour {
         playerLeftPanel?.SetDingque(0);
         playerTopPanel?.SetDingque(0);
         playerRightPanel?.SetDingque(0);
-        HandCardSelectionController.Instance?.DisarmAll();
+        HandCardSelectionController.Instance.DisarmAll();
         // 清空手牌容器 - 倒序遍历避免SetParent影响
         for (int i = handCardsContainer.childCount - 1; i >= 0; i--){
             Transform child = handCardsContainer.GetChild(i);
@@ -379,12 +375,12 @@ public partial class GameCanvas : MonoBehaviour {
         foreach (var kvp in player_to_tag_list) {
             int player_index = kvp.Key;
             string[] tag_list = kvp.Value;
-            
+
             // 根据 player_index 找到对应的玩家位置和面板
-            if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.indexToPosition.ContainsKey(player_index)) {
+            if (NormalGameStateManager.Instance.indexToPosition.ContainsKey(player_index)) {
                 string position = NormalGameStateManager.Instance.indexToPosition[player_index];
                 GamePlayerPanel targetPanel = null;
-                
+
                 // 根据位置获取对应的面板
                 switch (position) {
                     case "self":
@@ -400,7 +396,7 @@ public partial class GameCanvas : MonoBehaviour {
                         targetPanel = playerLeftPanel;
                         break;
                 }
-                
+
                 // 更新面板的标签列表
                 if (targetPanel != null) {
                     targetPanel.UpdateTagList(tag_list);
@@ -508,7 +504,7 @@ public partial class GameCanvas : MonoBehaviour {
     /// </summary>
     public void RefreshHandTileSelectability() {
         if (handCardsContainer == null) return;
-        bool inRiichiCutMode = RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive;
+        bool inRiichiCutMode = RiichiCutSelectionController.Instance.IsActive;
         var candidates = NormalGameStateManager.Instance.selfRiichiCandidateCuts;
         var forbidden = NormalGameStateManager.Instance.selfForbiddenCutTiles;
         var forced = NormalGameStateManager.Instance.selfForcedCutTiles;
@@ -571,7 +567,7 @@ public partial class GameCanvas : MonoBehaviour {
     /// 四川定缺：手牌仍含定缺花色时强制打出定缺牌（与服务端 _enforce_dingque_first 一致）。
     /// </summary>
     public bool TriggerMoqieHandCardClick() {
-        HandCardSelectionController.Instance?.DisarmAll();
+        HandCardSelectionController.Instance.DisarmAll();
         if (handCardsContainer == null) {
             Debug.LogWarning("手牌容器为空，无法触发自动出牌");
             return false;
@@ -618,7 +614,5 @@ public partial class GameCanvas : MonoBehaviour {
         Debug.Log($"自动出牌：触发牌ID {targetTileCard.tileId}，摸切={targetTileCard.currentGetTile}，排序位置={targetTileCard.handSortIndex}，定缺优先={mustCutDingque}");
         return true;
     }
-
-
 
 }

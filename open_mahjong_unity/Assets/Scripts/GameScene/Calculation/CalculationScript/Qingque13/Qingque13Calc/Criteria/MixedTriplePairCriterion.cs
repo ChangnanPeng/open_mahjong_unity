@@ -9,22 +9,22 @@ namespace Qingque13.Criteria
     public class MixedTriplePairCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedTriplePair;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            
+
             for (byte i = 1; i <= 9; i++)
             {
                 bool hasAll = counter.Count(new QingqueTile(QingqueTile.SuitType.M, i)) >= 2 &&
                              counter.Count(new QingqueTile(QingqueTile.SuitType.P, i)) >= 2 &&
                              counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) >= 2;
-                             
+
                 if (hasAll) return true;
             }
-            
+
             return false;
         }
     }

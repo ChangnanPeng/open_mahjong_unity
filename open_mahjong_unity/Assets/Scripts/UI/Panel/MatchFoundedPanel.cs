@@ -26,10 +26,10 @@ public class MatchFoundedPanel : MonoBehaviour {
     }
 
     public void Show(string matchTypeName) {
-        bool firstFound = MatchStateManager.Instance == null || !MatchStateManager.Instance.IsMatchFound;
+        bool firstFound = !MatchStateManager.Instance.IsMatchFound;
         MatchStateManager.Instance.MarkMatchFound(matchTypeName);
         if (firstFound) {
-            SoundManager.Instance?.PlayGameStartSound();
+            SoundManager.Instance.PlayGameStartSound();
         }
         MatchQueueingPanel.Instance?.HideImmediately();
         Present(matchTypeName);
@@ -96,7 +96,7 @@ public class MatchFoundedPanel : MonoBehaviour {
     }
 
     private void StopFoundedCountdown() {
-        CoroutineManager.Instance?.StopNamed(CoroutineKeys.MatchFoundedCountdown);
+        CoroutineManager.Instance.StopNamed(CoroutineKeys.MatchFoundedCountdown);
     }
 
     private IEnumerator CountdownRoutine() {

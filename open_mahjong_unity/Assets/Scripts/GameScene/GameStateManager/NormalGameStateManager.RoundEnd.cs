@@ -31,7 +31,7 @@ public partial class NormalGameStateManager {
         bool isSichuanEndgameScoreStep = IsSichuanRule() && IsSichuanEndgameScoreStep(liuju_step);
         ApplySichuanGangRefundIfAny(gang_refund_changes, liuju_step);
         if (isSichuanEndgameScoreStep) {
-            // 
+            //
             if (liuju_step == "reveal_hu") {
                 BeginSichuanEndgameScoreAccum();
             } else if (liuju_step == "settle_hu") {
@@ -81,9 +81,6 @@ public partial class NormalGameStateManager {
                 if (player_to_score != null) {
                     ApplyShowResultScores(player_to_score);
                 }
-            } else if (IsSichuanRule() && string.IsNullOrEmpty(liuju_step)) {
-                // 兼容旧版单次流局包
-                RoundEndPresentation.Instance.PresentLiuju("流局");
             } else if (!IsSichuanRule()) {
                 RoundEndPresentation.Instance.PresentLiuju("流局");
             }
@@ -368,7 +365,7 @@ public partial class NormalGameStateManager {
         foreach (var kvp in player_to_tag_list){
             int player_index = kvp.Key;
             string[] tag_list = kvp.Value;
-            
+
             // 根据 player_index 找到对应的玩家位置
             if (indexToPosition.ContainsKey(player_index)){
                 string position = indexToPosition[player_index];
@@ -378,7 +375,7 @@ public partial class NormalGameStateManager {
                 }
             }
         }
-        
+
         // 更新 GameCanvas 中的玩家面板显示
         GameCanvas.Instance.UpdatePlayerTagList(player_to_tag_list);
         TryResumeAfterCuoheContinue();

@@ -114,10 +114,7 @@ public partial class NormalGameStateManager {
     /// <summary>四川：手牌仍有定缺花色时须优先打出（类比日麻立直锁手仅可打摸入牌）。</summary>
     public bool MustCutDingqueFirst() {
         if (!IsSichuanRule() || selfDingqueSuit < 1 || selfDingqueSuit > 3) return false;
-        if (GameCanvas.Instance != null) {
-            return GameCanvas.Instance.SelfHandHasDingqueSuitTile(selfDingqueSuit);
-        }
-        return SelfHasDingqueTileInHand();
+        return GameCanvas.Instance.SelfHandHasDingqueSuitTile(selfDingqueSuit);
     }
 
     public bool IsDingqueSuitTile(int tileId) {
@@ -177,14 +174,12 @@ public partial class NormalGameStateManager {
         }
         pendingSichuanContinueAfterResult = false;
 
-        if (RoundEndPresentation.Instance != null) {
-            RoundEndPresentation.Instance.StopActiveSequence();
-            RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
-        }
+        RoundEndPresentation.Instance.StopActiveSequence();
+        RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
         if (EndResultPanel.Instance != null) {
             EndResultPanel.Instance.ClearEndResultPanel();
         }
-        RoundEndPresentation.Instance?.ShowSelfGameplayControlAndResyncHand3D();
+        RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
     }
 
     /// <summary>四川：重连/进入局中时，从 game_info 的 players_info.dingque_suit 恢复各家定缺标记。</summary>
@@ -196,7 +191,7 @@ public partial class NormalGameStateManager {
             map[p.player_index] = p.dingque_suit;
         }
         if (map.Count > 0) {
-            GameCanvas.Instance?.UpdatePlayerDingque(map);
+            GameCanvas.Instance.UpdatePlayerDingque(map);
             SetSelfDingqueFromMap(map);
         }
     }

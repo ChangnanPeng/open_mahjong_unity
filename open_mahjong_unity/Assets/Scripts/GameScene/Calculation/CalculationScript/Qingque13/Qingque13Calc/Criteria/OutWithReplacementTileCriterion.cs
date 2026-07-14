@@ -5,7 +5,7 @@ namespace Qingque13.Criteria
     public class OutWithReplacementTileCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.OutWithReplacementTile;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var wt = decomposition.WinningType;

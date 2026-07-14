@@ -35,9 +35,9 @@ public class NetworkPollingManager : MonoBehaviour {
 
     public void StartRoomListPolling(float intervalSeconds = 5f) {
         StopRoomListPolling();
-        RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false);
+        RoomNetworkManager.Instance.GetRoomList(showTipOnSuccess: false);
         roomListPollingCoroutine = StartCoroutine(PollingRoutine(() => {
-            RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false);
+            RoomNetworkManager.Instance.GetRoomList(showTipOnSuccess: false);
         }, intervalSeconds));
     }
 
@@ -50,9 +50,9 @@ public class NetworkPollingManager : MonoBehaviour {
 
     public void StartServerStatsPolling(float intervalSeconds = 5f) {
         StopServerStatsPolling();
-        NetworkManager.Instance?.GetServerStats();
+        NetworkManager.Instance.GetServerStats();
         serverStatsPollingCoroutine = StartCoroutine(PollingRoutine(() => {
-            NetworkManager.Instance?.GetServerStats();
+            NetworkManager.Instance.GetServerStats();
         }, intervalSeconds));
     }
 
@@ -68,9 +68,9 @@ public class NetworkPollingManager : MonoBehaviour {
     /// </summary>
     public void StartMenuMatchPlayerCountPolling(float intervalSeconds = 5f) {
         StopMenuMatchPlayerCountPolling();
-        MatchNetworkManager.Instance?.RequestQueueStatusForMenu();
+        MatchNetworkManager.Instance.RequestQueueStatusForMenu();
         menuMatchPlayerCountPollingCoroutine = StartCoroutine(PollingRoutine(() => {
-            MatchNetworkManager.Instance?.RequestQueueStatusForMenu();
+            MatchNetworkManager.Instance.RequestQueueStatusForMenu();
         }, intervalSeconds));
     }
 
@@ -86,9 +86,9 @@ public class NetworkPollingManager : MonoBehaviour {
     /// </summary>
     public void StartMatchPanelQueuePolling(float intervalSeconds = 5f) {
         StopMatchPanelQueuePolling();
-        MatchNetworkManager.Instance?.RequestQueueStatusForMatchPanel();
+        MatchNetworkManager.Instance.RequestQueueStatusForMatchPanel();
         matchPanelQueuePollingCoroutine = StartCoroutine(PollingRoutine(() => {
-            MatchNetworkManager.Instance?.RequestQueueStatusForMatchPanel();
+            MatchNetworkManager.Instance.RequestQueueStatusForMatchPanel();
         }, intervalSeconds));
     }
 
@@ -105,9 +105,9 @@ public class NetworkPollingManager : MonoBehaviour {
     /// </summary>
     public void StartFriendListPolling(float intervalSeconds = 5f) {
         StopFriendListPolling();
-        FriendNetworkManager.Instance?.ListAllFriendPanels();
+        FriendNetworkManager.Instance.ListAllFriendPanels();
         friendListPollingCoroutine = StartCoroutine(PollingRoutine(() => {
-            FriendNetworkManager.Instance?.ListAllFriendPanels();
+            FriendNetworkManager.Instance.ListAllFriendPanels();
         }, intervalSeconds));
     }
 

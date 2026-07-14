@@ -11,13 +11,13 @@ namespace Qingque13.Criteria
     public class ThreeChainedSequencesCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeChainedSequences;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             var melds = decomposition.Melds;
-            
+
             foreach (var suit in new[] { QingqueTile.SuitType.M, QingqueTile.SuitType.P, QingqueTile.SuitType.S })
             {
                 // Starting middle tile: 2, 3, or 4
@@ -29,7 +29,7 @@ namespace Qingque13.Criteria
             }
             return false;
         }
-        
+
         private bool ContainsSequences(List<QingqueMeld> melds, QingqueTile.SuitType suit, params byte[] middleTiles)
         {
             foreach (var midTile in middleTiles)
@@ -37,8 +37,8 @@ namespace Qingque13.Criteria
                 bool found = false;
                 foreach (var meld in melds)
                 {
-                    if (meld.Type == QingqueMeldType.Sequence && 
-                        meld.Tile.GetSuitType() == suit && 
+                    if (meld.Type == QingqueMeldType.Sequence &&
+                        meld.Tile.GetSuitType() == suit &&
                         meld.Tile.Num() == midTile)
                     {
                         found = true;

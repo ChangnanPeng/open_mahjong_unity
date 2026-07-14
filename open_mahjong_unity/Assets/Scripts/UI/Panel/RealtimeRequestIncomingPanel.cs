@@ -51,7 +51,7 @@ public class RealtimeRequestIncomingPanel : MonoBehaviour {
 
     private void OnAllow() {
         if (!string.IsNullOrEmpty(_currentRequestId)) {
-            FriendNetworkManager.Instance?.RespondRealtime(_currentRequestId, true);
+            FriendNetworkManager.Instance.RespondRealtime(_currentRequestId, true);
         }
         _currentRequestId = null;
         if (transition != null) transition.Hide();
@@ -60,7 +60,7 @@ public class RealtimeRequestIncomingPanel : MonoBehaviour {
 
     private void OnDeny() {
         if (!string.IsNullOrEmpty(_currentRequestId)) {
-            FriendNetworkManager.Instance?.RespondRealtime(_currentRequestId, false);
+            FriendNetworkManager.Instance.RespondRealtime(_currentRequestId, false);
         }
         _currentRequestId = null;
         if (transition != null) transition.Hide();

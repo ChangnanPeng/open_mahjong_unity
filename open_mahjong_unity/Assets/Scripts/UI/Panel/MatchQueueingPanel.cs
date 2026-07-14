@@ -46,7 +46,7 @@ public class MatchQueueingPanel : MonoBehaviour {
     /// </summary>
     public void RestoreIfQueueing() {
         MatchStateManager manager = MatchStateManager.Instance;
-        if (manager == null || !manager.IsQueueing || manager.IsMatchFound) return;
+        if (!manager.IsQueueing || manager.IsMatchFound) return;
         queueingMatchTypeText.text = manager.QueueTitle;
         UpdateElapsedText(manager.ElapsedTime);
         panelPopup.Show(Subscribe);
@@ -76,7 +76,6 @@ public class MatchQueueingPanel : MonoBehaviour {
     private void Subscribe() {
         if (subscribed) return;
         MatchStateManager manager = MatchStateManager.Instance;
-        if (manager == null) return;
         manager.OnElapsedTick += UpdateElapsedText;
         UpdateElapsedText(manager.ElapsedTime);
         subscribedManager = manager;
@@ -92,7 +91,7 @@ public class MatchQueueingPanel : MonoBehaviour {
 
     private void OnCancelClick() {
         Unsubscribe();
-        MatchStateManager.Instance?.StopQueueing();
-        panelPopup.Hide(() => MatchNetworkManager.Instance?.SendLeaveQueue());
+        MatchStateManager.Instance.StopQueueing();
+        panelPopup.Hide(() => MatchNetworkManager.Instance.SendLeaveQueue());
     }
 }
