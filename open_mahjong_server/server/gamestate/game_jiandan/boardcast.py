@@ -152,10 +152,13 @@ def ask_action_payload(
     viewer_index: int,
     action_list: list[str],
     *,
+    action_player_index: Optional[int] = None,
     cut_tile: Optional[int] = None,
     rob_kong_tile: Optional[int] = None,
 ) -> dict:
     is_hand_action = cut_tile is None and rob_kong_tile is None
+    if action_player_index is None:
+        action_player_index = viewer_index
     return {
         "type": "gamestate/jiandan/broadcast_hand_action" if is_hand_action else "gamestate/jiandan/ask_other_action",
         "success": True,
@@ -168,7 +171,7 @@ def ask_action_payload(
         "ask_hand_action_info": {
             "action_list": list(action_list),
             "remaining_time": game_state.player_list[viewer_index].remaining_time,
-            "player_index": viewer_index,
+            "player_index": action_player_index,
             "remain_tiles": len(game_state.tiles_list),
             "action_tick": game_state.server_action_tick,
         } if is_hand_action else None,
@@ -280,7 +283,13 @@ def _total_score_changes(game_state: Any) -> dict[int, int]:
 def _settlement_score_changes(game_state: Any, settlement: dict) -> dict[int, int]:
     changes = settlement.get("score_changes") or []
     return {
-        player.player_index: changes[player.player_index] if player.player_index < len(changes) else 0
+        # The shared result UI resolves score_changes by the stable identity
+        # index.  This differs from player_to_score, whose keys are the
+        # current hand's seats.  Keeping that contract matters after seats
+        # rotate, when player_index and original_player_index no longer match.
+        player.original_player_index: changes[player.player_index]
+        if player.player_index < len(changes)
+        else 0
         for player in game_state.player_list
     }
 

@@ -91,6 +91,23 @@ def test_visible_discard_win_keeps_public_tile_but_hides_scoring() -> None:
     assert payload["points"] is None
 
 
+def test_visible_draw_does_not_leak_other_players_tile() -> None:
+    action = {
+        "action": "deal_tile",
+        "player": 0,
+        "tile": 41,
+    }
+
+    owner_payload = visible_action_payload(JiandanGameState(), 0, action)
+    other_payload = visible_action_payload(JiandanGameState(), 1, action)
+
+    assert owner_payload["do_action_info"]["deal_tile"] == 41
+    assert "deal_tiles" not in owner_payload["do_action_info"]
+    assert other_payload["tile"] is None
+    assert other_payload["do_action_info"]["deal_tile"] is None
+    assert "deal_tiles" not in other_payload["do_action_info"]
+
+
 def test_visible_concealed_kong_masks_other_viewers() -> None:
     action = {
         "action": "angang",
@@ -146,6 +163,30 @@ def test_first_win_emits_one_final_result_and_applies_scores_once() -> None:
         assert excluded not in info
 
 
+def test_result_score_changes_follow_original_identity_after_seat_rotation() -> None:
+    game = JiandanGameState()
+    game.advance_dealer_after_round()
+    game.deferred_hu_settlements = [
+        {
+            "source": "self_draw",
+            "winner": 3,
+            "tile": 36,
+            "points": 1,
+            "fan_ids": ["all_simples"],
+            "score_changes": [-2, -2, -2, 6],
+        }
+    ]
+    game.ended_by = "win"
+
+    payload = final_settlement_payload(game, 3)
+    info = payload["show_result_info"]
+
+    assert [player.original_player_index for player in game.player_list] == [1, 2, 3, 0]
+    assert info["hepai_player_index"] == 3
+    assert info["player_to_score"] == {0: -2, 1: -2, 2: -2, 3: 6}
+    assert info["score_changes"] == {0: 6, 1: -2, 2: -2, 3: -2}
+
+
 def test_draw_emits_one_standard_result() -> None:
     game = JiandanGameState()
     game.ended_by = "wall_exhausted"
@@ -169,6 +210,16 @@ def test_ask_action_payload_includes_standard_bridge_fields() -> None:
     assert payload["action_tick"] == 7
     assert payload["ask_hand_action_info"]["action_list"] == ["cut", "hu"]
     assert payload["ask_hand_action_info"]["action_tick"] == 7
+
+    observer_payload = ask_action_payload(
+        game,
+        2,
+        [],
+        action_player_index=0,
+    )
+    assert observer_payload["player_index"] == 2
+    assert observer_payload["ask_hand_action_info"]["player_index"] == 0
+    assert observer_payload["ask_hand_action_info"]["action_list"] == []
 
 
 def test_pending_action_replays_standard_action_ask() -> None:
@@ -206,8 +257,10 @@ def run() -> None:
         test_game_info_uses_only_standard_room_contract,
         test_visible_self_draw_hides_private_tile_and_scoring,
         test_visible_discard_win_keeps_public_tile_but_hides_scoring,
+        test_visible_draw_does_not_leak_other_players_tile,
         test_visible_concealed_kong_masks_other_viewers,
         test_first_win_emits_one_final_result_and_applies_scores_once,
+        test_result_score_changes_follow_original_identity_after_seat_rotation,
         test_draw_emits_one_standard_result,
         test_ask_action_payload_includes_standard_bridge_fields,
         test_pending_action_replays_standard_action_ask,

@@ -9,6 +9,7 @@ from .action_check import JiandanActionPolicy
 from .init_tiles import init_jiandan_tiles
 from .settlement import JiandanSettlementPolicy
 from ..public.hand_slot_utils import has_draw_slot, pick_timeout_discard_tile
+from ..public.logic_common import back_current_num
 from ..public.random_seed_manager import setup_random_seed_system
 from ..public.round_end_timing import liuju_ready_wait_seconds
 
@@ -77,7 +78,7 @@ class JiandanPlayer:
             self.has_draw_slot = True
         return tile
 
-    def reset_for_round(self) -> None:
+    def reset_for_round(self, round_time: int) -> None:
         self.hand_tiles = []
         self.discard_tiles = []
         self.discard_origin_tiles = []
@@ -89,6 +90,7 @@ class JiandanPlayer:
         self.hu_order = 0
         self.has_draw_slot = False
         self.discard_win_lockout_tiles = set()
+        self.remaining_time = round_time
 
 
 class JiandanGameState:
@@ -347,6 +349,52 @@ class JiandanGameState:
         )
         self.action_events[player_index].set()
 
+    def _consume_time_bank(self, player_index: int, elapsed_seconds: float) -> None:
+        """Deduct only the whole seconds used after the configured step time."""
+        overtime = max(0, int(elapsed_seconds) - int(self.step_time or 0))
+        if overtime <= 0:
+            return
+        player = self.player_list[player_index]
+        player.remaining_time = max(0, int(player.remaining_time) - overtime)
+
+    def _build_timeout_action(self, player_index: int) -> Optional[dict]:
+        """Build the ordinary automatic action when one player's clock expires."""
+        actions = self.action_dict.get(player_index, [])
+        action_type = None
+        tile = None
+        cut_index = -1
+        cut_class = False
+        if "pass" in actions:
+            action_type = "pass"
+        elif "cut" in actions:
+            action_type = "cut"
+            player = self.player_list[player_index]
+            tile = pick_timeout_discard_tile(player.hand_tiles) if player.hand_tiles else None
+            cut_index = len(player.hand_tiles) - 1
+            if tile is not None:
+                for hand_index in range(len(player.hand_tiles) - 1, -1, -1):
+                    if player.hand_tiles[hand_index] == tile:
+                        cut_index = hand_index
+                        break
+            cut_class = bool(has_draw_slot(player))
+        elif "ready" in actions:
+            action_type = "ready"
+        if action_type is None:
+            return None
+        if action_type != "ready":
+            self.player_list[player_index].remaining_time = 0
+        self.action_dict[player_index] = []
+        if player_index in self.waiting_players_list:
+            self.waiting_players_list.remove(player_index)
+        return {
+            "player_index": player_index,
+            "action_type": action_type,
+            "target_tile": None,
+            "TileId": tile,
+            "cutIndex": cut_index if action_type == "cut" else -1,
+            "cutClass": cut_class,
+        }
+
     async def wait_action(self, timeout: Optional[float] = None) -> Dict[int, dict]:
         """Collect queued actions for the current action_dict.
 
@@ -362,71 +410,68 @@ class JiandanGameState:
 
         self.schedule_bot_actions()
         results: Dict[int, dict] = {}
-        deadline = None if timeout is None else asyncio.get_running_loop().time() + timeout
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+        deadline = None if timeout is None else started_at + timeout
+        is_ready_phase = self.game_status == "waiting_ready"
+        player_deadlines = {
+            idx: started_at + int(self.step_time or 0) + max(0, int(self.player_list[idx].remaining_time))
+            for idx in self.waiting_players_list
+        } if not is_ready_phase else {}
         while self.waiting_players_list:
             wait_tasks = {
                 asyncio.create_task(self.action_events[idx].wait()): idx
                 for idx in self.waiting_players_list
             }
-            wait_timeout = None if deadline is None else max(0.0, deadline - asyncio.get_running_loop().time())
-            done, pending = await asyncio.wait(wait_tasks.keys(), timeout=wait_timeout, return_when=asyncio.FIRST_COMPLETED)
+            now = loop.time()
+            next_deadlines = []
+            if deadline is not None:
+                next_deadlines.append(deadline)
+            if not is_ready_phase:
+                next_deadlines.extend(player_deadlines[idx] for idx in self.waiting_players_list)
+            wait_timeout = None if not next_deadlines else max(0.0, min(next_deadlines) - now)
+            try:
+                done, pending = await asyncio.wait(
+                    wait_tasks.keys(),
+                    timeout=wait_timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            except asyncio.CancelledError:
+                for task in wait_tasks:
+                    task.cancel()
+                await asyncio.gather(*wait_tasks, return_exceptions=True)
+                raise
             for task in pending:
                 task.cancel()
-            if not done:
-                break
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
             for task in done:
                 idx = wait_tasks[task]
                 if not self.action_queues[idx].empty():
                     results[idx] = await self.action_queues[idx].get()
+                    if not is_ready_phase:
+                        self._consume_time_bank(idx, loop.time() - started_at)
                     self.action_dict[idx] = []
                     self.action_events[idx].clear()
                     self.waiting_players_list.remove(idx)
+            now = loop.time()
+            expired = []
+            if not is_ready_phase:
+                expired.extend(
+                    idx for idx in self.waiting_players_list
+                    if now >= player_deadlines[idx]
+                )
+            if deadline is not None and now >= deadline:
+                expired.extend(idx for idx in self.waiting_players_list if idx not in expired)
+            for idx in expired:
+                timeout_action = self._build_timeout_action(idx)
+                if timeout_action is not None:
+                    results[idx] = timeout_action
 
         for idx in list(self.waiting_players_list):
-            if "pass" in self.action_dict.get(idx, []):
-                self.player_list[idx].remaining_time = 0
-                results[idx] = {
-                    "player_index": idx,
-                    "action_type": "pass",
-                    "target_tile": None,
-                    "TileId": None,
-                    "cutIndex": -1,
-                    "cutClass": False,
-                }
-                self.action_dict[idx] = []
-                self.waiting_players_list.remove(idx)
-            elif "cut" in self.action_dict.get(idx, []):
-                player = self.player_list[idx]
-                player.remaining_time = 0
-                tile = pick_timeout_discard_tile(player.hand_tiles) if player.hand_tiles else None
-                cut_index = len(player.hand_tiles) - 1
-                if tile is not None:
-                    for hand_index in range(len(player.hand_tiles) - 1, -1, -1):
-                        if player.hand_tiles[hand_index] == tile:
-                            cut_index = hand_index
-                            break
-                results[idx] = {
-                    "player_index": idx,
-                    "action_type": "cut",
-                    "target_tile": None,
-                    "TileId": tile,
-                    "cutIndex": cut_index if player.hand_tiles else -1,
-                    "cutClass": bool(has_draw_slot(player)),
-                }
-                self.action_dict[idx] = []
-                self.waiting_players_list.remove(idx)
-            elif "ready" in self.action_dict.get(idx, []):
-                self.player_list[idx].remaining_time = 0
-                results[idx] = {
-                    "player_index": idx,
-                    "action_type": "ready",
-                    "target_tile": None,
-                    "TileId": None,
-                    "cutIndex": -1,
-                    "cutClass": False,
-                }
-                self.action_dict[idx] = []
-                self.waiting_players_list.remove(idx)
+            timeout_action = self._build_timeout_action(idx)
+            if timeout_action is not None:
+                results[idx] = timeout_action
         return results
 
     async def run_round_ready_phase(self, timeout: Optional[float] = None) -> Dict[int, dict]:
@@ -512,17 +557,23 @@ class JiandanGameState:
         else:
             cut_tile = window.get("tile") if window.get("status") == "waiting_action_after_cut" else None
             rob_kong_tile = window.get("tile") if window.get("status") == "waiting_action_qianggang" else None
-            for idx, actions in self.action_dict.items():
-                if actions:
-                    payloads.append(
-                        ask_action_payload(
-                            self,
-                            idx,
-                            actions,
-                            cut_tile=cut_tile,
-                            rob_kong_tile=rob_kong_tile,
-                        )
+            action_player_index = window.get("player")
+            if action_player_index is None:
+                action_player_index = self.current_player_index
+            # 与青雀一致：行动窗口通知所有视角。只有实际需要决策的玩家
+            # 携带非空 action_list；其他真人客户端仍可由通用 ask 路径同步
+            # 当前行动者与服务端权威余牌数，无需规则专用客户端刷新逻辑。
+            for idx in range(4):
+                payloads.append(
+                    ask_action_payload(
+                        self,
+                        idx,
+                        self.action_dict.get(idx, []),
+                        action_player_index=action_player_index,
+                        cut_tile=cut_tile,
+                        rob_kong_tile=rob_kong_tile,
                     )
+                )
         self.outbound_payloads.extend(payloads)
         return payloads
 
@@ -614,12 +665,17 @@ class JiandanGameState:
         )
         from .boardcast import _settlement_hu_class
 
+        for player in self.player_list:
+            if any(meld and meld[0] in {"s", "k", "g"} for meld in player.combination_tiles):
+                player.record_counter.fulu_times += 1
+
         self.apply_deferred_score_changes()
         if self.deferred_hu_settlements:
             for settlement in self.deferred_hu_settlements:
                 winner_index = settlement.get("winner", -1)
                 hu_class = _settlement_hu_class(settlement)
                 hu_fan = list(settlement.get("fan_names") or settlement.get("fan_ids") or [])
+                fan_ids = list(settlement.get("fan_ids") or hu_fan)
                 score_changes = list(settlement.get("score_changes") or [0, 0, 0, 0])
                 player_action_record_hu(
                     self,
@@ -631,7 +687,7 @@ class JiandanGameState:
                     hepai_tile=settlement.get("tile"),
                     ron_discarder_index=self._settlement_payer_index(settlement),
                 )
-                self._update_record_counter_for_settlement(settlement, hu_fan)
+                self._update_record_counter_for_settlement(settlement, fan_ids)
         else:
             player_action_record_liuju(self)
 
@@ -645,14 +701,15 @@ class JiandanGameState:
 
         end_game_record(self)
 
-    def _update_record_counter_for_settlement(self, settlement: dict, hu_fan: list[str]) -> None:
+    def _update_record_counter_for_settlement(self, settlement: dict, fan_ids: list[str]) -> None:
         winner_index = settlement.get("winner")
         if winner_index not in range(len(self.player_list)):
             return
         winner = self.player_list[winner_index]
         points = int(settlement.get("points", 0) or 0)
-        winner.record_counter.recorded_fans.append(hu_fan)
+        winner.record_counter.recorded_fans.append(fan_ids)
         winner.record_counter.win_score += points
+        winner.record_counter.win_turn += len(winner.discard_tiles) + 1
         if settlement.get("source") == "self_draw":
             winner.record_counter.zimo_times += 1
         else:
@@ -734,16 +791,37 @@ class JiandanGameState:
                 await room_manager.finish_custom_game_room(self.room_id)
 
     def persist_game_record(self) -> Optional[str]:
-        """Persist the finalized replay using the shared rule storage path."""
+        """Persist the finalized replay and rule-local statistics."""
         if self.db_manager is None or not self.game_record:
             return None
         try:
-            return self.db_manager.store_jiandan_game_record(
+            game_id = self.db_manager.store_jiandan_game_record(
                 self.game_record,
                 self.player_list,
                 self.room_type,
                 f"{self.max_round}/4",
             )
+            has_ai_player = any(player.user_id <= 10 for player in self.player_list)
+            if self.room_type == "events":
+                logger.info("Jiandan event game skips player statistics: game_id=%s", game_id)
+            elif game_id and not has_ai_player:
+                total_rounds = len(self.game_record.get("game_round", {}))
+                self.db_manager.store_jiandan_game_stats(
+                    game_id,
+                    self.player_list,
+                    self.room_type,
+                    self.max_round,
+                    total_rounds,
+                )
+                self.db_manager.store_jiandan_fan_stats(
+                    game_id,
+                    self.player_list,
+                    self.room_type,
+                    self.max_round,
+                )
+            elif has_ai_player:
+                logger.info("Jiandan game contains an AI player; statistics skipped")
+            return game_id
         except Exception as exc:
             logger.warning(
                 "Jiandan replay persistence failed, room_id=%s: %s",
@@ -1024,7 +1102,7 @@ class JiandanGameState:
 
     def reset_round_state(self) -> None:
         for player in self.player_list:
-            player.reset_for_round()
+            player.reset_for_round(self.round_time)
         self.tiles_list = []
         self.current_player_index = self.dealer_index
         self.hu_order_counter = 0
@@ -1251,7 +1329,12 @@ class JiandanGameState:
         return sum(1 for player in self.player_list if player.is_hu)
 
     def advance_dealer_after_round(self) -> int:
-        self.dealer_index = (self.dealer_index + 1) % 4
+        # Follow the established Qingque seat model: rotate every identity's
+        # wind and sort by the new seat, so the next dealer remains East (0).
+        for player in self.player_list:
+            player.player_index = back_current_num(player.player_index)
+        self.player_list.sort(key=lambda player: player.player_index)
+        self.dealer_index = 0
         self.current_round += 1
         self.round_index += 1
         return self.dealer_index
