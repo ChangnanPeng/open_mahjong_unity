@@ -323,7 +323,7 @@ public class EndResultPanel : MonoBehaviour {
         // 立直规则：和牌画面出现的瞬间立刻翻开宝牌/里宝牌（含里宝来自立直家），其余槽位仍渲染牌背 0
         string roomRuleForFan = NormalGameStateManager.Instance.subRule;
         ShowRiichiExtrasPanel(roomRuleForFan, riichiExtras);
-        GuobiaoAngangCheck.Apply(guobiaoAngangCheckText, NormalGameStateManager.Instance?.lastGuobiaoEndExtras, hu_fan);
+        GuobiaoAngangCheck.Apply(guobiaoAngangCheckText, NormalGameStateManager.Instance.lastGuobiaoEndExtras, hu_fan);
         TryPlayGongHuSound(roomRuleForFan, hu_fan);
 
         // 面板重建：清除被检查高亮，按缓存准备状态重绘座位配色（川麻 Prepare 会随后设置被检查座位）
@@ -433,7 +433,7 @@ public class EndResultPanel : MonoBehaviour {
         }
 
         yield return CoPlayEndButtonCountdown(confirmCountdownSeconds, allowConfirmClick);
-        if (resumeSichuanContinueAfterClose && currentState == StateGame && NormalGameStateManager.Instance != null) {
+        if (resumeSichuanContinueAfterClose && currentState == StateGame) {
             NormalGameStateManager.Instance.TryResumeAfterSichuanContinue();
         }
     }
@@ -830,7 +830,7 @@ public class EndResultPanel : MonoBehaviour {
             GameRecordManager.Instance.AdvanceToNextAction();
         }
     }
-    
+
     // 更新准备状态显示：缓存最新准备状态并按缓存重绘座位配色（修复机器人/罗伯特已准备却不显示准备色）
     public void UpdateReadyStatus(Dictionary<int, bool> playerToReady) {
         if (playerToReady != null) {
@@ -869,7 +869,6 @@ public class EndResultPanel : MonoBehaviour {
 
     /// <summary>按 缓存准备状态 + 被检查座位 重绘所有座位面板配色。</summary>
     private void ApplySeatVisuals() {
-        if (NormalGameStateManager.Instance == null) return;
         foreach (var kvp in NormalGameStateManager.Instance.indexToPosition) {
             int seat = kvp.Key;
             string position = kvp.Value;
@@ -984,9 +983,7 @@ public class EndResultPanel : MonoBehaviour {
         if (!FanTextDictionary.ShouldPlayGongHuSound(rule, huFan)) {
             return;
         }
-        if (SoundManager.Instance != null) {
-            SoundManager.Instance.PlayPhysicsSound("Gong_hu");
-        }
+        SoundManager.Instance.PlayPhysicsSound("Gong_hu");
     }
 
     private static int CalculateClassicalFanTotal(string[] huFan) {
@@ -1027,12 +1024,12 @@ public class EndResultPanel : MonoBehaviour {
         foreach (Transform child in EndTilescontainer.transform){
             Destroy(child.gameObject);
         }
-        
+
         // 清空番数容器
         foreach (Transform child in FanCountContainer){
             Destroy(child.gameObject);
         }
-        
+
         // 清空分数
         SelfUserName.text = "";
         SelfScore.text = "";
@@ -1042,7 +1039,7 @@ public class EndResultPanel : MonoBehaviour {
         TopScore.text = "";
         RightUserName.text = "";
         RightScore.text = "";
-        
+
         // 隐藏所有准备状态
         SelfReady.gameObject.SetActive(false);
         LeftReady.gameObject.SetActive(false);

@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>牌谱/观战回放和牌 3D 演出入口。</summary>
 public static partial class HepaiRevealDirector {
     public static bool IsRecordShowCardsExpanded(string winnerPosition) {
-        return RecordSetting.Instance != null && RecordSetting.Instance.IsShowCardsMode;
+        return RecordSetting.Instance.IsShowCardsMode;
     }
 
     public static HepaiPresentationRequest BuildRecordRequest(
@@ -24,7 +24,7 @@ public static partial class HepaiRevealDirector {
     }
 
     public static IEnumerator PlayRecord(HepaiPresentationRequest request) {
-        if (request == null || Game3DManager.Instance == null) {
+        if (request == null) {
             yield break;
         }
         yield return Game3DManager.Instance.PlayRecordHepaiReveal(request);

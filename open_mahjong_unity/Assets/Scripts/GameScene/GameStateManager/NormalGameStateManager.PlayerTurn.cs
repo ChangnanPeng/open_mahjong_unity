@@ -17,9 +17,7 @@ public partial class NormalGameStateManager {
                 // 清空操作按钮 *有时候补花轮自己不补花，但是别人也不补，就出现两次按钮
                 GameCanvas.Instance.ClearActionButton();
                 // 立直锁手 / 食替禁切：每次询问立刻刷新自家手牌的可点状态与变灰显示
-                if (AutoAction.Instance != null) {
-                    AutoAction.Instance.SetAutoCutLocked(IsSelfRiichi());
-                }
+                AutoAction.Instance.SetAutoCutLocked(IsSelfRiichi());
                 GameCanvas.Instance.RefreshHandTileSelectability();
 
                 // 全量自动（自摸/起手胡/补花）：不出按钮，仅延迟发网，避免闪按钮泄密
@@ -89,7 +87,7 @@ public partial class NormalGameStateManager {
                 // 清空按钮
                 GameCanvas.Instance.ClearActionButton();
                 // 切牌后退出立直选牌模式（超时被迫切牌时同样会走到这里），并清空食替禁切
-                if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+                RiichiCutSelectionController.Instance.ExitRiichiCutMode();
                 selfRiichiCandidateCuts.Clear();
                 selfForbiddenCutTiles.Clear();
                 selfForcedCutTiles.Clear();
@@ -117,7 +115,7 @@ public partial class NormalGameStateManager {
             selfRiichiCandidateCuts.Clear();
             selfForbiddenCutTiles.Clear();
             selfForcedCutTiles.Clear();
-            if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+            RiichiCutSelectionController.Instance.ExitRiichiCutMode();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);
         }
@@ -129,7 +127,7 @@ public partial class NormalGameStateManager {
             GameSceneMouseInputController.Instance.ClearStaleHandInput("TimeOut");
             // 清空操作按钮
             GameCanvas.Instance.ClearActionButton();
-            if (RiichiCutSelectionController.Instance != null) RiichiCutSelectionController.Instance.ExitRiichiCutMode();
+            RiichiCutSelectionController.Instance.ExitRiichiCutMode();
             selfForcedCutTiles.Clear();
             IsSelfActionRequired = false;
             GameSceneMouseInputController.Instance.SetActionInputPhase(GameSceneMouseInputController.InputPhaseNone);

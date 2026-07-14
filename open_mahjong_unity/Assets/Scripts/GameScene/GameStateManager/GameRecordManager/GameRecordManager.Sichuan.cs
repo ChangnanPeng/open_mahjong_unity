@@ -123,7 +123,7 @@ public partial class GameRecordManager {
         string action, int hepaiPlayerIndex, int hepaiTile, bool multiRon,
         int? ronDiscarderIndex, bool recycleDiscard, bool isQianggang) {
         string discardPos = ResolveRecordRonDiscarderPosition(ronDiscarderIndex);
-        if (action != "hu_self" && Game3DManager.Instance != null) {
+        if (action != "hu_self") {
             int syncTile = hepaiTile >= 10 ? hepaiTile : lastWinnableTileId;
             Game3DManager.Instance.SyncRecordLastDiscardForRon(discardPos, syncTile);
         }
@@ -193,7 +193,7 @@ public partial class GameRecordManager {
 
     private void HandleSichuanRecordRevealHu(List<string> tick) {
         if (tick.Count < 3) return;
-        NormalGameStateManager.Instance?.BeginSichuanEndgameScoreAccum();
+        NormalGameStateManager.Instance.BeginSichuanEndgameScoreAccum();
         Dictionary<int, int[]> allHands = ParseRecordHuHandsJson(tick[2]);
         if (allHands.Count > 0) {
             RoundEndPresentation.Instance.ResetSichuanEndgameQueue();
@@ -264,21 +264,6 @@ public partial class GameRecordManager {
             Debug.LogWarning($"[GameRecord] chajiao hand parse failed: {e.Message}");
             return null;
         }
-    }
-
-    private static Dictionary<int, string> ParseRecordStatusJson(string json) {
-        var result = new Dictionary<int, string>();
-        if (string.IsNullOrEmpty(json)) return result;
-        try {
-            JObject obj = JObject.Parse(json);
-            foreach (var prop in obj.Properties()) {
-                if (!int.TryParse(prop.Name, out int idx)) continue;
-                result[idx] = prop.Value?.Value<string>() ?? "no_ting";
-            }
-        } catch (Exception e) {
-            Debug.LogWarning($"[GameRecord] chajiao status parse failed: {e.Message}");
-        }
-        return result;
     }
 
     private void HandleSichuanRecordChaRefund(List<string> tick) {

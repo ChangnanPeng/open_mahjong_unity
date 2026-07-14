@@ -119,20 +119,20 @@ namespace Qingque13.Core
                     // Platform-specific: use int arithmetic then convert to byte to prevent underflow/overflow in WebGL
                     {
                         int baseValue = (int)Tile.Value;
-                        return new QingqueTile[] 
-                        { 
-                            new QingqueTile((byte)(baseValue - 1)), 
-                            Tile, 
-                            new QingqueTile((byte)(baseValue + 1)) 
+                        return new QingqueTile[]
+                        {
+                            new QingqueTile((byte)(baseValue - 1)),
+                            Tile,
+                            new QingqueTile((byte)(baseValue + 1))
                         };
                     }
-                
+
                 case QingqueMeldType.Triplet:
                     return new QingqueTile[] { Tile, Tile, Tile };
-                
+
                 case QingqueMeldType.Kong:
                     return new QingqueTile[] { Tile, Tile, Tile, Tile };
-                
+
                 default:
                     return new QingqueTile[0];
             }

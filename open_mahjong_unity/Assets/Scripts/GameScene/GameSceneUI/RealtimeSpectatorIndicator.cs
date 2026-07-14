@@ -44,7 +44,6 @@ public class RealtimeSpectatorIndicator : MonoBehaviour {
     }
 
     private void RegisterEvents() {
-        if (FriendNetworkManager.Instance == null) return;
         FriendNetworkManager.Instance.OnRealtimeSpectatorsChanged -= HandleSpectatorsChanged;
         FriendNetworkManager.Instance.OnListRealtimeSpectatorsResp -= HandleSpectatorsChanged;
         FriendNetworkManager.Instance.OnRealtimeSpectatorsChanged += HandleSpectatorsChanged;
@@ -52,7 +51,6 @@ public class RealtimeSpectatorIndicator : MonoBehaviour {
     }
 
     private void UnregisterEvents() {
-        if (FriendNetworkManager.Instance == null) return;
         FriendNetworkManager.Instance.OnRealtimeSpectatorsChanged -= HandleSpectatorsChanged;
         FriendNetworkManager.Instance.OnListRealtimeSpectatorsResp -= HandleSpectatorsChanged;
     }
@@ -63,9 +61,7 @@ public class RealtimeSpectatorIndicator : MonoBehaviour {
         ClearRows();
         HidePanel();
         ApplyVisibility();
-        if (FriendNetworkManager.Instance != null) {
-            FriendNetworkManager.Instance.ListRealtimeSpectators();
-        }
+        FriendNetworkManager.Instance.ListRealtimeSpectators();
     }
 
     public void HandleSpectatorsChanged(Response response) {
@@ -82,8 +78,7 @@ public class RealtimeSpectatorIndicator : MonoBehaviour {
 
     private void ApplyVisibility() {
         bool hasSpectators = _currentSpectators.Count > 0;
-        bool isSelfRealtimeSpectator = NormalGameStateManager.Instance != null
-            && NormalGameStateManager.Instance.IsRealtimeSpectator;
+        bool isSelfRealtimeSpectator = NormalGameStateManager.Instance.IsRealtimeSpectator;
         bool show = hasSpectators && !isSelfRealtimeSpectator;
         if (iconButton != null) iconButton.gameObject.SetActive(show);
         if (icon != null) icon.gameObject.SetActive(show);
@@ -101,9 +96,7 @@ public class RealtimeSpectatorIndicator : MonoBehaviour {
             RealtimeSpectatorRow row = Instantiate(rowPrefab, listContent);
             _spawnedRows.Add(row.gameObject);
             row.Bind(entry, uid => {
-                if (FriendNetworkManager.Instance != null) {
-                    FriendNetworkManager.Instance.KickRealtime(uid);
-                }
+                FriendNetworkManager.Instance.KickRealtime(uid);
             });
         }
     }

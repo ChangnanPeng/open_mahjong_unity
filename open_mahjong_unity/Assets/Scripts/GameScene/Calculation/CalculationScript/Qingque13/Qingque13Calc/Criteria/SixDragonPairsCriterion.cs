@@ -9,13 +9,13 @@ namespace Qingque13.Criteria
     public class SixDragonPairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.SixDragonPairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            
+
             // Count pairs of dragons
             byte pairCount = 0;
             for (byte n = 5; n <= 7; n++)
@@ -24,7 +24,7 @@ namespace Qingque13.Criteria
                 if (count == 2) pairCount += 1;
                 else if (count == 4) pairCount += 2;
             }
-            
+
             return pairCount == 6;
         }
     }

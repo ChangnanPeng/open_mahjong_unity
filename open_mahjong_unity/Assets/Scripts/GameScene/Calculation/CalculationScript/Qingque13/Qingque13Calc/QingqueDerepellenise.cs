@@ -39,72 +39,72 @@ namespace Qingque13
                 QingqueFan.TwoConcealedKongs, QingqueFan.ConcealedKong,
                 QingqueFan.ThreeKongs, QingqueFan.TwoKongs, QingqueFan.ThreeConcealedTriplets);
             Cover(fans, result, QingqueFan.TwoConcealedKongs, QingqueFan.ConcealedKong, QingqueFan.TwoKongs);
-            
+
             // Kongs coverage
             Cover(fans, result, QingqueFan.FourKongs, QingqueFan.ThreeKongs, QingqueFan.TwoKongs, QingqueFan.AllTriplets);
             Cover(fans, result, QingqueFan.ThreeKongs, QingqueFan.TwoKongs);
-            
+
             // Concealed Triplets coverage
-            Cover(fans, result, QingqueFan.FourConcealedTriplets, 
+            Cover(fans, result, QingqueFan.FourConcealedTriplets,
                 QingqueFan.ThreeConcealedTriplets, QingqueFan.AllTriplets, QingqueFan.ConcealedHand);
 
             // Hog coverage
             Cover(fans, result, QingqueFan.TwelveHog, QingqueFan.EightHog);
 
             // All Honours coverage
-            Cover(fans, result, QingqueFan.AllHonours, 
-                QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.AllTerminalsAndHonours, 
+            Cover(fans, result, QingqueFan.AllHonours,
+                QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.AllTerminalsAndHonours,
                 QingqueFan.MixedOutsideHand, QingqueFan.FanTile1P);
 
             // Wind coverage
-            Cover(fans, result, QingqueFan.BigFourWinds, 
-                QingqueFan.ThreeWindTriplets, QingqueFan.AllTriplets, QingqueFan.MixedOneNumber, 
+            Cover(fans, result, QingqueFan.BigFourWinds,
+                QingqueFan.ThreeWindTriplets, QingqueFan.AllTriplets, QingqueFan.MixedOneNumber,
                 QingqueFan.HalfFlush, QingqueFan.FanTile1T);
-            Cover(fans, result, QingqueFan.LittleFourWinds, 
+            Cover(fans, result, QingqueFan.LittleFourWinds,
                 QingqueFan.ThreeWindTriplets, QingqueFan.HalfFlush, QingqueFan.FanTile1P);
             Cover(fans, result, QingqueFan.FourWindPairs, QingqueFan.FanTile1P);
-            Cover(fans, result, QingqueFan.SevenWindPairs, 
+            Cover(fans, result, QingqueFan.SevenWindPairs,
                 QingqueFan.SixWindPairs, QingqueFan.FourWindPairs,
                 QingqueFan.FanTile1P, QingqueFan.AllHonours, QingqueFan.TwelveHog, QingqueFan.ThreeDoublePairs);
-            Cover(fans, result, QingqueFan.SixWindPairs, 
+            Cover(fans, result, QingqueFan.SixWindPairs,
                 QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.EightHog, QingqueFan.TwoDoublePairs);
 
             // Dragon coverage
             Cover(fans, result, QingqueFan.BigThreeDragons, QingqueFan.FanTile3T);
             Cover(fans, result, QingqueFan.LittleThreeDragons, QingqueFan.FanTile2T, QingqueFan.FanTile3P);
-            Cover(fans, result, QingqueFan.SixDragonPairs, 
+            Cover(fans, result, QingqueFan.SixDragonPairs,
                 QingqueFan.ThreeDragonPairs, QingqueFan.FanTile6P,
                 QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.TwelveHog, QingqueFan.ThreeDoublePairs);
             Cover(fans, result, QingqueFan.ThreeDragonPairs, QingqueFan.FanTile3P);
 
             // Fan tile coverage (triplets)
-            Cover(fans, result, QingqueFan.FanTile4T, 
+            Cover(fans, result, QingqueFan.FanTile4T,
                 QingqueFan.FanTile3T, QingqueFan.FanTile2T, QingqueFan.FanTile1T,
                 QingqueFan.FanTile4P, QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P,
                 QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.AllTriplets);
-            Cover(fans, result, QingqueFan.FanTile3T, 
+            Cover(fans, result, QingqueFan.FanTile3T,
                 QingqueFan.FanTile2T, QingqueFan.FanTile1T,
                 QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P);
             Cover(fans, result, QingqueFan.FanTile2T, QingqueFan.FanTile1T, QingqueFan.FanTile2P, QingqueFan.FanTile1P);
             Cover(fans, result, QingqueFan.FanTile1T, QingqueFan.FanTile1P);
 
             // Fan tile coverage (pairs)
-            Cover(fans, result, QingqueFan.FanTile7P, 
-                QingqueFan.FanTile6P, QingqueFan.FanTile5P, QingqueFan.FanTile4P, 
+            Cover(fans, result, QingqueFan.FanTile7P,
+                QingqueFan.FanTile6P, QingqueFan.FanTile5P, QingqueFan.FanTile4P,
                 QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P,
                 QingqueFan.AllHonours, QingqueFan.TwelveHog, QingqueFan.ThreeDoublePairs, QingqueFan.ThreeDragonPairs);
-            Cover(fans, result, QingqueFan.FanTile6P, 
+            Cover(fans, result, QingqueFan.FanTile6P,
                 QingqueFan.FanTile5P, QingqueFan.FanTile4P, QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P,
                 QingqueFan.HalfFlush, QingqueFan.MixedOneNumber, QingqueFan.EightHog, QingqueFan.TwoDoublePairs);
-            Cover(fans, result, QingqueFan.FanTile5P, 
+            Cover(fans, result, QingqueFan.FanTile5P,
                 QingqueFan.FanTile4P, QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P, QingqueFan.DoublePair);
-            Cover(fans, result, QingqueFan.FanTile4P, 
+            Cover(fans, result, QingqueFan.FanTile4P,
                 QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P);
             Cover(fans, result, QingqueFan.FanTile3P, QingqueFan.FanTile2P, QingqueFan.FanTile1P);
             Cover(fans, result, QingqueFan.FanTile2P, QingqueFan.FanTile1P);
 
             // Terminal coverage
-            Cover(fans, result, QingqueFan.AllTerminals, 
+            Cover(fans, result, QingqueFan.AllTerminals,
                 QingqueFan.AllTerminalsAndHonours, QingqueFan.PureOutsideHand, QingqueFan.MixedOutsideHand, QingqueFan.TwoNumbers);
             Cover(fans, result, QingqueFan.AllTerminalsAndHonours, QingqueFan.MixedOutsideHand);
             Cover(fans, result, QingqueFan.PureOutsideHand, QingqueFan.MixedOutsideHand);
@@ -118,15 +118,15 @@ namespace Qingque13
             Cover(fans, result, QingqueFan.TwoConsecutiveNumbers, QingqueFan.TwoNumbers);
 
             // Reflected hand special case
-            if (fans.Contains(QingqueFan.ReflectedHand) && 
-                fans.Contains(QingqueFan.ReflectedHand2) && 
+            if (fans.Contains(QingqueFan.ReflectedHand) &&
+                fans.Contains(QingqueFan.ReflectedHand2) &&
                 fans.Contains(QingqueFan.FullFlush))
             {
                 result.Remove(QingqueFan.ReflectedHand2);
             }
 
             // Sequence coverage
-            Cover(fans, result, QingqueFan.QuadrupleSequence, 
+            Cover(fans, result, QingqueFan.QuadrupleSequence,
                 QingqueFan.TripleSequence, QingqueFan.TwoDoubleSequences, QingqueFan.DoubleSequence, QingqueFan.TwelveHog);
             Cover(fans, result, QingqueFan.TripleSequence, QingqueFan.DoubleSequence);
             Cover(fans, result, QingqueFan.TwoDoubleSequences, QingqueFan.DoubleSequence);
@@ -137,10 +137,10 @@ namespace Qingque13
             Cover(fans, result, QingqueFan.FourChainedSequences, QingqueFan.ThreeChainedSequences);
 
             // Shifted pairs coverage
-            Cover(fans, result, QingqueFan.SevenShiftedPairs, 
+            Cover(fans, result, QingqueFan.SevenShiftedPairs,
                 QingqueFan.SixShiftedPairs, QingqueFan.FiveShiftedPairs, QingqueFan.FourShiftedPairs,
                 QingqueFan.FullFlush, QingqueFan.ReflectedHand, QingqueFan.ConnectedNumbers);
-            Cover(fans, result, QingqueFan.SixShiftedPairs, 
+            Cover(fans, result, QingqueFan.SixShiftedPairs,
                 QingqueFan.FiveShiftedPairs, QingqueFan.FourShiftedPairs);
             Cover(fans, result, QingqueFan.FiveShiftedPairs, QingqueFan.FourShiftedPairs);
 
@@ -151,12 +151,12 @@ namespace Qingque13
             Cover(fans, result, QingqueFan.ThreeMirroredPairs, QingqueFan.TwoMirroredPairs);
 
             // Consecutive numbers coverage
-            Cover(fans, result, QingqueFan.TwoConsecutiveNumbers, 
+            Cover(fans, result, QingqueFan.TwoConsecutiveNumbers,
                 QingqueFan.ThreeConsecutiveNumbers, QingqueFan.FourConsecutiveNumbers);
             Cover(fans, result, QingqueFan.ThreeConsecutiveNumbers, QingqueFan.FourConsecutiveNumbers);
 
             // Double pairs coverage
-            Cover(fans, result, QingqueFan.ThreeDoublePairs, 
+            Cover(fans, result, QingqueFan.ThreeDoublePairs,
                 QingqueFan.TwoDoublePairs, QingqueFan.DoublePair, QingqueFan.TwelveHog, QingqueFan.EightHog);
             Cover(fans, result, QingqueFan.TwoDoublePairs, QingqueFan.DoublePair, QingqueFan.EightHog);
 

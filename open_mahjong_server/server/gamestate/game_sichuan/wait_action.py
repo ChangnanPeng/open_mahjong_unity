@@ -431,12 +431,14 @@ async def wait_action(self):
                         # 刮风：点杠（明杠他人弃牌）收点杠者 2 分
                         await broadcast_do_action(self, action_list=["gang"], action_player=self.current_player_index,
                                                   combination_mask=combination_mask, combination_target=combination_target,
-                                                  gang_score_changes=gang_changes, gang_score_type="guafeng")
+                                                  gang_score_changes=gang_changes, gang_score_type="guafeng",
+                                                  cut_from_player=discarder, cut_tile=tile_id)
                         self.last_action_was_gang = True
                         self.game_status = "deal_card_after_gang"
                     else:
                         await broadcast_do_action(self, action_list=[action_type], action_player=self.current_player_index,
-                                                  combination_mask=combination_mask, combination_target=combination_target)
+                                                  combination_mask=combination_mask, combination_target=combination_target,
+                                                  cut_from_player=discarder, cut_tile=tile_id)
                         self.last_action_was_gang = False
                         self.game_status = "onlycut_after_action"
                     return

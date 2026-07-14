@@ -257,10 +257,8 @@ public class CreatePanel : MonoBehaviour {
         InitCuoheTypeDropdown();
         EnsureChangshaOptionControls();
         EnsureEventControls();
-        if (EventNetworkManager.Instance != null) {
-            EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
-            EventNetworkManager.Instance.OnActiveEventsUpdated += RefreshEventControls;
-        }
+        EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
+        EventNetworkManager.Instance.OnActiveEventsUpdated += RefreshEventControls;
         InitSubRuleDropdown();
         ApplyRuleDefaults(_ruleState);
         RefreshVisibility();
@@ -271,17 +269,13 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private void OnEnable() {
-        if (EventNetworkManager.Instance != null) {
-            EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
-            EventNetworkManager.Instance.OnActiveEventsUpdated += RefreshEventControls;
-        }
+        EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
+        EventNetworkManager.Instance.OnActiveEventsUpdated += RefreshEventControls;
         RefreshEventControls();
     }
 
     private void OnDisable() {
-        if (EventNetworkManager.Instance != null) {
-            EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
-        }
+        EventNetworkManager.Instance.OnActiveEventsUpdated -= RefreshEventControls;
     }
 
     private void OnRuleDropdownChanged(int selectedIndex) {
@@ -570,9 +564,7 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private void RefreshEventControls() {
-        var events = EventNetworkManager.Instance != null
-            ? EventNetworkManager.Instance.ActiveEvents
-            : null;
+        var events = EventNetworkManager.Instance.ActiveEvents;
         bool hasEvents = events != null && events.Count > 0;
 
         if (EventModeToggle != null) {
@@ -806,7 +798,7 @@ public class CreatePanel : MonoBehaviour {
     }
 
     private static string GetDefaultRoomName() {
-        string name = UserDataManager.Instance != null ? UserDataManager.Instance.Username : null;
+        string name = UserDataManager.Instance.Username;
         return (string.IsNullOrEmpty(name) ? "未知用户" : name) + "的游戏";
     }
 

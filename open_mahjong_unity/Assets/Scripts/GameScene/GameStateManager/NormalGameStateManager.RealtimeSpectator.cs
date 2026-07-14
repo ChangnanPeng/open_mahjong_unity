@@ -10,9 +10,9 @@ public partial class NormalGameStateManager {
         IsRealtimeSpectator = true;
         RealtimeSpectatorHostUserId = hostUserId;
         UserDataManager.Instance.SetGamestateId(gamestateId);
-        if (ExitButtonManager.Instance != null) {
-            ExitButtonManager.Instance.ShowForRealtimeSpectator();
-        }
+
+        ExitButtonManager.Instance.ShowForRealtimeSpectator();
+
         SubscribeRealtimeEndEvents();
     }
 
@@ -23,38 +23,35 @@ public partial class NormalGameStateManager {
         IsRealtimeSpectator = false;
         RealtimeSpectatorHostUserId = 0;
         UserDataManager.Instance.SetGamestateId("");
-        if (ExitButtonManager.Instance != null) {
-            ExitButtonManager.Instance.HideAll();
-        }
+
+        ExitButtonManager.Instance.HideAll();
+
         UnsubscribeRealtimeEndEvents();
     }
 
     private bool _realtimeEndSubscribed;
     private void SubscribeRealtimeEndEvents() {
         if (_realtimeEndSubscribed) return;
-        if (FriendNetworkManager.Instance == null) return;
         FriendNetworkManager.Instance.OnRealtimeKicked += HandleRealtimeKicked;
         FriendNetworkManager.Instance.OnRealtimeEnded += HandleRealtimeEnded;
         _realtimeEndSubscribed = true;
     }
     private void UnsubscribeRealtimeEndEvents() {
         if (!_realtimeEndSubscribed) return;
-        if (FriendNetworkManager.Instance != null) {
-            FriendNetworkManager.Instance.OnRealtimeKicked -= HandleRealtimeKicked;
-            FriendNetworkManager.Instance.OnRealtimeEnded -= HandleRealtimeEnded;
-        }
+        FriendNetworkManager.Instance.OnRealtimeKicked -= HandleRealtimeKicked;
+        FriendNetworkManager.Instance.OnRealtimeEnded -= HandleRealtimeEnded;
         _realtimeEndSubscribed = false;
     }
 
     private void HandleRealtimeKicked(Response response) {
         if (!IsRealtimeSpectator) return;
-        NotificationManager.Instance?.ShowTip("实时观战", false, response?.message ?? "您已被踢出实时观战");
+        NotificationManager.Instance.ShowTip("实时观战", false, response?.message ?? "您已被踢出实时观战");
         PostGameNavigator.ExitToFriend();
     }
 
     private void HandleRealtimeEnded(Response response) {
         if (!IsRealtimeSpectator) return;
-        NotificationManager.Instance?.ShowTip("实时观战", true, response?.message ?? "被观战的对局已结束");
+        NotificationManager.Instance.ShowTip("实时观战", true, response?.message ?? "被观战的对局已结束");
         PostGameNavigator.ExitToFriend();
     }
 }

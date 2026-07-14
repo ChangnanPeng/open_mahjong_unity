@@ -10,14 +10,14 @@ namespace Qingque13.Criteria
     public class FanTile6PCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.FanTile6P;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
             var seatWind = decomposition.WinningType.SeatWind();
-            
+
             var fanTiles = new QingqueTile[]
             {
                 seatWind,
@@ -25,13 +25,13 @@ namespace Qingque13.Criteria
                 new QingqueTile(QingqueTile.Honours.F),
                 new QingqueTile(QingqueTile.Honours.P)
             };
-            
+
             byte pairCount = 0;
             foreach (var tile in fanTiles)
             {
                 pairCount += (byte)(counter.Count(tile) / 2);
             }
-            
+
             return pairCount >= 6;
         }
     }

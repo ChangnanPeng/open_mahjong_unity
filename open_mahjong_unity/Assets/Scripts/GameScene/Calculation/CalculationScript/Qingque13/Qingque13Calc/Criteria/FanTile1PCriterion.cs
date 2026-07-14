@@ -10,12 +10,12 @@ namespace Qingque13.Criteria
     public class FanTile1PCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.FanTile1P;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
             var seatWind = decomposition.WinningType.SeatWind();
-            
+
             // Fan tiles: seat wind + 3 dragons (C, F, P)
             var fanTiles = new QingqueTile[]
             {
@@ -24,13 +24,13 @@ namespace Qingque13.Criteria
                 new QingqueTile(QingqueTile.Honours.F),
                 new QingqueTile(QingqueTile.Honours.P)
             };
-            
+
             // Check if any fan tile is present
             foreach (var tile in fanTiles)
             {
                 if (counter.Count(tile) > 1) return true;
             }
-            
+
             return false;
         }
     }

@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -57,7 +55,7 @@ public class PlayerInfoEntry : MonoBehaviour{
             }
             else if (playerStatsInfo.rule == "riichi"){
                 ShowText = "立直麻将";
-                
+
                 if (playerStatsInfo.mode == "2/4"){
                     ShowText += "南风战";
                 }
@@ -67,7 +65,7 @@ public class PlayerInfoEntry : MonoBehaviour{
             }
             else if (playerStatsInfo.rule == "qingque"){
                 ShowText = "青雀麻将";
-                
+
                 if (playerStatsInfo.mode == "4/4"){
                     ShowText += "全庄战";
                 }
@@ -151,22 +149,22 @@ public class PlayerInfoEntry : MonoBehaviour{
         if (playerInfoPanel == null || playerStatsInfo == null){
             return;
         }
-        
+
         // 检查下一个子物体是否存在数据布局组
         int entryIndex = transform.GetSiblingIndex();
         Transform parent = transform.parent;
         bool hasDataLayout = false;
-        
+
         if (parent != null && entryIndex + 1 < parent.childCount){
             Transform nextChild = parent.GetChild(entryIndex + 1);
             if (nextChild != null && nextChild.name.Contains("DataLayoutGroup")){
                 hasDataLayout = true;
             }
         }
-        
+
         // 调用 ShowStatsData（如果已展开会删除，否则会创建）
         playerInfoPanel.ShowStatsData(playerStatsCase, playerStatsInfo, transform);
-        
+
         // 更新展开/收起状态（如果之前有数据布局组，现在应该收起；否则应该展开）
         isExpanded = !hasDataLayout;
         if (expandText != null){

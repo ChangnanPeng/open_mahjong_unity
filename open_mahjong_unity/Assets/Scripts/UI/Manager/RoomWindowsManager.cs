@@ -26,7 +26,7 @@ public class RoomWindowsManager : MonoBehaviour {
     /// <param name="targetWindow">目标窗口：roomList, roomInfo, createRoom</param>
     public void SwitchRoomWindow(string targetWindow) {
         Debug.Log($"切换到房间窗口: {targetWindow}");
-        
+
         // 先关闭所有房间窗口
         roomPanel.SetActive(false);
         createRoomPanel.SetActive(false);
@@ -53,4 +53,3 @@ public class RoomWindowsManager : MonoBehaviour {
         createRoomPanel.SetActive(false);
     }
 }
-

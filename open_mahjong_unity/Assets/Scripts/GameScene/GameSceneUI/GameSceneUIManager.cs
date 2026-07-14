@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
@@ -31,15 +30,13 @@ public class GameSceneUIManager : MonoBehaviour
     /// <summary>关闭计分板 UI（不清对局结算缓存，用于新开对局/观战初始化）。</summary>
     public void ClearScoreRecordUi() {
         ScoreHistoryPanel.Instance?.Close();
-        if (GameCanvas.Instance != null) {
-            GameCanvas.Instance.SetScoreRecordOpen(false);
-        }
+        GameCanvas.Instance.SetScoreRecordOpen(false);
     }
 
     /// <summary>关闭计分板并清空对局结算缓存，用于退出对局/牌谱/观战及切换牌谱。</summary>
     public void ClearScoreRecordState() {
         ClearScoreRecordUi();
-        NormalGameStateManager.Instance?.ClearScoreRecordSettlementCache();
+        NormalGameStateManager.Instance.ClearScoreRecordSettlementCache();
     }
 
     /// <summary>
@@ -132,8 +129,7 @@ public class GameSceneUIManager : MonoBehaviour
 
         var mgr = NormalGameStateManager.Instance;
         var player_to_info = mgr?.player_to_info;
-        bool recordActive = GameRecordManager.Instance != null
-            && GameRecordManager.Instance.gameObject.activeSelf
+        bool recordActive = GameRecordManager.Instance.gameObject.activeSelf
             && GameRecordManager.Instance.gameRecord != null;
 
         if (recordActive) {
@@ -175,13 +171,10 @@ public class GameSceneUIManager : MonoBehaviour
         AutoAction.Instance.gameObject.SetActive(true);
         AutoAction.Instance.Initialize(); // 初始化自动行为组件
         RecordSetting.Instance.gameObject.SetActive(false);
-        if (ExitButtonManager.Instance != null) {
-            // 自定义房间对局显示投票暂停/结束按钮；匹配对局/其它模式隐藏全部退出按钮
-            bool isCustomRoom = NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.roomType == "custom";
-            if (isCustomRoom) ExitButtonManager.Instance.ShowForRoomGame();
-            else ExitButtonManager.Instance.HideAll();
-        }
+        // 自定义房间对局显示投票暂停/结束按钮；匹配对局/其它模式隐藏全部退出按钮
+        bool isCustomRoom = NormalGameStateManager.Instance.roomType == "custom";
+        if (isCustomRoom) ExitButtonManager.Instance.ShowForRoomGame();
+        else ExitButtonManager.Instance.HideAll();
         if (realtimeSpectatorIndicator != null) realtimeSpectatorIndicator.ResetForNewGame(); // 重置被实时观战指示器，主动询问一次
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
     }
@@ -201,7 +194,7 @@ public class GameSceneUIManager : MonoBehaviour
         TipsContainer.Instance.HideTips();
         AutoAction.Instance.InitializeForSpectator();
         RecordSetting.Instance.gameObject.SetActive(false);
-        if (ExitButtonManager.Instance != null) ExitButtonManager.Instance.ShowForRealtimeSpectator();
+        ExitButtonManager.Instance.ShowForRealtimeSpectator();
         RoundEndPresentation.Instance.ShowSelfGameplayControlAndResyncHand3D();
     }
 

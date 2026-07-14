@@ -132,7 +132,7 @@ public static class ScoreHistorySettlementHelper {
         int scoreHistoryCount,
         IReadOnlyList<RoundSettlementSnapshot> roundSettlements) {
         if (roundSettlements == null || roundSettlements.Count == 0) {
-            var live = NormalGameStateManager.Instance?.roundSettlementHistory;
+            var live = NormalGameStateManager.Instance.roundSettlementHistory;
             if (live == null || live.Count == 0) return null;
             roundSettlements = live;
         }
@@ -239,8 +239,7 @@ public static class ScoreHistorySettlementHelper {
         int winnerDelta = 0;
         if (scoreChanges != null && hepaiPlayerIndex >= 0) {
             int originalPlayerIndex = hepaiPlayerIndex;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {
@@ -290,8 +289,7 @@ public static class ScoreHistorySettlementHelper {
         int winnerDelta = 0;
         if (scoreChanges != null && hepaiPlayerIndex.HasValue) {
             int originalPlayerIndex = hepaiPlayerIndex.Value;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex.Value, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {
@@ -341,8 +339,7 @@ public static class ScoreHistorySettlementHelper {
         }
         if (scoreChanges != null && hepaiPlayerIndex.HasValue) {
             int originalPlayerIndex = hepaiPlayerIndex.Value;
-            if (NormalGameStateManager.Instance != null
-                && NormalGameStateManager.Instance.indexToPosition != null
+            if (NormalGameStateManager.Instance.indexToPosition != null
                 && NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex.Value, out string huPos)
                 && NormalGameStateManager.Instance.player_to_info != null
                 && NormalGameStateManager.Instance.player_to_info.TryGetValue(huPos, out PlayerInfoClass winnerInfo)) {

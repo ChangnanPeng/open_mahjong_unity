@@ -4,11 +4,8 @@ using TMPro;
 
 public class MenuPanel : MonoBehaviour {
 
-
     [SerializeField] private TMP_Text usernameText;
     [SerializeField] private Image profileImage;
-
-
 
     public static MenuPanel Instance { get; private set; }
     private void Awake(){
@@ -19,7 +16,6 @@ public class MenuPanel : MonoBehaviour {
         Instance = this;
     }
     // Start is called before the first frame update
-
 
     public void ShowUserSettings(UserSettings userSettings){
         // 如果userSettings为null（游客登录），使用UserDataManager中的默认值

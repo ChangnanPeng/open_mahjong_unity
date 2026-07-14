@@ -11,18 +11,18 @@ namespace Qingque13.Criteria
     public class MixedShiftedTripletsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedShiftedTriplets;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             foreach (var pattern in QingquePatterns.MixedShiftedTriplets)
             {
                 if (ContainsMelds(decomposition.Melds, pattern)) return true;
             }
             return false;
         }
-        
+
         private bool ContainsMelds(List<QingqueMeld> melds, List<QingqueMeld> required)
         {
             foreach (var req in required)
@@ -31,7 +31,7 @@ namespace Qingque13.Criteria
                 foreach (var meld in melds)
                 {
                     // Triplets or Kongs both count
-                    if ((meld.Type == QingqueMeldType.Triplet || meld.Type == QingqueMeldType.Kong) && 
+                    if ((meld.Type == QingqueMeldType.Triplet || meld.Type == QingqueMeldType.Kong) &&
                         (req.Type == QingqueMeldType.Triplet || req.Type == QingqueMeldType.Kong) &&
                         meld.Tile.Value == req.Tile.Value)
                     {

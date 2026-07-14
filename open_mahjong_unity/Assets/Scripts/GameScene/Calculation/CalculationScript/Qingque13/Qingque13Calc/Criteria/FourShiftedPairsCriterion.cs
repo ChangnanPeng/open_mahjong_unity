@@ -9,14 +9,14 @@ namespace Qingque13.Criteria
     public class FourShiftedPairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.FourShiftedPairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
             var suits = new[] { QingqueTile.SuitType.M, QingqueTile.SuitType.P, QingqueTile.SuitType.S };
-            
+
             foreach (var suit in suits)
             {
                 for (byte start = 1; start <= 6; start++)
@@ -34,7 +34,7 @@ namespace Qingque13.Criteria
                     if (valid) return true;
                 }
             }
-            
+
             return false;
         }
     }

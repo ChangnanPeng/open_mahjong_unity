@@ -9,13 +9,13 @@ namespace Qingque13.Criteria
     public class ThreeMirroredPairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeMirroredPairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            
+
             // Check for three distinct numbers with pairs in two suits
             for (byte i = 1; i <= 7; i++)
             {
@@ -31,7 +31,7 @@ namespace Qingque13.Criteria
                             counter.Count(new QingqueTile(QingqueTile.SuitType.P, j)) >= 2 &&
                             counter.Count(new QingqueTile(QingqueTile.SuitType.P, k)) >= 2)
                             return true;
-                        
+
                         // Check S and P
                         if (counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) >= 2 &&
                             counter.Count(new QingqueTile(QingqueTile.SuitType.S, j)) >= 2 &&
@@ -40,7 +40,7 @@ namespace Qingque13.Criteria
                             counter.Count(new QingqueTile(QingqueTile.SuitType.P, j)) >= 2 &&
                             counter.Count(new QingqueTile(QingqueTile.SuitType.P, k)) >= 2)
                             return true;
-                        
+
                         // Check M and S
                         if (counter.Count(new QingqueTile(QingqueTile.SuitType.M, i)) >= 2 &&
                             counter.Count(new QingqueTile(QingqueTile.SuitType.M, j)) >= 2 &&
@@ -52,7 +52,7 @@ namespace Qingque13.Criteria
                     }
                 }
             }
-            
+
             // Check for one pair + one double pair (4 tiles) pattern
             for (byte i = 1; i <= 8; i++)
             {
@@ -71,7 +71,7 @@ namespace Qingque13.Criteria
                         if (pCount == 4) pairCount += 2;
                         if (pairCount == 4) return true;
                     }
-                    
+
                     // S and P
                     if (counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) >= 2 &&
                         counter.Count(new QingqueTile(QingqueTile.SuitType.P, i)) >= 2)
@@ -85,7 +85,7 @@ namespace Qingque13.Criteria
                         if (pCount == 4) pairCount += 2;
                         if (pairCount == 4) return true;
                     }
-                    
+
                     // M and S
                     if (counter.Count(new QingqueTile(QingqueTile.SuitType.M, i)) >= 2 &&
                         counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) >= 2)
@@ -101,7 +101,7 @@ namespace Qingque13.Criteria
                     }
                 }
             }
-            
+
             return false;
         }
     }

@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class TwoKongsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TwoKongs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;

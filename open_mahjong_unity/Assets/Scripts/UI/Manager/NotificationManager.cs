@@ -1,9 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class NotificationManager : MonoBehaviour {
-    
+
     [Header("Tips 配置")]
     [SerializeField] private GameObject tipsPosition;
     [SerializeField] private TipItem tipItemPrefab;                // Tips 预制体（挂 TipItem + CanvasGroup）
@@ -19,7 +17,7 @@ public class NotificationManager : MonoBehaviour {
     [SerializeField] private MessagePrefab messagePrefab;        // Message 预制体
 
     public static NotificationManager Instance { get; private set; }
-    
+
     private void Awake() {
         if (Instance != null && Instance != this) {
             Debug.Log($"Destroying duplicate NotificationManager. Existing: {Instance}, New: {this}");

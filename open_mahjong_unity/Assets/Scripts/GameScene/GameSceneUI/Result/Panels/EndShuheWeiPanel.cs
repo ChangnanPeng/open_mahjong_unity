@@ -214,9 +214,6 @@ public class EndShuheWeiPanel : MonoBehaviour {
     }
 
     public void UpdateReadyStatus(Dictionary<int, bool> playerToReady) {
-        if (NormalGameStateManager.Instance == null) {
-            return;
-        }
         foreach (var kvp in playerToReady) {
             if (!NormalGameStateManager.Instance.indexToPosition.ContainsKey(kvp.Key)) {
                 continue;

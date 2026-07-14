@@ -14,7 +14,6 @@ public class RoomListPanel : MonoBehaviour {
     [SerializeField] private Button refreshButton;     // 刷新按钮
     [SerializeField] private Button JoinRoomButton;        // 加入房间按钮
 
-
     [Header("Password Input")]
     [SerializeField] private PanelPopupTransition passwordInputPanel; // 密码输入面板（挂载 PanelPopupTransition）
     [SerializeField] private TMP_InputField passwordInput; // 密码输入框
@@ -79,9 +78,7 @@ public class RoomListPanel : MonoBehaviour {
             NotificationManager.Instance.ShowTip("tips",false,"房间ID不能为空");
             return;
         } else {
-            if (RoomNetworkManager.Instance != null) {
-                RoomNetworkManager.Instance.JoinRoom(RoomIdInput.text, RoomIdInput.text);
-            }
+            RoomNetworkManager.Instance.JoinRoom(RoomIdInput.text, RoomIdInput.text);
         }
     }
 
@@ -154,4 +151,3 @@ public class RoomListPanel : MonoBehaviour {
         passwordInputPanel.Hide();
     }
 }
-

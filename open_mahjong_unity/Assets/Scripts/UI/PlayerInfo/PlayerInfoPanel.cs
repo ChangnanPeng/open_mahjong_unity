@@ -1,9 +1,7 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
-
 
 public class PlayerInfoPanel : MonoBehaviour {
     [SerializeField] private PanelPopupTransition panelPopup;
@@ -51,6 +49,7 @@ public class PlayerInfoPanel : MonoBehaviour {
     private PlayerStatsInfo[] classicalStats;
     private PlayerStatsInfo[] jiandanStats;
     
+
     // 保存汇总番种统计数据（由服务器返回）
     private Dictionary<string, int> guobiaoTotalFanStats;
     private Dictionary<string, int> guobiaoRankedFanStats;
@@ -100,7 +99,6 @@ public class PlayerInfoPanel : MonoBehaviour {
         }
     }
 
-
     // 显示玩家信息（仅显示用户信息，默认加载国标数据）
     public void ShowPlayerInfo(PlayerInfoResponse playerInfo){
         if (playerInfo == null){
@@ -116,7 +114,7 @@ public class PlayerInfoPanel : MonoBehaviour {
         usernameText.text = _currentUsername;
         useridText.text = playerInfo.user_id.ToString();
         titleText.text = ConfigManager.GetTitleText(playerInfo.user_settings.title_id);
-        
+
         profileImage.sprite = Resources.Load<Sprite>($"image/Profiles/{playerInfo.user_settings.profile_image_id}");
 
         // 段位信息
@@ -149,10 +147,10 @@ public class PlayerInfoPanel : MonoBehaviour {
         currentGuobiaoCategory = "rank";
         UpdateModeToggleVisibility();
         ClearRecordEntryContainer();
-        DataNetworkManager.Instance?.GetGuobiaoStats(currentUserId.ToString());
+        DataNetworkManager.Instance.GetGuobiaoStats(currentUserId.ToString());
         FriendRelationCache.OnChanged += RefreshFriendActionButton;
         RefreshFriendActionButton();
-        FriendNetworkManager.Instance?.ListFriends();
+        FriendNetworkManager.Instance.ListFriends();
         _shownOnce = true;
         if (panelPopup != null) {
             panelPopup.Show();
@@ -180,7 +178,7 @@ public class PlayerInfoPanel : MonoBehaviour {
             FriendPanel.Instance?.ShowDeleteFriendConfirm(currentUserId, _currentUsername);
             return;
         }
-        FriendNetworkManager.Instance?.RequestFriend(currentUserId);
+        FriendNetworkManager.Instance.RequestFriend(currentUserId);
     }
 
     private void UnsubscribeFriendCache() {
@@ -295,23 +293,26 @@ public class PlayerInfoPanel : MonoBehaviour {
     private void OnSwitchRuleButtonClick(string rule){
         CurrentShowRule = rule;
         UpdateModeToggleVisibility();
-        
+
         // 如果数据不存在（null 或未初始化），则请求数据
         if (rule == "guobiao" && guobiaoStats == null){
-            DataNetworkManager.Instance?.GetGuobiaoStats(currentUserId.ToString());
+            DataNetworkManager.Instance.GetGuobiaoStats(currentUserId.ToString());
             return;
         }
         else if (rule == "riichi" && riichiStats == null){
-            DataNetworkManager.Instance?.GetRiichiStats(currentUserId.ToString());
+            DataNetworkManager.Instance.GetRiichiStats(currentUserId.ToString());
             return;
         }
         else if (rule == "Other" && (qingqueStats == null || classicalStats == null || jiandanStats == null)){
             if (qingqueStats == null) DataNetworkManager.Instance?.GetQingqueStats(currentUserId.ToString());
             if (classicalStats == null) DataNetworkManager.Instance?.GetClassicalStats(currentUserId.ToString());
             if (jiandanStats == null) DataNetworkManager.Instance?.GetJiandanStats(currentUserId.ToString());
+        else if (rule == "Other" && (qingqueStats == null || classicalStats == null)){
+            if (qingqueStats == null) DataNetworkManager.Instance.GetQingqueStats(currentUserId.ToString());
+            if (classicalStats == null) DataNetworkManager.Instance.GetClassicalStats(currentUserId.ToString());
             return;
         }
-        
+
         // 刷新显示（即使数据为空数组也会显示所有模式）
         RefreshCurrentRuleDisplay();
     }
@@ -320,9 +321,9 @@ public class PlayerInfoPanel : MonoBehaviour {
     private void RefreshCurrentRuleDisplay(){
         // 清空容器
         ClearRecordEntryContainer();
-        
+
         Dictionary<string, int> totalFanStats = null;
-        
+
         if (CurrentShowRule == "guobiao"){
             // 国标麻将：4 种局制，按场次分类（自定义=4/4 等，天梯=4/4_rank 等）
             bool isRank = (currentGuobiaoCategory == "rank");
@@ -333,7 +334,7 @@ public class PlayerInfoPanel : MonoBehaviour {
                 "2/4" + suffix,
                 "1/4" + suffix
             };
-            
+
             // 创建字典以便快速查找统计数据
             Dictionary<string, PlayerStatsInfo> statsDict = new Dictionary<string, PlayerStatsInfo>();
             if (guobiaoStats != null){
@@ -343,12 +344,12 @@ public class PlayerInfoPanel : MonoBehaviour {
         }
                 }
             }
-            
+
             // 按固定顺序显示所有模式
             for (int i = 0; i < guobiaoModes.Length; i++){
                 string mode = guobiaoModes[i];
                 statsDict.TryGetValue(mode, out PlayerStatsInfo stat);
-        
+
                 // 如果没有数据，创建空数据
                 if (stat == null){
                     stat = new PlayerStatsInfo{
@@ -371,7 +372,7 @@ public class PlayerInfoPanel : MonoBehaviour {
                         total_round_score = 0
                     };
                 }
-                
+
             GameObject playerInfoEntryObject = Instantiate(PlayerInfoEntryPrefab, RecordEntryContainer);
             PlayerInfoEntry playerInfoEntry = playerInfoEntryObject.GetComponent<PlayerInfoEntry>();
             playerInfoEntry.SetPlayerInfoEntry("mode", this, stat);
@@ -382,7 +383,7 @@ public class PlayerInfoPanel : MonoBehaviour {
         else if (CurrentShowRule == "riichi"){
             // 立直麻将：显示2个固定模式
             string[] riichiModes = {"2/4", "1/4"};
-            
+
             // 创建字典以便快速查找统计数据
             Dictionary<string, PlayerStatsInfo> statsDict = new Dictionary<string, PlayerStatsInfo>();
             if (riichiStats != null){
@@ -392,12 +393,12 @@ public class PlayerInfoPanel : MonoBehaviour {
         }
                 }
     }
-    
+
             // 按固定顺序显示所有模式
             for (int i = 0; i < riichiModes.Length; i++){
                 string mode = riichiModes[i];
                 statsDict.TryGetValue(mode, out PlayerStatsInfo stat);
-                
+
                 // 如果没有数据，创建空数据
                 if (stat == null){
                     stat = new PlayerStatsInfo{
@@ -418,18 +419,18 @@ public class PlayerInfoPanel : MonoBehaviour {
                         fulu_round_count = 0
                     };
                 }
-                
+
                 GameObject playerInfoEntryObject = Instantiate(PlayerInfoEntryPrefab, RecordEntryContainer);
                 PlayerInfoEntry playerInfoEntry = playerInfoEntryObject.GetComponent<PlayerInfoEntry>();
                 playerInfoEntry.SetPlayerInfoEntry("mode", this, stat);
             }
-            
+
             totalFanStats = riichiTotalFanStats;
         }
         else if (CurrentShowRule == "Other"){
             // 青雀麻将：显示4个固定模式
             string[] qingqueModes = {"4/4", "3/4", "2/4", "1/4"};
-            
+
             Dictionary<string, PlayerStatsInfo> statsDict = new Dictionary<string, PlayerStatsInfo>();
             if (qingqueStats != null){
                 foreach (var stat in qingqueStats){
@@ -438,11 +439,11 @@ public class PlayerInfoPanel : MonoBehaviour {
                     }
                 }
             }
-            
+
             for (int i = 0; i < qingqueModes.Length; i++){
                 string mode = qingqueModes[i];
                 statsDict.TryGetValue(mode, out PlayerStatsInfo stat);
-                
+
                 if (stat == null){
                     stat = new PlayerStatsInfo{
                         rule = "qingque",
@@ -462,7 +463,7 @@ public class PlayerInfoPanel : MonoBehaviour {
                         fulu_round_count = 0
                     };
                 }
-                
+
                 GameObject playerInfoEntryObject = Instantiate(PlayerInfoEntryPrefab, RecordEntryContainer);
                 PlayerInfoEntry playerInfoEntry = playerInfoEntryObject.GetComponent<PlayerInfoEntry>();
                 playerInfoEntry.SetPlayerInfoEntry("mode", this, stat);
@@ -590,14 +591,13 @@ public class PlayerInfoPanel : MonoBehaviour {
         PlayerInfoEntry fanStatsEntry = fanStatsEntryObject.GetComponent<PlayerInfoEntry>();
         fanStatsEntry.SetPlayerInfoEntry("fanStats", this, fanStatsInfo);
     }
-    
+
     // 清空容器
     private void ClearRecordEntryContainer(){
         foreach (Transform child in RecordEntryContainer){
             Destroy(child.gameObject);
                     }
                 }
-    
 
     // 复制 Userid
     private void OnCopyUseridButtonClick(){
@@ -634,10 +634,10 @@ public class PlayerInfoPanel : MonoBehaviour {
         // 在条目下方创建数据布局组
         GameObject layoutGroupObject = Instantiate(PlayerInfoDataLayoutGroupPrefab, RecordEntryContainer);
         layoutGroupObject.transform.SetSiblingIndex(entryIndex + 1);
-        
+
         // 获取布局组的 Transform（作为父物体）
         Transform layoutGroupTransform = layoutGroupObject.transform;
-        
+
         // 根据数据类型显示不同的内容
         if (statsCase == "mode"){
             // 显示对局统计
@@ -813,7 +813,7 @@ public class PlayerInfoPanel : MonoBehaviour {
     // 显示番数统计数据
     private void ShowFanStats(Transform parent, PlayerStatsInfo stats){
         if (parent == null) return;
-        
+
         // 根据规则选择对应的番种翻译字典
         Dictionary<string, string> currentFanDict = RankConfig.GuobiaoFanTranslation;
         if (stats?.rule == "qingque") {
@@ -828,12 +828,12 @@ public class PlayerInfoPanel : MonoBehaviour {
         foreach (var fanPair in currentFanDict){
             string fanName = fanPair.Value; // 中文名称
             int fanValue = 0;
-            
+
             // 如果统计数据中有该番种，获取其值
             if (stats?.fan_stats != null && stats.fan_stats.ContainsKey(fanPair.Key)){
                 fanValue = stats.fan_stats[fanPair.Key];
             }
-            
+
             CreateDataText(parent, fanName, fanValue.ToString());
         }
     }
@@ -849,7 +849,7 @@ public class PlayerInfoPanel : MonoBehaviour {
 
         GameObject textObject = Instantiate(PlayerInfoDataTextPrefab, parent);
         TMP_Text textComponent = textObject.GetComponent<TMP_Text>();
-        
+
         if (textComponent != null)
         {
             textComponent.text = $"{label}: {value}";

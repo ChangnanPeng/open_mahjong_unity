@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D;
@@ -42,12 +41,11 @@ public class MahjongObjectPool : MonoBehaviour {
             Destroy(gameObject);
             return;
         }
-        
+
         CacheAllSprites(cardAtlas);
-        // 目前所有规则都使用一套国标卡牌
-        InitializePool("guobiao");
+        InitializePool();
     }
-    
+
     /// <summary>
     /// 预缓存所有需要的 Sprite
     /// </summary>
@@ -75,7 +73,7 @@ public class MahjongObjectPool : MonoBehaviour {
 
     private const float CARD_FACE_VERTICAL_STRETCH = 1.1f;
 
-    public void InitializePool(string rule) {
+    public void InitializePool() {
         int blankId = BlankPoolTileId;
         Queue<GameObject> blankTilePool = new Queue<GameObject>();
         for (int i = 0; i < 56; i++) {
@@ -132,7 +130,7 @@ public class MahjongObjectPool : MonoBehaviour {
             poolDictionary[tileId] = objectPool;
         }
     }
-    
+
     /// <summary>
     /// 预计算对象的平滑法线
     /// </summary>
@@ -221,7 +219,7 @@ public class MahjongObjectPool : MonoBehaviour {
         ApplyCardTexture(tile, type);
         return tile;
     }
-    
+
     /// <summary>
     /// 从池中取出一张空白牌面
     /// </summary>
@@ -246,9 +244,7 @@ public class MahjongObjectPool : MonoBehaviour {
     /// </summary>
     public void Return(int type, GameObject tile) {
         // 归还前重置材质颜色并取消悬停管理器注册
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.ResetAndUnregisterCard(tile);
-        }
+        Card3DHoverManager.Instance.ResetAndUnregisterCard(tile);
 
         Tile3D tile3D = tile.GetComponent<Tile3D>();
         if (tile3D != null && type == -1) {
@@ -276,7 +272,7 @@ public class MahjongObjectPool : MonoBehaviour {
         tile.transform.SetParent(transform);
         poolDictionary[type].Enqueue(tile);
     }
-    
+
     /// <summary>
     /// 将空白牌面归还到池中
     /// </summary>
@@ -295,7 +291,7 @@ public class MahjongObjectPool : MonoBehaviour {
         if (spriteCache.TryGetValue(tileId, out Sprite cachedSprite)) {
             tile3D.SetCardSprite(tileId, cachedSprite, CARD_FACE_VERTICAL_STRETCH);
         }
-        if (ConfigManager.Instance != null && ConfigManager.Instance.UseBlankWhiteDragonFace(tileId) && spriteCache.TryGetValue(BlankPoolTileId, out Sprite blankSprite)) {
+        if (ConfigManager.Instance.UseBlankWhiteDragonFace(tileId) && spriteCache.TryGetValue(BlankPoolTileId, out Sprite blankSprite)) {
             tile3D.SetCardSprite(tileId, blankSprite, CARD_FACE_VERTICAL_STRETCH);
         }
     }
