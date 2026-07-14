@@ -64,17 +64,14 @@ public partial class Game3DManager : MonoBehaviour {
             rotation = Quaternion.Euler(90, 0, 270);
         }
 
-        bool isRecordSet = SetType == "Record";
         // 立直横置：基础姿势再绕世界 Y 轴逆时针 90°，使长边沿 widthdirection 排布
         if (isRiichi && SetType == "Discard") {
             rotation = Quaternion.Euler(0, -90, 0) * rotation;
         }
         // 添加随机的 z 轴旋转（正负3度），模拟手牌排列的自然效果
-        if (!isRecordSet) {
-            Vector3 euler = rotation.eulerAngles;
-            euler.z += Random.Range(-3f, 3f);
-            rotation = Quaternion.Euler(euler);
-        }
+        Vector3 euler = rotation.eulerAngles;
+        euler.z += Random.Range(-3f, 3f);
+        rotation = Quaternion.Euler(euler);
 
         int cardsPerRow;
         if (SetType == "Discard") {
@@ -104,8 +101,7 @@ public partial class Game3DManager : MonoBehaviour {
             yield break;
         }
         if (SetType == "Discard") {
-            lastCutJiagang3DObject = cardObj;
-            // 登记为该家最新弃牌对象：鸣牌认走时直接用此确切对象，避免河里同类牌歧义与共享字段失效。
+            // 登记为该家最新弃牌对象：鸣牌认走时直接用此确切对象，避免河里同类牌歧义。
             RegisterLastDiscard(PlayerPosition, cardObj, tileId);
         }
         // 立直横置标记写入 Tile3D，归还对象池时会被清掉
@@ -114,11 +110,9 @@ public partial class Game3DManager : MonoBehaviour {
         cardObj.transform.SetParent(SetPosition, worldPositionStays: true);
         cardObj.name = $"Card_{SetPosition.childCount}";
 
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
-        }
+        Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
 
-        if (isMoqie && Card3DHoverManager.Instance != null) {
+        if (isMoqie) {
             Card3DHoverManager.Instance.SetCardGrayOverlay(cardObj, Card3DHoverManager.Instance.MoqieOverlayColor, Card3DHoverManager.Instance.MoqieOverlayIntensity);
         }
 
@@ -212,36 +206,23 @@ public partial class Game3DManager : MonoBehaviour {
             Debug.LogError($"无法从对象池获取牌: {tileId}");
             return;
         }
-        if (SetType == "Discard") {
-            lastCutJiagang3DObject = cardObj;
+        if (isDiscardLike) {
+            // 牌谱重建/重连无动画弃牌也须登记，否则荣和/鸣牌认不到河牌。
+            RegisterLastDiscard(PlayerPosition, cardObj, tileId);
         }
         Tile3D tile3D = cardObj.GetComponent<Tile3D>();
         if (tile3D != null) tile3D.isRiichiHorizontal = useHorizontalLayout;
         cardObj.transform.SetParent(SetPosition, worldPositionStays: true);
         cardObj.name = $"Card_{SetPosition.childCount}";
 
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
-        }
+        Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
 
-        if (isMoqie && Card3DHoverManager.Instance != null) {
+        if (isMoqie) {
             Card3DHoverManager.Instance.SetCardGrayOverlay(cardObj, Card3DHoverManager.Instance.MoqieOverlayColor, Card3DHoverManager.Instance.MoqieOverlayIntensity);
         }
 
         if (isRecordSet) {
             cardObj.transform.position = currentPosition;
-            return;
-        }
-
-        Vector3 startPosition = GetLastRemovePos(PlayerPosition);
-        if (PlayerPosition == "self") {
-            startPosition = selfPosPanel.outputPos != null ? selfPosPanel.outputPos.position : selfPosPanel.cardsPosition.position;
-        }
-        if (SetType == "DiscardWithoutAnimation" || SetType == "BuhuaWithoutAnimation") {
-            return;
-        }
-        else {
-            StartCoroutine(MoveCardFromRemovePosition(cardObj, currentPosition, startPosition));
         }
     }
 }

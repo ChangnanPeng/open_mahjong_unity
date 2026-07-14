@@ -10,12 +10,12 @@ namespace Qingque13.Criteria
     public class MixedTripleSequenceCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedTripleSequence;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             var melds = decomposition.Melds;
-            
+
             // Check each possible middle number (2-8 for sequences)
             for (byte num = 2; num <= 8; num++)
             {
@@ -23,7 +23,7 @@ namespace Qingque13.Criteria
             }
             return false;
         }
-        
+
         private bool ContainsSequences(List<QingqueMeld> melds, byte midTile)
         {
             bool hasM = false, hasP = false, hasS = false;

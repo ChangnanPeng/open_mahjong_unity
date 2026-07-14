@@ -10,7 +10,6 @@ public class RecordSetting : MonoBehaviour {
     [SerializeField] private TMP_Text showMoqieModeText; // 手摸切灰显
     [SerializeField] private TMP_Text showChongHintText; // 铳牌提示
 
-
     [Header("颜色配置")]
     [SerializeField] private Color falseColor = Color.white;
     [SerializeField] private Color trueColor = new Color(1f, 0.5f, 0f);

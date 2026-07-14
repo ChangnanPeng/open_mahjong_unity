@@ -39,21 +39,17 @@ public class RealtimeRequestWaitPanel : MonoBehaviour {
     }
 
     private void OnEnable() {
-        if (FriendNetworkManager.Instance != null) {
-            FriendNetworkManager.Instance.OnRealtimeRequestResult += HandleRequestResult;
-            FriendNetworkManager.Instance.OnRealtimeRequestTimeout += HandleTimeout;
-            FriendNetworkManager.Instance.OnRealtimeRequestDeclined += HandleDeclined;
-            FriendNetworkManager.Instance.OnRealtimeStarted += HandleStarted;
-        }
+        FriendNetworkManager.Instance.OnRealtimeRequestResult += HandleRequestResult;
+        FriendNetworkManager.Instance.OnRealtimeRequestTimeout += HandleTimeout;
+        FriendNetworkManager.Instance.OnRealtimeRequestDeclined += HandleDeclined;
+        FriendNetworkManager.Instance.OnRealtimeStarted += HandleStarted;
     }
 
     private void OnDisable() {
-        if (FriendNetworkManager.Instance != null) {
-            FriendNetworkManager.Instance.OnRealtimeRequestResult -= HandleRequestResult;
-            FriendNetworkManager.Instance.OnRealtimeRequestTimeout -= HandleTimeout;
-            FriendNetworkManager.Instance.OnRealtimeRequestDeclined -= HandleDeclined;
-            FriendNetworkManager.Instance.OnRealtimeStarted -= HandleStarted;
-        }
+        FriendNetworkManager.Instance.OnRealtimeRequestResult -= HandleRequestResult;
+        FriendNetworkManager.Instance.OnRealtimeRequestTimeout -= HandleTimeout;
+        FriendNetworkManager.Instance.OnRealtimeRequestDeclined -= HandleDeclined;
+        FriendNetworkManager.Instance.OnRealtimeStarted -= HandleStarted;
         StopCountdown();
     }
 
@@ -114,15 +110,13 @@ public class RealtimeRequestWaitPanel : MonoBehaviour {
             return;
         }
         int hostUserId = response.realtime_to_user_id ?? 0;
-        if (NormalGameStateManager.Instance != null) {
-            NormalGameStateManager.Instance.StartAsRealtimeSpectator(gamestateId, hostUserId);
-        }
-        WindowsManager.Instance?.SwitchWindow("game");
+        WindowsManager.Instance.SwitchWindow("game");
+        NormalGameStateManager.Instance.StartAsRealtimeSpectator(gamestateId, hostUserId);
     }
 
     private void OnCancelClicked() {
         if (!string.IsNullOrEmpty(_pendingRequestId)) {
-            FriendNetworkManager.Instance?.CancelRealtime(_pendingRequestId);
+            FriendNetworkManager.Instance.CancelRealtime(_pendingRequestId);
         }
         _pendingRequestId = null;
         StopCountdown();

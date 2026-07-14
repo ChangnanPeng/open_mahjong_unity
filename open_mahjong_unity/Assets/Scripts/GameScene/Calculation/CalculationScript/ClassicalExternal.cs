@@ -17,7 +17,7 @@ public static class ClassicalExternal {
         List<string> wayToHepai,
         int getTile,
         bool debug = false) {
-        return new ClassicalHepaiCheck(debug).HepaiCheck(
+        return new ClassicalHepaiCheck().HepaiCheck(
             handList, tilesCombination, wayToHepai, getTile);
     }
 
@@ -30,7 +30,7 @@ public static class ClassicalExternal {
         List<string> wayToHepai,
         int getTile,
         bool debug = false) {
-        return new ClassicalHepaiCheck(debug).FushuCheck(
+        return new ClassicalHepaiCheck().FushuCheck(
             handList, tilesCombination, wayToHepai, getTile);
     }
 

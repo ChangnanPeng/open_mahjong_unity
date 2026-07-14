@@ -52,8 +52,6 @@ public class ScoreHistoryPanel : MonoBehaviour
 
     private void OnEnable()
     {
-        if (GameSceneUIManager.Instance == null) return;
-
         bool recordActive = GameRecordManager.Instance != null
             && GameRecordManager.Instance.gameObject.activeSelf
             && GameRecordManager.Instance.gameRecord != null;
@@ -63,7 +61,6 @@ public class ScoreHistoryPanel : MonoBehaviour
         }
 
         var mgr = NormalGameStateManager.Instance;
-        if (mgr == null) return;
         if (!mgr.IsGameActive && mgr.roundSettlementHistory.Count == 0) return;
         GameSceneUIManager.Instance.UpdateScoreRecord();
     }
@@ -194,13 +191,13 @@ public class ScoreHistoryPanel : MonoBehaviour
         if (player_to_info == null || player_to_info.Count < 4) return;
 
         if (roundSettlements == null || roundSettlements.Count == 0) {
-            roundSettlements = NormalGameStateManager.Instance?.roundSettlementHistory;
+            roundSettlements = NormalGameStateManager.Instance.roundSettlementHistory;
         }
 
         // 总局数（用于预测未来局名占位）：优先用调用方传入，其次回退到实时对局的 maxRound（风圈数）*4
         if (totalRounds <= 0) {
             var mgr = NormalGameStateManager.Instance;
-            if (mgr != null && mgr.maxRound > 0) {
+            if (mgr.maxRound > 0) {
                 totalRounds = mgr.maxRound * 4;
             }
         }
@@ -253,7 +250,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         ClearContainer(MainFanContainer);
 
         if (roundSettlements == null || roundSettlements.Count == 0) {
-            roundSettlements = NormalGameStateManager.Instance?.roundSettlementHistory;
+            roundSettlements = NormalGameStateManager.Instance.roundSettlementHistory;
         }
 
         string baseRule = rule ?? "";
@@ -268,7 +265,7 @@ public class ScoreHistoryPanel : MonoBehaviour
 
         string subRule = ScoreHistorySettlementHelper.ResolveSubRule(
             rule,
-            NormalGameStateManager.Instance != null ? NormalGameStateManager.Instance.subRule : null);
+            NormalGameStateManager.Instance.subRule);
 
         List<int> roundNumbers = roundNumberHistory ?? new List<int>();
 
@@ -433,7 +430,7 @@ public class ScoreHistoryPanel : MonoBehaviour
         }
 
         if (roundSettlements == null || roundSettlements.Count == 0) {
-            roundSettlements = NormalGameStateManager.Instance?.roundSettlementHistory;
+            roundSettlements = NormalGameStateManager.Instance.roundSettlementHistory;
         }
 
         RoundSettlementSnapshot snapshot = ScoreHistorySettlementHelper.ResolveSettlementForRow(

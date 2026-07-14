@@ -101,9 +101,9 @@ public partial class Game3DManager {
             if (cardObj == null) continue;
             cardObj.transform.SetParent(showCardsPosition, worldPositionStays: true);
             cardObj.name = $"RecordShow_{i}";
-            if (Card3DHoverManager.Instance != null) {
-                Card3DHoverManager.Instance.RegisterCard(cardObj, mainTiles[i]);
-            }
+
+            Card3DHoverManager.Instance.RegisterCard(cardObj, mainTiles[i]);
+
         }
 
         if (hasDraw && drawPosition.HasValue) {
@@ -115,9 +115,9 @@ public partial class Game3DManager {
                 if (drawTile3D != null) {
                     drawTile3D.isRecordDrawSlotPinned = true;
                 }
-                if (Card3DHoverManager.Instance != null) {
-                    Card3DHoverManager.Instance.RegisterCard(drawObj, drawTileId);
-                }
+
+                Card3DHoverManager.Instance.RegisterCard(drawObj, drawTileId);
+
             }
         }
     }
@@ -142,9 +142,8 @@ public partial class Game3DManager {
         if (tile3D != null) {
             tile3D.isRecordDrawSlotPinned = true;
         }
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
-        }
+
+        Card3DHoverManager.Instance.RegisterCard(cardObj, tileId);
 
         yield return null;
     }
@@ -349,9 +348,8 @@ public partial class Game3DManager {
         if (tile3D != null) {
             tile3D.isRecordDrawSlotPinned = true;
         }
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.RegisterCard(winObj, winTileId);
-        }
+
+        Card3DHoverManager.Instance.RegisterCard(winObj, winTileId);
 
         Vector3 startPos = winObj.transform.position;
         Quaternion startRot = winObj.transform.rotation;

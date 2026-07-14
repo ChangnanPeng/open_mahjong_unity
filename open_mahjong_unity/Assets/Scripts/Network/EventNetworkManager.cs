@@ -35,7 +35,6 @@ public class EventNetworkManager : MonoBehaviour {
     }
 
     private static WebSocket _GetWs() {
-        if (NetworkManager.Instance == null) return null;
         var ws = NetworkManager.Instance.GetWebSocket();
         return (ws != null && ws.State == WebSocketState.Open) ? ws : null;
     }

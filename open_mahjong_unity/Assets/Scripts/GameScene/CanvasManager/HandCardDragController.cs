@@ -189,8 +189,7 @@ public class HandCardDragController : MonoBehaviour {
         if (gameCanvas.IsHandRecordPlayback()) {
             return false;
         }
-        if (NormalGameStateManager.Instance != null
-            && NormalGameStateManager.Instance.IsSelfActionRequired
+        if (NormalGameStateManager.Instance.IsSelfActionRequired
             && !NormalGameStateManager.Instance.allowActionList.Contains("cut")) {
             return false;
         }
@@ -221,8 +220,7 @@ public class HandCardDragController : MonoBehaviour {
         dragSessionActive = false;
         isFinishingDrag = false;
         hadPointerMove = false;
-        wasArmedAtPress = HandCardSelectionController.Instance != null
-            && HandCardSelectionController.Instance.IsArmed(card);
+        wasArmedAtPress = HandCardSelectionController.Instance.IsArmed(card);
         dragStartScreenPos = eventData.position;
         pointerPressCamera = eventData.pressEventCamera;
         pressStartUnscaledTime = Time.unscaledTime;
@@ -237,7 +235,7 @@ public class HandCardDragController : MonoBehaviour {
         dragSessionActive = true;
         IsDragging = true;
         SuppressPointerHover = true;
-        HandCardSelectionController.Instance?.DisarmAll();
+        HandCardSelectionController.Instance.DisarmAll();
         ClearAllHandHover();
         dragCard.transform.SetAsLastSibling();
         EnsureDragCanvas(dragCard);
@@ -324,7 +322,7 @@ public class HandCardDragController : MonoBehaviour {
         RestoreSnapshotLayout();
         EndFinishDrag();
         if (armed) {
-            HandCardSelectionController.Instance?.Arm(card);
+            HandCardSelectionController.Instance.Arm(card);
         }
         Debug.Log($"[HandInput] 微点击按出牌处理 | tileId={card.tileId} | armedAtPress={armed}");
         TileCard.TryCommitClick(card, releaseScreenPos, skipSameCardCheck: true);
@@ -350,7 +348,7 @@ public class HandCardDragController : MonoBehaviour {
             main = BuildOrderForInsert(activeGapIndex, activeMergeDraw);
             draw = gameCanvas.GetPinnedDrawTile();
             gameCanvas.SetHandArranged(true);
-            if (AutoAction.Instance != null && AutoAction.Instance.IsAutoArrangeHandCards) {
+            if (AutoAction.Instance.IsAutoArrangeHandCards) {
                 AutoAction.Instance.SetAutoArrangeHandCards(false);
             }
         }
@@ -542,10 +540,10 @@ public class HandCardDragController : MonoBehaviour {
     }
 
     private bool CanTryDiscard(TileCard card) {
-        if (!card.IsSelectableForCut() || NormalGameStateManager.Instance == null) {
+        if (!card.IsSelectableForCut()) {
             return false;
         }
-        if (RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive) {
+        if (RiichiCutSelectionController.Instance.IsActive) {
             return true;
         }
         return NormalGameStateManager.Instance.allowActionList.Contains("cut");
@@ -671,7 +669,7 @@ public class HandCardDragController : MonoBehaviour {
         Dictionary<RectTransform, Vector2> positions = gameCanvas.BuildHandLayoutPositions(order, draw, null);
         gameCanvas.ApplyHandLayoutPositions(positions, order, draw);
         gameCanvas.SetHandArranged(true);
-        if (AutoAction.Instance != null && AutoAction.Instance.IsAutoArrangeHandCards) {
+        if (AutoAction.Instance.IsAutoArrangeHandCards) {
             AutoAction.Instance.SetAutoArrangeHandCards(false);
         }
     }
@@ -766,10 +764,8 @@ public class HandCardDragController : MonoBehaviour {
 
     private void ClearAllHandHover() {
         TipsContainer.Instance.EndCutPreviewTips();
-        if (Card3DHoverManager.Instance != null) {
-            Card3DHoverManager.Instance.OnCardExit();
-        }
-        HandCardSelectionController.Instance?.DisarmAll();
+        Card3DHoverManager.Instance.OnCardExit();
+        HandCardSelectionController.Instance.DisarmAll();
         for (int i = 0; i < gameCanvas.HandCardsContainer.childCount; i++) {
             Transform child = gameCanvas.HandCardsContainer.GetChild(i);
             child.GetComponent<TileCard>()?.ForceExitHover();

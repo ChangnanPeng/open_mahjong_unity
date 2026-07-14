@@ -6,7 +6,7 @@ using System;
 using UnityEngine;
 
 public partial class GameCanvas{
-    
+
     // 手牌处理
     public void ChangeHandCards(string ChangeType,int tileId,int[] TilesList,int? cut_tile_index){
         // 将手牌处理任务加入队列
@@ -18,7 +18,7 @@ public partial class GameCanvas{
             _processChangeHandCardQueueCoroutine = StartCoroutine(ProcessChangeHandCardQueue());
         }
     }
-    
+
     // 处理手牌队列
     private IEnumerator ProcessChangeHandCardQueue(){
         // 手牌处理运行
@@ -35,8 +35,8 @@ public partial class GameCanvas{
         _processChangeHandCardQueueCoroutine = null;
         isChangeHandCardProcessing = false;
     }
-    
-    // 手牌处理 
+
+    // 手牌处理
     public IEnumerator ChangeHandCardsCoroutine(string ChangeType,int tileId,int[] TilesList,int? cut_tile_index){
 
         Debug.Log($"手牌处理: {ChangeType}");
@@ -90,7 +90,7 @@ public partial class GameCanvas{
             RectTransform cardRect = cardObj.GetComponent<RectTransform>();
             Vector2 targetPosition = GetDrawTileTargetPosition(main);
             yield return StartCoroutine(AnimateGetCard(cardRect, targetPosition));
-            if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsSelfActionRequired) {
+            if (NormalGameStateManager.Instance.IsSelfActionRequired) {
                 RefreshHandTileSelectability();
             }
         }
@@ -104,7 +104,7 @@ public partial class GameCanvas{
             tileCard.handSortIndex = handCardCount;
             LayoutHandCardsFromCurrentOrder();
             GameRecordManager.Instance?.ReapplySelf2DHandChongOverlay();
-            if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsSelfActionRequired) {
+            if (NormalGameStateManager.Instance.IsSelfActionRequired) {
                 RefreshHandTileSelectability();
             }
         }
@@ -230,7 +230,7 @@ public partial class GameCanvas{
             yield break;
         }
 
-        // 初始化卡牌、摸切、手切、单次补花、吃碰杠以后 进行卡牌排序 
+        // 初始化卡牌、摸切、手切、单次补花、吃碰杠以后 进行卡牌排序
         else if (ChangeType == "RemoveHandCard" || ChangeType == "RemoveHandCardRecord" || ChangeType == "RemoveCombinationCard" || ChangeType == "RemoveBuhuaCard" ||
          ChangeType == "RemoveJiagangCard" || ChangeType == "InitHandCards" || ChangeType == "InitHandCardsFromRecord" || ChangeType == "ReSetHandCards" || ChangeType == "RemoveGetCard" || ChangeType == "RemoveGetCards"){
             isArranged = true;
@@ -263,7 +263,7 @@ public partial class GameCanvas{
         Dictionary<RectTransform, Vector2> currentPositions = new Dictionary<RectTransform, Vector2>();
         // 创建字典：手牌物体 -> 目标位置
         Dictionary<RectTransform, Vector2> targetPositions = new Dictionary<RectTransform, Vector2>();
-        
+
         // 收集所有手牌物体和当前位置
         List<TileCard> tileCards = new List<TileCard>();
         for (int i = 0; i < handCardsContainer.childCount; i++){
@@ -278,9 +278,9 @@ public partial class GameCanvas{
 
         // 如果玩家选择了自动排序手牌，按tileId排序
         // 牌谱回放/观战回放依赖 cut_tile_index，不能在客户端额外重排顺序
-        bool isRecordPlayback = GameRecordManager.Instance != null && GameRecordManager.Instance.gameObject.activeSelf;
+        bool isRecordPlayback = GameRecordManager.Instance.gameObject.activeSelf;
         // 牌谱模式始终按牌值排序；对局模式在勾选自动排序时排序
-        if (isRecordPlayback || (AutoAction.Instance != null && AutoAction.Instance.IsAutoArrangeHandCards)){
+        if (isRecordPlayback || ( AutoAction.Instance.IsAutoArrangeHandCards)){
             tileCards.Sort((a, b) => TileIdOrder.Compare(a.tileId, b.tileId));
         }
         // 对局且不勾选自动排序时保持原有顺序
@@ -292,20 +292,20 @@ public partial class GameCanvas{
             tileCards[i].transform.SetSiblingIndex(i);
             targetPositions[cardRect] = layoutPositions[cardRect];
         }
-        
+
         // 检查是否需要动画：比较每个手牌的当前位置和目标位置
         bool needsAnimation = false;
         foreach (var kvp in currentPositions){
             RectTransform cardRect = kvp.Key;
             Vector2 currentPos = kvp.Value;
             Vector2 targetPos = targetPositions[cardRect];
-            
+
             if (Vector2.Distance(currentPos, targetPos) > 0.01f){
                 needsAnimation = true;
                 break;
             }
         }
-        
+
         if (!needsAnimation){
             Debug.Log($"手牌位置无需调整，跳过动画");
             yield break;
@@ -323,22 +323,22 @@ public partial class GameCanvas{
     // 卡牌移动动画协程
     public System.Collections.IEnumerator AnimateCardsToPositions(List<RectTransform> cards, List<Vector2> targetPositions, float animationDuration = 0.3f){
         float elapsedTime = 0f;
-        
+
         // 记录起始位置
         List<Vector2> startPositions = new List<Vector2>();
         for (int i = 0; i < cards.Count; i++){
             if (cards[i] == null) yield break; // 手牌已被清空（重连/下一局）
             startPositions.Add(cards[i].anchoredPosition);
         }
-        
+
         // 动画循环
         while (elapsedTime < animationDuration){
             elapsedTime += Time.deltaTime;
             float progress = elapsedTime / animationDuration;
-            
+
             // 使用平滑插值函数（easeOutCubic）
             float smoothProgress = 1f - Mathf.Pow(1f - progress, 3f);
-            
+
             // 更新每张卡牌的位置
             for (int i = 0; i < cards.Count; i++){
                 if (cards[i] != null){
@@ -346,10 +346,10 @@ public partial class GameCanvas{
                     cards[i].anchoredPosition = currentPos;
                 }
             }
-            
+
             yield return null; // 等待下一帧
         }
-        
+
         // 确保最终位置准确
         for (int i = 0; i < cards.Count; i++){
             if (cards[i] != null){
@@ -368,11 +368,11 @@ public partial class GameCanvas{
 
         // 计算初始位置（上方2个宽度）
         Vector2 startPosition = targetPosition + new Vector2(0, 1.0f * tileCardWidth);
-        
+
         // 设置初始位置和透明度
         cardRect.anchoredPosition = startPosition;
         if (cardRect == null) yield break;
-        
+
         // 获取CanvasGroup组件控制透明度（如果没有则添加）
         CanvasGroup canvasGroup = cardRect.GetComponent<CanvasGroup>();
         if (canvasGroup == null)
@@ -380,27 +380,27 @@ public partial class GameCanvas{
             canvasGroup = cardRect.gameObject.AddComponent<CanvasGroup>();
         }
         canvasGroup.alpha = 0.0f; // 初始透明度100%
-        
+
         // 动画参数
         float animationDuration = 0.2f;
         float elapsedTime = 0f;
-        
+
         // 动画循环
         while (elapsedTime < animationDuration)
         {
             if (cardRect == null) yield break; // 手牌容器被清空（重连/下一局）时安全退出
             elapsedTime += Time.deltaTime;
             float progress = Mathf.Clamp01(elapsedTime / animationDuration);
-            
+
             // 位置插值：从上方滑动到目标位置
             cardRect.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, progress);
-            
+
             // 透明度插值：从100%到0%
             canvasGroup.alpha = Mathf.Lerp(0.0f, 1.0f, progress);
-            
+
             yield return null; // 等待下一帧
         }
-        
+
         // 确保最终位置和透明度准确
         if (cardRect == null) yield break;
         cardRect.anchoredPosition = targetPosition;

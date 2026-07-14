@@ -181,11 +181,11 @@ public static class GameRecordJsonDecoder {
     }
 
     /// <summary>
-    /// 解析补花 tick 第 4 段 T/F（摸补/手补）。旧牌谱仅 3 段时默认手补。
+    /// 解析补花 tick 第 4 段 T/F（摸补/手补）；须为 4 段格式。
     /// </summary>
-    public static bool ParseBuhuaMoFlag(List<string> tick, bool legacyDefault = false) {
+    public static bool ParseBuhuaMoFlag(List<string> tick) {
         if (tick == null || tick.Count < 4) {
-            return legacyDefault;
+            throw new Exception($"补花 tick 缺少摸补/手补标记: [{string.Join(", ", tick ?? new List<string>())}]");
         }
         string flag = tick[3].ToUpperInvariant();
         if (flag != "T" && flag != "F") {

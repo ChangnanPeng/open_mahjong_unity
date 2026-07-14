@@ -9,13 +9,13 @@ namespace Qingque13.Criteria
     public class QuadrupleSequenceCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.QuadrupleSequence;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             var melds = decomposition.Melds;
             if (melds.Count < 4) return false;
-            
+
             // All melds must be equivalent to the first
             for (int i = 1; i < melds.Count; i++)
             {
@@ -23,7 +23,7 @@ namespace Qingque13.Criteria
             }
             return true;
         }
-        
+
         private bool IsEquivalent(QingqueMeld a, QingqueMeld b)
         {
             return a.Type == b.Type && a.Tile.Value == b.Tile.Value;

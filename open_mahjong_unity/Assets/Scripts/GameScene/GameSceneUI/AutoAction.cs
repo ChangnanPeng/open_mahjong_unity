@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -238,7 +236,7 @@ public class AutoAction : MonoBehaviour{
     private void ToggleArrangeHandCards(){
         bool enabling = !isAutoArrangeHandCards;
         ToggleAutoOption(ref isAutoArrangeHandCards, arrangeHandCardsText);
-        if (enabling && isAutoArrangeHandCards && GameCanvas.Instance != null) {
+        if (enabling && isAutoArrangeHandCards) {
             GameCanvas.Instance.SortMainHandByTileIdIfNeeded();
         }
     }

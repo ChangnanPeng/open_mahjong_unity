@@ -26,7 +26,7 @@ namespace Qingque13.Core
             this.isSevenPairs = false;
             this.sevenPairTiles = null;
         }
-        
+
         // Constructor for seven pairs decomposition
         public QingqueDecomposition(QingqueHand hand, List<QingqueTile> pairs)
         {
@@ -89,29 +89,29 @@ namespace Qingque13.Core
                 }
                 return counter;
             }
-            
+
             // If we're still building (have remaining tiles), return remaining
             if (!remainingCounter.IsEmpty)
                 return remainingCounter;
-            
+
             // If complete (pair is set), return ALL tiles used in this decomposition
             if (pairTile.IsValid)
             {
                 var counter = new QingqueTileCounter(0, 0);
-                
+
                 // Add pair
                 counter.Add(pairTile, 2);
-                
+
                 // Add all melds
                 foreach (var meld in melds)
                 {
                     if (includeOpenMelds || !meld.Fixed)
                         counter.Add(meld);
                 }
-                
+
                 return counter;
             }
-            
+
             // Fallback: return original hand's counter
             return originalHand.Counter(includeOpenMelds);
         }

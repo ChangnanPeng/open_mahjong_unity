@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -50,7 +49,7 @@ public partial class Game3DManager {
         for (int i = 0; i < cardCount; i++) {
             Vector3 currentPos = cards[i].position;
             Vector3 targetPos = startPosition + direction * cardWidth * i;
-            
+
             if (Vector3.Distance(currentPos, targetPos) > 0.01f) {
                 return true; // 需要排列
             }
@@ -74,4 +73,3 @@ public partial class Game3DManager {
         }
     }
 }
-

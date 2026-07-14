@@ -73,7 +73,7 @@ public partial class NormalGameStateManager {
     /// 例外：该牌既能鸣牌（吃/碰/明杠且对应过滤未开）又能点和时，不剔除，等待玩家抉择。
     /// </summary>
     private static bool ShouldFilterRonForAutoPass(List<string> allowActions) {
-        if (AutoAction.Instance == null || !AutoAction.Instance.IsNoRon) {
+        if (!AutoAction.Instance.IsNoRon) {
             return false;
         }
         if (!allowActions.Any(IsHuAction)) {
@@ -116,7 +116,7 @@ public partial class NormalGameStateManager {
     private bool TryResolveFullAutoMingPai(out string actionType, out float delaySeconds) {
         actionType = null;
         delaySeconds = 0f;
-        if (IsRealtimeSpectator || AutoAction.Instance == null) {
+        if (IsRealtimeSpectator) {
             return false;
         }
 
@@ -155,7 +155,7 @@ public partial class NormalGameStateManager {
     private bool TryResolveImmediateAutoHand(out string actionType, out float delaySeconds) {
         actionType = null;
         delaySeconds = 0.2f;
-        if (IsRealtimeSpectator || AutoAction.Instance == null) {
+        if (IsRealtimeSpectator) {
             return false;
         }
 
@@ -182,7 +182,7 @@ public partial class NormalGameStateManager {
 
     /// <summary>是否应在已显示按钮后挂起自动摸切协程。</summary>
     private bool ShouldStartAutoCut() {
-        if (IsRealtimeSpectator || AutoAction.Instance == null || !AutoAction.Instance.IsAutoCut) {
+        if (IsRealtimeSpectator || !AutoAction.Instance.IsAutoCut) {
             return false;
         }
         if (HandActionsBlockingAutoCut.Any(allowActionList.Contains)) {
@@ -199,11 +199,9 @@ public partial class NormalGameStateManager {
         if (lastDealTileId > 0) {
             return lastDealTileId;
         }
-        if (GameCanvas.Instance != null) {
-            TileCard drawTile = GameCanvas.Instance.GetDrawTile();
-            if (drawTile != null && drawTile.tileId > 0) {
-                return drawTile.tileId;
-            }
+        TileCard drawTile = GameCanvas.Instance.GetDrawTile();
+        if (drawTile != null && drawTile.tileId > 0) {
+            return drawTile.tileId;
         }
         return 0;
     }
@@ -230,7 +228,7 @@ public partial class NormalGameStateManager {
     /// <summary>已显示按钮后的自动摸切（立直锁切等）。</summary>
     private IEnumerator WaitAutoCut() {
         try {
-            if (IsRealtimeSpectator || AutoAction.Instance == null || !AutoAction.Instance.IsAutoCut) {
+            if (IsRealtimeSpectator || !AutoAction.Instance.IsAutoCut) {
                 yield break;
             }
             float autoCutDelay = AutoAction.Instance.IsAutoCutLocked ? 0.3f : 0.5f;

@@ -235,7 +235,7 @@ public class VotePanel : MonoBehaviour {
 
     private void OnVoteClicked(string vote) {
         _localVoted = true;
-        GameStateNetworkManager.Instance?.SendVoteResponse(vote);
+        GameStateNetworkManager.Instance.SendVoteResponse(vote);
         if (bottomBar != null) {
             bottomBar.SetActive(false);
         } else {
@@ -245,7 +245,7 @@ public class VotePanel : MonoBehaviour {
     }
 
     private void OnResumeClicked() {
-        GameStateNetworkManager.Instance?.SendVoteResume();
+        GameStateNetworkManager.Instance.SendVoteResume();
         if (resumeButton != null) resumeButton.gameObject.SetActive(false);
     }
 }

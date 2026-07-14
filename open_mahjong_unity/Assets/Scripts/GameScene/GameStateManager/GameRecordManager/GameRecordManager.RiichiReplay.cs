@@ -1,7 +1,5 @@
 using System;
-using System;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Linq;
 
 /// <summary>
@@ -42,15 +40,10 @@ public partial class GameRecordManager {
         return scores;
     }
 
-    /// <summary>立直牌谱统一起手分；旧牌谱无字段时按子规则推断（标准 25000 / 浪涌 50000）。</summary>
+    /// <summary>立直牌谱统一起手分；须写入 starting_score，缺失返回 0。</summary>
     private static int ReadRecordStartingScoreUniform(Dictionary<string, object> gt) {
         int explicitScore = ReadGameTitleInt(gt, "starting_score", -1);
-        if (explicitScore >= 0) return explicitScore;
-        string subRule = ReadGameTitleString(gt, "sub_rule", "");
-        if (subRule == "riichi/langyong") return 50000;
-        string rule = ReadGameTitleString(gt, "rule", "").ToLowerInvariant();
-        if (rule == "riichi" || rule.StartsWith("riichi/") || subRule.StartsWith("riichi")) return 25000;
-        return 0;
+        return explicitScore >= 0 ? explicitScore : 0;
     }
 
     /// <summary>截至指定局开始前各 original 座位的累计分（含起手分）。</summary>

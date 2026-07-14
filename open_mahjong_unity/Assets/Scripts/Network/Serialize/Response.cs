@@ -166,7 +166,7 @@ public class DoActionInfo { // 执行操作
     public string[] action_list;
     public int action_player;
     public int action_tick;
-    public int? cut_from_player;      // 鸣牌（吃/碰/明杠）真正认走的打牌者座位索引；服务器显式下发，避免乱序/双同牌歧义
+    public int? cut_from_player;      // 鸣牌（吃/碰/明杠）必填：被认走的打牌者座位索引；切牌等其它动作可空
     public float? meld_reveal_delay;  // 受保护观众鸣牌呈现延迟（秒）：display/音效/3D 一并延后，复现 claim_meld_followup_gap 间隔且不破坏 wire 顺序
     public int? cut_tile;           // 可空类型
     public int[] cut_tiles;
@@ -200,7 +200,7 @@ public class PlayerInfo { // 房间信息中单个玩家信息
     public int[] discard_origin_tiles;        // 理论弃牌
     public string[] combination_tiles;  // 组合牌
     public int[][] combination_mask;   // 组合牌掩码（二维数组，每个副露的掩码是一个子数组）
-    
+
     public int remaining_time;          // 剩余时间
     public int player_index;            // 东南西北位置 (改为player_index)
     public int original_player_index;   // 原始玩家索引 东南西北 0 1 2 3
@@ -497,4 +497,3 @@ public class Response { // 所有后端的返回数据都由Response类接收
     public VoteInfo vote_info; // 房间对局投票暂停/结束状态同步
     public EventListEntry[] event_list; // 当前用户可建房的 active 赛事列表
 }
-

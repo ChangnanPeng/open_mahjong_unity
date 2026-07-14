@@ -11,7 +11,7 @@ namespace Qingque13.Criteria
     public class EarthlyHandCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.EarthlyHand;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             // Has HeavenlyOrEarthlyHand flag AND does NOT have SelfDrawn flag

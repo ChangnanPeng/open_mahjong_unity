@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 /// 房间网络管理器 - 处理所有房间相关的网络通信
 /// </summary>
 public class RoomNetworkManager : MonoBehaviour {
-    
+
     public static RoomNetworkManager Instance { get; private set; }
 
     /// <summary>
@@ -16,7 +16,7 @@ public class RoomNetworkManager : MonoBehaviour {
     /// 为空表示未请求进入，大厅中收到的滞后 refresh_room_info 应忽略，避免错误跳进房间页。
     /// </summary>
     private string _pendingEnterRoomId;
-    
+
     private void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -24,14 +24,14 @@ public class RoomNetworkManager : MonoBehaviour {
         }
         Instance = this;
     }
-    
+
     /// <summary>
     /// 获取 websocket 连接（通过 NetworkManager）
     /// </summary>
     private WebSocket GetWebSocket() {
-        return NetworkManager.Instance?.GetWebSocket();
+        return NetworkManager.Instance.GetWebSocket();
     }
-    
+
     /// <summary>
     /// 处理房间相关的服务器响应消息
     /// </summary>
@@ -60,7 +60,7 @@ public class RoomNetworkManager : MonoBehaviour {
                 break;
         }
     }
-    
+
     /// <summary>
     /// 处理创建房间响应
     /// </summary>
@@ -69,7 +69,7 @@ public class RoomNetworkManager : MonoBehaviour {
         UserDataManager.Instance.SetRoomId(response.room_info.room_id);
         NotificationManager.Instance.ShowTip("create_room", true, "创建房间成功");
     }
-    
+
     /// <summary>
     /// 处理获取房间列表响应（根据服务端回显的 show_tip 决定是否显示 tips）
     /// </summary>
@@ -79,7 +79,7 @@ public class RoomNetworkManager : MonoBehaviour {
             NotificationManager.Instance.ShowTip("get_room_list", true, "刷新房间列表成功");
         }
     }
-    
+
     /// <summary>
     /// 处理获取房间信息响应。
     /// 仅在「当前用户确实在房间内」且「已在房间页 / 正在请求进入 / 重连同步」时应用，
@@ -101,9 +101,7 @@ public class RoomNetworkManager : MonoBehaviour {
         }
 
         string roomId = response.room_info.room_id;
-        string currentWindow = WindowsManager.Instance != null
-            ? WindowsManager.Instance.GetCurrentWindow()
-            : null;
+        string currentWindow = WindowsManager.Instance.GetCurrentWindow();
         bool onRoomPage = currentWindow == "room";
         bool pendingOk = _pendingEnterRoomId == "*"
             || (!string.IsNullOrEmpty(_pendingEnterRoomId) && _pendingEnterRoomId == roomId);
@@ -120,8 +118,8 @@ public class RoomNetworkManager : MonoBehaviour {
         }
         ClearPendingRoomEntry();
         RoomPanel.Instance.GetRoomInfoResponse(
-            response.success, 
-            response.message, 
+            response.success,
+            response.message,
             response.room_info
         );
         UserDataManager.Instance.SetRoomId(roomId);
@@ -141,12 +139,10 @@ public class RoomNetworkManager : MonoBehaviour {
 
     private bool ShouldNavigateToRoomOnRefresh(string roomId) {
         if (AutoReconnect.IsActive && AutoReconnect.ExpectGameRestore) return false;
-        if (WindowsManager.Instance != null && WindowsManager.Instance.GetCurrentWindow() == "game") {
+        if (WindowsManager.Instance.GetCurrentWindow() == "game") {
             return false;
         }
-        string current = WindowsManager.Instance != null
-            ? WindowsManager.Instance.GetCurrentWindow()
-            : null;
+        string current = WindowsManager.Instance.GetCurrentWindow();
         if (current == "room") return true;
         if (_pendingEnterRoomId == "*") return true;
         if (!string.IsNullOrEmpty(_pendingEnterRoomId) && _pendingEnterRoomId == roomId) return true;
@@ -165,7 +161,7 @@ public class RoomNetworkManager : MonoBehaviour {
     private void ClearPendingRoomEntry() {
         _pendingEnterRoomId = null;
     }
-    
+
     /// <summary>
     /// 处理加入房间响应
     /// </summary>
@@ -183,7 +179,7 @@ public class RoomNetworkManager : MonoBehaviour {
             );
         }
     }
-    
+
     /// <summary>
     /// 处理离开房间响应
     /// </summary>
@@ -200,8 +196,8 @@ public class RoomNetworkManager : MonoBehaviour {
     public void ApplyLeftRoomState(bool silent = false) {
         ClearPendingRoomEntry();
         ClearStaleLobbyState();
-        WindowsManager.Instance?.OnLeftRoom();
-        RoomWindowsManager.Instance?.SwitchRoomWindow("createRoom");
+        WindowsManager.Instance.OnLeftRoom();
+        RoomWindowsManager.Instance.SwitchRoomWindow("createRoom");
         // 立即刷新列表，避免依赖 5 秒轮询导致基于过期人数误点加入
         GetRoomList(showTipOnSuccess: false);
         if (!silent) {
@@ -214,13 +210,13 @@ public class RoomNetworkManager : MonoBehaviour {
         UserDataManager.Instance.SetRoomId("");
         RoomPanel.Instance?.ClearRoomState();
     }
-    
+
     // ========== 房间相关的发送方法 ==========
 
     private static bool BlockRoomEntryRequest() {
         return LobbyStateGuard.BlockIfInMatchQueueForRoom();
     }
-    
+
     /// <summary>解析复式主种子；未开启复式时返回空字符串。</summary>
     private static bool TryResolveRandomSeed(string raw, out string seedHex, out string error) {
         seedHex = "";
@@ -241,7 +237,7 @@ public class RoomNetworkManager : MonoBehaviour {
                 NotificationManager.Instance.ShowTip("create_room", false, seedError);
                 return;
             }
-            
+
             var request = new CreateGBRoomRequest {
                 type = "room/create_GB_room",
                 rule = config.Rule,
@@ -521,7 +517,7 @@ public class RoomNetworkManager : MonoBehaviour {
             AutoReconnect.OnRoomSyncDone();
         }
     }
-    
+
     /// <summary>
     /// 加入房间
     /// </summary>
@@ -546,7 +542,7 @@ public class RoomNetworkManager : MonoBehaviour {
             NotificationManager.Instance.ShowTip("join_room", false, "加入房间失败");
         }
     }
-    
+
     /// <summary>
     /// 离开房间
     /// </summary>
@@ -562,7 +558,7 @@ public class RoomNetworkManager : MonoBehaviour {
         };
         await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
     }
-    
+
     /// <summary>
     /// 开始游戏
     /// </summary>
@@ -573,7 +569,7 @@ public class RoomNetworkManager : MonoBehaviour {
         };
         await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
     }
-    
+
     /// <summary>
     /// 添加机器人到房间
     /// </summary>
@@ -631,4 +627,3 @@ public class RoomNetworkManager : MonoBehaviour {
         }
     }
 }
-

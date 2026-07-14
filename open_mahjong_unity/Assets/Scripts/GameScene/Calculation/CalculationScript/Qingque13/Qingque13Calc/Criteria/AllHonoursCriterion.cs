@@ -9,11 +9,11 @@ namespace Qingque13.Criteria
     public class AllHonoursCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.AllHonours;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
-            
+
             // Check if any numbered tile exists
             foreach (var tile in QingqueTile.NumberedTiles)
             {

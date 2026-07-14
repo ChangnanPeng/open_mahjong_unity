@@ -1,11 +1,9 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Linq;
 using Riichi;
-
 
 public class ActionButton : MonoBehaviour {
     [SerializeField] private GameObject ActionBlockPrefab; // 次级按钮选择块
@@ -22,7 +20,7 @@ public class ActionButton : MonoBehaviour {
             return textObject;
         }
     }
-    
+
     void Start() {
         // 验证TMP_Text组件是否已赋值
         if (textObject == null)
@@ -280,4 +278,3 @@ public class ActionButton : MonoBehaviour {
     }
 
 }
-

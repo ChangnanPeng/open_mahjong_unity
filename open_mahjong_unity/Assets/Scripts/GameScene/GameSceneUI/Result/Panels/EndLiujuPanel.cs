@@ -51,7 +51,7 @@ public class EndLiujuPanel : MonoBehaviour {
             autoHideCoroutine = null;
         }
         if (liujuText != null) liujuText.text = displayText;
-        GuobiaoAngangCheck.Apply(guobiaoAngangCheckText, NormalGameStateManager.Instance?.lastGuobiaoEndExtras, null);
+        GuobiaoAngangCheck.Apply(guobiaoAngangCheckText, NormalGameStateManager.Instance.lastGuobiaoEndExtras, null);
         ClearTenpaiMarkers();
         ApplyTenpaiMarkers(tenpaiTilesByPlayerIndex);
         gameObject.SetActive(true);

@@ -656,8 +656,9 @@ async def wait_action(self):
                 if action_type in ("chi_left", "chi_mid", "chi_right", "peng", "gang"):
                     if getattr(self, "pending_gang_forced_discard", False):
                         self.prepare_gang_replacement(0, False)
-                    _remove_claimed_discard(self.player_list[self.current_player_index].discard_tiles, tile_id) # 删除弃牌堆中被鸣走的牌
-                    self.player_list[self.current_player_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
+                    discarder_index = self.current_player_index
+                    _remove_claimed_discard(self.player_list[discarder_index].discard_tiles, tile_id) # 删除弃牌堆中被鸣走的牌
+                    self.player_list[discarder_index].discard_origin_tiles.append(tile_id) # 添加弃牌理论弃牌
                     self.player_list[player_index].combination_mask.append(combination_mask) # 添加组合掩码
                     clear_draw_slot(self.player_list[player_index])
                     self.current_player_index = player_index # 转移行为后 当前玩家索引变为操作玩家索引
@@ -671,7 +672,7 @@ async def wait_action(self):
                     player_action_record_chipenggang(self, action_type=action_type, mingpai_tile=tile_id,
                                                      action_player=player_index, combination_mask=combination_mask)
                     # 广播碰杠动画
-                    await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target)
+                    await broadcast_do_action(self,action_list = [action_type],action_player = self.current_player_index,combination_mask = combination_mask,combination_target = combination_target,cut_from_player = discarder_index,cut_tile = tile_id)
                     if action_type == "gang":
                         self.prepare_gang_replacement(getattr(self, "open_kong_replacement_count", 2), True)
                         self.game_status = "deal_card_after_gang" # 转移行为

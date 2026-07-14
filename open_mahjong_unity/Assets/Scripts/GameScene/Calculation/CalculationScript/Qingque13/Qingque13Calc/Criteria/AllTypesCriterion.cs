@@ -9,21 +9,21 @@ namespace Qingque13.Criteria
     public class AllTypesCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.AllTypes;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
 
             var counter = decomposition.Counter();
             bool hasM = false, hasP = false, hasS = false, hasWind = false, hasDragon = false;
-            
+
             for (byte n = 1; n <= 9; n++)
             {
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.M, n)) > 0) hasM = true;
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.P, n)) > 0) hasP = true;
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.S, n)) > 0) hasS = true;
             }
-            
+
             // Check winds (E, S, W, N)
             for (byte n = 1; n <= 4; n++)
             {
@@ -33,7 +33,7 @@ namespace Qingque13.Criteria
                     break;
                 }
             }
-            
+
             // Check dragons (C, F, P)
             for (byte n = 5; n <= 7; n++)
             {
@@ -43,7 +43,7 @@ namespace Qingque13.Criteria
                     break;
                 }
             }
-            
+
             return hasM && hasP && hasS && hasWind && hasDragon;
         }
     }

@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class TwoNumbersCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TwoNumbers;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
@@ -22,7 +22,7 @@ namespace Qingque13.Criteria
                     return false;
                 }
             }
-            
+
             foreach (var tile in QingqueTile.NumberedTiles)
             {
                 if (counter.Count(tile) > 0)
@@ -30,13 +30,13 @@ namespace Qingque13.Criteria
                     numbers[tile.Num() - 1] = true;
                 }
             }
-            
+
             int distinctNumbers = 0;
             foreach (var hasNumber in numbers)
             {
                 if (hasNumber) distinctNumbers++;
             }
-            
+
             return distinctNumbers == 2;
         }
     }

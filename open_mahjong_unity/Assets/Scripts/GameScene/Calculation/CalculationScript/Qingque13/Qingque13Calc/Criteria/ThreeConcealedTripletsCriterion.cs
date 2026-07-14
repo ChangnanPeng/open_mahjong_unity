@@ -1,4 +1,3 @@
-using System.Linq;
 using Qingque13.Core;
 
 namespace Qingque13.Criteria
@@ -10,7 +9,7 @@ namespace Qingque13.Criteria
     public class ThreeConcealedTripletsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeConcealedTriplets;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;

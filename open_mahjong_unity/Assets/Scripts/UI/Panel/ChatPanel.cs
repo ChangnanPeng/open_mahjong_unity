@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -62,8 +61,8 @@ public class ChatPanel : MonoBehaviour {
         if (rectTransform == null) return false;
 
         return RectTransformUtility.RectangleContainsScreenPoint(
-            rectTransform, 
-            Input.mousePosition, 
+            rectTransform,
+            Input.mousePosition,
             null
         );
     }
@@ -86,7 +85,7 @@ public class ChatPanel : MonoBehaviour {
         if (SwitchSendTarget.value == 0){
             targetChannelId = 0; // 大厅id
         } else if (SwitchSendTarget.value == 1){
-            if (UserDataManager.Instance != null && UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE){
+            if (UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE){
                 targetChannelId = int.Parse(UserDataManager.Instance.RoomId); // 房间id
             } else {
                 ShowChatMessage("False", 0, "未进入房间,无法在房间中发送消息");
@@ -172,7 +171,7 @@ public class ChatPanel : MonoBehaviour {
                 chatTextItem.StartFadeOut();
             }
         }
-        
+
         // 将聊天窗口滚动到底部
         StartCoroutine(ScrollChatToBottomCoroutine());
     }
@@ -182,11 +181,11 @@ public class ChatPanel : MonoBehaviour {
         // 强制更新Canvas布局，确保新添加的内容已被计算
         Canvas.ForceUpdateCanvases();
         yield return null; // 等待一帧，确保布局系统完成更新
-        
+
         if (ScrollRect != null) {
             ScrollRect.verticalNormalizedPosition = 0f;
         }
-        
+
         // 再等待一帧，确保滚动已完成
         yield return null;
         // 再次设置以确保滚动到底部
@@ -226,7 +225,7 @@ public class ChatPanel : MonoBehaviour {
         Vector2 position = rectTransform.anchoredPosition;
         position.x = 0f; // 恢复为0
         rectTransform.anchoredPosition = position;
-        
+
         // 设置所有子物体的透明度为100%
         SetChildrenAlpha(1f);
     }

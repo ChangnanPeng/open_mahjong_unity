@@ -48,7 +48,7 @@ public partial class RoundEndPresentation {
     }
 
     private IEnumerator CoSichuanRevealHuStep(Dictionary<int, int[]> huHands) {
-        if (huHands != null && huHands.Count > 0 && Game3DManager.Instance != null) {
+        if (huHands != null && huHands.Count > 0) {
             Game3DManager.Instance.RevealSichuanLiujuAllHands(huHands);
             yield return new WaitForSeconds(RoundEndTiming.RoundEndHandRevealSeconds);
         }

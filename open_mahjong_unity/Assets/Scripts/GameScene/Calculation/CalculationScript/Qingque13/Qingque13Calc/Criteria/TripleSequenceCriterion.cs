@@ -10,13 +10,13 @@ namespace Qingque13.Criteria
     public class TripleSequenceCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TripleSequence;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             return CountEquivalentPairs(decomposition.Melds) >= 3;
         }
-        
+
         private int CountEquivalentPairs(List<QingqueMeld> melds)
         {
             int count = 0;

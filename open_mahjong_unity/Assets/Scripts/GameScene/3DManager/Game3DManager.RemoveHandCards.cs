@@ -142,30 +142,22 @@ public partial class Game3DManager : MonoBehaviour {
     }
 
     private void RemoveOneSelfMoqieHandCard(Transform cardPosition, int tileId, string playerPosition) {
-        if (tileId >= 2) {
-            // 如果摸切就删除最右/最后一张牌（须 tileId 一致）
-            Transform rightmost = GetSelfRightmostHandCard(cardPosition);
-            if (TryReturnSelfHandCardIfTileId(rightmost, tileId, playerPosition)) {
-                return;
-            }
-            if (cardPosition.childCount > 0) {
-                Transform lastCard = cardPosition.GetChild(cardPosition.childCount - 1);
-                if (TryReturnSelfHandCardIfTileId(lastCard, tileId, playerPosition)) {
-                    return;
-                }
-            }
-            RemoveOneSelfHandCardByTileId(cardPosition, tileId, playerPosition);
+        if (tileId < 2) {
+            Debug.LogError($"摸切删牌缺少有效 tileId: {tileId}, player={playerPosition}");
             return;
         }
-
-        Transform fallback = GetSelfRightmostHandCard(cardPosition);
-        if (fallback != null) {
-            SetLastRemovePos(playerPosition, fallback.position);
-            MahjongObjectPool.Instance.Return(-1, fallback.gameObject);
+        // 摸切优先删最右/最后一张（须 tileId 一致）
+        Transform rightmost = GetSelfRightmostHandCard(cardPosition);
+        if (TryReturnSelfHandCardIfTileId(rightmost, tileId, playerPosition)) {
+            return;
         }
-        else {
-            Debug.LogWarning($"摸切：无法删除最后一张牌");
+        if (cardPosition.childCount > 0) {
+            Transform lastCard = cardPosition.GetChild(cardPosition.childCount - 1);
+            if (TryReturnSelfHandCardIfTileId(lastCard, tileId, playerPosition)) {
+                return;
+            }
         }
+        RemoveOneSelfHandCardByTileId(cardPosition, tileId, playerPosition);
     }
 
     private bool TryReturnSelfHandCardIfTileId(Transform card, int tileId, string playerPosition) {

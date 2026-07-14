@@ -26,7 +26,7 @@ public partial class GameRecordManager
         lastWinnableTileId = -1;
         lastJiagangPlayerIndex = -1;
         waitingForDrawAfterCut = false;
-        
+
         // 重置牌山列表到初始状态
         if (roundData.tilesList != null) {
             currentTilesList = new List<int>(roundData.tilesList);
@@ -48,7 +48,7 @@ public partial class GameRecordManager
                 userIdToScore[rp.userId] = rp.score;
             }
         }
-        
+
         GotoSelectPlayer(false);
 
         // 推演当前目标节点信息
@@ -60,7 +60,7 @@ public partial class GameRecordManager
         // 重建当前目标节点画面
         Game3DManager.Instance.Clear3DTile();
         GameCanvas.Instance.ChangeHandCards("InitHandCardsFromRecord", 0, recordPlayer_to_info["self"].tileList.ToArray(), null);
-        
+
         Game3DManager.Instance.Change3DTile("InitHandCardsFromRecord", 0, 0, null, false, null);
         RebuildRecord3DTableWithoutAnimation();
         if (recordRiichiTenbousClearedAfterHu) {
@@ -77,7 +77,6 @@ public partial class GameRecordManager
     }
 
     private void SyncRecordRonDiscardObjectAfterRebuild() {
-        if (Game3DManager.Instance == null) return;
         int winTileId = lastWinnableTileId >= 10 ? lastWinnableTileId : lastDiscardTileId;
         if (winTileId < 10) return;
         string sourcePos = ResolveRecordRonDiscarderPosition(null);
@@ -115,7 +114,7 @@ public partial class GameRecordManager
             actingPlayer.tileList.Add(dealTile);
             actingPlayer.showHandDrawSlotActive = true;
             waitingForDrawAfterCut = false;
-            
+
             if (currentTilesList.Count > 0) {
                 if (action == "gd" || action == "bd") {
                     int removePos;
