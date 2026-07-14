@@ -54,6 +54,9 @@ async def broadcast_game_start(self):
         'initial_hu_san_tong': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["sanTong"], True),
         'bird_count': getattr(self, 'bird_count', 2),
         'dealer_bird': getattr(self, 'dealer_bird', True),
+        'base_score_no_dealer': getattr(self, 'base_score_no_dealer', False),
+        'small_hu_score': getattr(self, 'small_hu_score', 2),
+        'big_hu_score': getattr(self, 'big_hu_score', 8),
         'isPlayerSetRandomSeed': self.isPlayerSetRandomSeed, # 是否玩家设置了随机种子
         'players_info': [] # ↓玩家信息
     }

@@ -26,6 +26,9 @@ public partial class NormalGameStateManager {
         pendingAskFromJiagang = false;
         roomRule = null;
         subRule = null;
+        changshaBaseScoreNoDealer = false;
+        changshaSmallHuScore = 2;
+        changshaBigHuScore = 8;
 
         if (RiichiCutSelectionController.Instance.IsActive) {
             RiichiCutSelectionController.Instance.ExitRiichiCutMode();

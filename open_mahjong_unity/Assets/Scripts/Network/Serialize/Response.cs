@@ -43,6 +43,9 @@ public class RoomInfo {
     public bool initial_hu_san_tong;
     public int bird_count;
     public bool dealer_bird;
+    public bool base_score_no_dealer;
+    public int small_hu_score;
+    public int big_hu_score;
     public string event_id; // 赛事房间关联的赛事 ID
 }
 
@@ -264,6 +267,9 @@ public class GameInfo { // 游戏开始时传递房间信息
     public bool? initial_hu_san_tong;
     public int? bird_count;
     public bool? dealer_bird;
+    public bool? base_score_no_dealer;
+    public int? small_hu_score;
+    public int? big_hu_score;
 }
 
 public class SwitchSeatInfo { // 换位信息

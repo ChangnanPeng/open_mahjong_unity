@@ -125,6 +125,20 @@ class FixedBaseCalculation:
         return 1
 
 
+def attach_changsha_score_helpers(state):
+    state.base_score_no_dealer = False
+    state.small_hu_score = 2
+    state.big_hu_score = 8
+    state.dealer_bird = True
+    state._changsha_base_from_fans = lambda fans, dealer_related=False: ChangshaGameState._changsha_base_from_fans(
+        state,
+        fans,
+        dealer_related,
+    )
+    state._changsha_bird_origin = lambda winner: ChangshaGameState._changsha_bird_origin(state, winner)
+    return state
+
+
 class ChangshaRulesTest(unittest.TestCase):
     def test_initial_deal_gives_dealer_fourteen_tiles(self):
         state = SimpleNamespace(
@@ -557,6 +571,44 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=False), 12)
         self.assertEqual(changsha_base_from_fans(["碰碰胡", "清一色"], dealer_related=True), 14)
 
+    def test_changsha_base_scores_support_no_dealer_mode_and_custom_values(self):
+        for dealer_related in (False, True):
+            self.assertEqual(
+                changsha_base_from_fans(
+                    ["小胡"],
+                    dealer_related=dealer_related,
+                    base_score_no_dealer=True,
+                ),
+                2,
+            )
+            self.assertEqual(
+                changsha_base_from_fans(
+                    ["碰碰胡", "清一色"],
+                    dealer_related=dealer_related,
+                    base_score_no_dealer=True,
+                ),
+                16,
+            )
+
+        self.assertEqual(
+            changsha_base_from_fans(
+                ["小胡"],
+                small_hu_score=3,
+                big_hu_score=9,
+                base_score_no_dealer=True,
+            ),
+            3,
+        )
+        self.assertEqual(
+            changsha_base_from_fans(
+                ["碰碰胡", "清一色"],
+                small_hu_score=3,
+                big_hu_score=9,
+                base_score_no_dealer=True,
+            ),
+            18,
+        )
+
     def test_jiangjianghu_is_detected_and_displayed(self):
         score, fan_list = Changsha_Hepai_Check().hepai_check(
             [12, 12, 12, 15, 15, 15, 18, 18, 18, 22, 22, 22, 25, 25],
@@ -642,6 +694,13 @@ class ChangshaRulesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ChangshaRoomValidator(**{**base, "game_round": 3})
 
+        custom = ChangshaRoomValidator(**{**base, "base_score_no_dealer": True, "small_hu_score": 3, "big_hu_score": 9})
+        self.assertEqual((custom.small_hu_score, custom.big_hu_score), (3, 9))
+        with self.assertRaises(ValueError):
+            ChangshaRoomValidator(**{**base, "small_hu_score": 0})
+        with self.assertRaises(ValueError):
+            ChangshaRoomValidator(**{**base, "big_hu_score": 1000})
+
     def test_initial_hu_room_toggles_filter_detected_types(self):
         state = SimpleNamespace(
             player_list=[
@@ -683,10 +742,11 @@ class ChangshaRulesTest(unittest.TestCase):
         players = [SimpleNamespace(player_index=i, score=0) for i in range(4)]
         state = SimpleNamespace(
             player_list=players,
-            calculation_service=FixedBaseCalculation(),
             round_random_seed=12345,
             current_round=1,
         )
+        attach_changsha_score_helpers(state)
+        state.dealer_bird = False
         state._roll_initial_hu_dice = lambda winner: [1, 2]
         state._initial_hu_dice_seat = ChangshaGameState._initial_hu_dice_seat
         state._player_by_index = lambda index: players[index]
@@ -695,8 +755,8 @@ class ChangshaRulesTest(unittest.TestCase):
 
         self.assertEqual(result["dice"], [1, 2])
         self.assertEqual(result["bird_seats"], [1, 2])
-        self.assertEqual(players[1].score, 8)
-        self.assertEqual([players[i].score for i in range(4)], [-2, 8, -4, -2])
+        self.assertEqual(players[1].score, 10)
+        self.assertEqual([players[i].score for i in range(4)], [-4, 10, -4, -2])
         self.assertIn("四喜", result["fan_display"])
         self.assertIn("骰子:1,2", result["fan_display"])
 
@@ -707,8 +767,9 @@ class ChangshaRulesTest(unittest.TestCase):
             player_list=players,
             bird_count=1,
             dealer_bird=False,
-            calculation_service=FixedBaseCalculation(),
         )
+        attach_changsha_score_helpers(state)
+        state.dealer_bird = False
 
         def draw_birds(count):
             state.requested_bird_count = count
@@ -729,7 +790,7 @@ class ChangshaRulesTest(unittest.TestCase):
         result = ChangshaGameState._score_changsha_win(
             state,
             winner=1,
-            fan_list=["test"],
+            fan_list=["小胡"],
             is_zimo=False,
             discarder=2,
         )
@@ -746,8 +807,9 @@ class ChangshaRulesTest(unittest.TestCase):
             player_list=players,
             bird_count=2,
             dealer_bird=False,
-            calculation_service=FixedBaseCalculation(),
         )
+        attach_changsha_score_helpers(state)
+        state.dealer_bird = False
         state._draw_changsha_birds = lambda count: [24, 31]
         state._is_sea_bottom_win = ChangshaGameState._is_sea_bottom_win
         state._changsha_bird_seat = lambda tile, origin: {24: 2, 31: 0}[tile]
@@ -769,6 +831,55 @@ class ChangshaRulesTest(unittest.TestCase):
         self.assertEqual(players[1].score, 2)
         self.assertEqual(players[2].score, -2)
 
+    def test_bird_origin_uses_seat_zero_when_dealer_bird_is_enabled(self):
+        state = SimpleNamespace(dealer_bird=True)
+        self.assertEqual(ChangshaGameState._changsha_bird_origin(state, 2), 0)
+
+        state.dealer_bird = False
+        self.assertEqual(ChangshaGameState._changsha_bird_origin(state, 2), 2)
+
+    def test_no_dealer_mode_applies_same_base_to_dealer_and_non_dealer_win(self):
+        players = [SimpleNamespace(player_index=i, score=0) for i in range(4)]
+        state = SimpleNamespace(
+            player_list=players,
+            bird_count=0,
+            dealer_bird=True,
+            base_score_no_dealer=True,
+            small_hu_score=2,
+            big_hu_score=8,
+        )
+        state._changsha_base_from_fans = lambda fans, dealer_related=False: ChangshaGameState._changsha_base_from_fans(
+            state,
+            fans,
+            dealer_related,
+        )
+        state._changsha_bird_origin = lambda winner: ChangshaGameState._changsha_bird_origin(state, winner)
+        state._draw_changsha_birds = lambda count: []
+        state._is_sea_bottom_win = ChangshaGameState._is_sea_bottom_win
+        state._player_by_index = lambda index: players[index]
+
+        result = ChangshaGameState._score_changsha_win(
+            state,
+            winner=0,
+            fan_list=["碰碰胡", "清一色"],
+            is_zimo=False,
+            discarder=1,
+        )
+
+        self.assertEqual(result["base_score"], 16)
+        self.assertEqual(players[0].score, 16)
+        self.assertEqual(players[1].score, -16)
+
+    def test_quanqiuren_allows_self_draw_and_non_258_pair(self):
+        checker = Changsha_Hepai_Check()
+        hand = [11, 11]
+        melds = ["k12", "k23", "k31", "k19"]
+
+        for way in (["自摸"], ["点炮"]):
+            score, fans = checker.hepai_check(hand, melds, way, 11)
+            self.assertIn("全求人", fans)
+            self.assertGreaterEqual(score, 6)
+
     def test_bird_draw_uses_remaining_wall_front(self):
         state = SimpleNamespace(tiles_list=[11, 22, 33])
 
@@ -788,9 +899,10 @@ class ChangshaRulesTest(unittest.TestCase):
             player_list=players,
             bird_count=2,
             dealer_bird=False,
-            calculation_service=FixedBaseCalculation(),
             tiles_list=[],
         )
+        attach_changsha_score_helpers(state)
+        state.dealer_bird = False
         state._draw_changsha_birds = lambda count: ChangshaGameState._draw_changsha_birds(state, count)
         state._is_sea_bottom_win = ChangshaGameState._is_sea_bottom_win
         state._sea_bottom_bird_tile = lambda winner: ChangshaGameState._sea_bottom_bird_tile(state, winner)
@@ -807,8 +919,8 @@ class ChangshaRulesTest(unittest.TestCase):
         )
 
         self.assertEqual(result["birds"], [11])
-        self.assertEqual(players[1].score, 2)
-        self.assertEqual(players[2].score, -2)
+        self.assertEqual(players[1].score, 12)
+        self.assertEqual(players[2].score, -12)
 
     def test_sea_bottom_skips_noten_players(self):
         p1_hand = [11, 12, 13]

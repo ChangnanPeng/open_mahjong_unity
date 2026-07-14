@@ -27,7 +27,11 @@ from ..public.spectator_rules import too_many_ai_for_spectator
 from ..public.vote_manager import vote_checkpoint
 from ..public.game_record_manager import init_game_record,init_game_round,player_action_record_deal,player_action_record_cut,player_action_record_angang,player_action_record_jiagang,player_action_record_chipenggang,player_action_record_hu,player_action_record_liuju,player_action_record_round_end,end_game_record,build_score_changes_by_seat,build_score_changes_dict,capture_player_entry_order
 from ...game_calculation.game_calculation_service import GameCalculationService
-from ...game_calculation.changsha.changsha_hepai_check import evaluate_changsha_initial_hu, INITIAL_HU_NAMES
+from ...game_calculation.changsha.changsha_hepai_check import (
+    INITIAL_HU_NAMES,
+    changsha_base_from_fans,
+    evaluate_changsha_initial_hu,
+)
 from ...database.db_manager import DatabaseManager
 from ..public.random_seed_manager import setup_random_seed_system
 from ...database.fulu_utils import record_fulu_rounds_for_players
@@ -163,6 +167,9 @@ class ChangshaGameState:
         if self.bird_count not in (0, 1, 2, 4):
             self.bird_count = 2
         self.dealer_bird = room_data.get("dealer_bird", True)
+        self.base_score_no_dealer = bool(room_data.get("base_score_no_dealer", False))
+        self.small_hu_score = max(1, int(room_data.get("small_hu_score", 2)))
+        self.big_hu_score = max(1, int(room_data.get("big_hu_score", 8)))
         self.initial_hu_enabled = {
             INITIAL_HU_NAMES["siXi"]: room_data.get("initial_hu_si_xi", True),
             INITIAL_HU_NAMES["banBanHu"]: room_data.get("initial_hu_ban_ban_hu", True),
@@ -299,6 +306,9 @@ class ChangshaGameState:
                         'initial_hu_san_tong': getattr(self, 'initial_hu_enabled', {}).get(INITIAL_HU_NAMES["sanTong"], True),
                         'bird_count': getattr(self, 'bird_count', 2),
                         'dealer_bird': getattr(self, 'dealer_bird', True),
+                        'base_score_no_dealer': getattr(self, 'base_score_no_dealer', False),
+                        'small_hu_score': getattr(self, 'small_hu_score', 2),
+                        'big_hu_score': getattr(self, 'big_hu_score', 8),
                         'isPlayerSetRandomSeed': self.isPlayerSetRandomSeed,
                         'players_info': []
                     }
@@ -515,12 +525,25 @@ class ChangshaGameState:
         return [rng.randint(1, 6), rng.randint(1, 6)]
 
     @staticmethod
-    def _initial_hu_dice_seat(player_index: int, die: int) -> int:
-        return (player_index + die - 1) % 4
+    def _initial_hu_dice_seat(origin_index: int, die: int) -> int:
+        return (origin_index + die - 1) % 4
+
+    def _changsha_bird_origin(self, winner: int) -> int:
+        return 0 if self.dealer_bird else winner
+
+    def _changsha_base_from_fans(self, fan_list: List[str], dealer_related: bool = False) -> int:
+        return changsha_base_from_fans(
+            fan_list,
+            dealer_related=dealer_related,
+            small_hu_score=self.small_hu_score,
+            big_hu_score=self.big_hu_score,
+            base_score_no_dealer=self.base_score_no_dealer,
+        )
 
     def _score_initial_hu(self, winner: int, hu_types: List[str]):
         dice = self._roll_initial_hu_dice(winner)
-        bird_seats = [self._initial_hu_dice_seat(winner, die) for die in dice]
+        bird_origin = self._changsha_bird_origin(winner)
+        bird_seats = [self._initial_hu_dice_seat(bird_origin, die) for die in dice]
         payers = [p.player_index for p in self.player_list if p.player_index != winner]
         total_win = 0
         total_base = 0
@@ -528,7 +551,7 @@ class ChangshaGameState:
 
         for payer in payers:
             dealer_related = winner == 0 or payer == 0
-            base = self.calculation_service.Changsha_base_from_fans(["小胡"], dealer_related)
+            base = self._changsha_base_from_fans(["小胡"], dealer_related)
             hit_count = sum(1 for seat in bird_seats if seat in (winner, payer))
             multiplier = 2 ** hit_count
             payment = base * multiplier
@@ -880,7 +903,7 @@ class ChangshaGameState:
             sea_bottom_bird = self._sea_bottom_bird_tile(winner)
             if sea_bottom_bird is not None:
                 birds = [sea_bottom_bird]
-        bird_origin = 0 if self.dealer_bird else winner
+        bird_origin = self._changsha_bird_origin(winner)
         bird_seats = [self._changsha_bird_seat(tile, bird_origin) for tile in birds]
         payers = [p.player_index for p in self.player_list if p.player_index != winner] if is_zimo else [discarder]
         total_win = 0
@@ -889,7 +912,7 @@ class ChangshaGameState:
 
         for payer in payers:
             dealer_related = winner == 0 or payer == 0
-            base = self.calculation_service.Changsha_base_from_fans(fan_list, dealer_related)
+            base = self._changsha_base_from_fans(fan_list, dealer_related)
             hit_count = sum(1 for seat in bird_seats if seat in (winner, payer))
             multiplier = 2 ** hit_count
             payment = base * multiplier
