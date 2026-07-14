@@ -158,7 +158,7 @@ public partial class NormalGameStateManager {
                     else{
                         player_to_info[GetCardPlayer].hand_tiles_count -= resolvedCutTiles.Length;
                         Game3DManager.Instance.Change3DDiscardTiles(resolvedCutTiles, GetCardPlayer, cut_class.Value, isRiichiHorizontalCut, playCutPhysicsSound: !isSilent);
-                    } 
+                    }
                     break;
 
                 // 补花
@@ -242,13 +242,13 @@ public partial class NormalGameStateManager {
                         Game3DManager.Instance.Change3DTile(action, 0, angangRemoveList.Count, GetCardPlayer, false, combination_mask, isMoGang: isMoGang);
                     }
                     else{
-                        // 吃 / 碰 / 明杠：河牌被取走，按掩码 flag!=1 删手牌侧真实 ID
-                        // 打牌者+被鸣牌张优先用服务器在 meld payload 显式下发的 cut_from_player / cut_tile，
-                        // 不再依赖会被乱序覆盖的 lastDiscardPlayerPosition / currentAskCutTileId，也不依赖“最近一张”不变量；
-                        // 字段缺失（老服务器/非国标）时退回 lastDiscardPlayerPosition（S1 消除乱序后已按序到达，正确）。
-                        currentMeldDiscarderPos = ResolveMeldDiscarder(cut_from_player, GetCardPlayer);
-                        currentMeldClaimedTileId = cut_tile.HasValue ? cut_tile.Value
-                            : (currentAskCutTileId > 0 ? currentAskCutTileId : lastCutCardID);
+                        // 吃 / 碰 / 明杠：河牌被取走；打牌者与牌张由服务端 cut_from_player / cut_tile 必填下发。
+                        currentMeldDiscarderPos = RequireMeldDiscarder(cut_from_player, GetCardPlayer);
+                        if (!cut_tile.HasValue || cut_tile.Value <= 0) {
+                            throw new System.Exception(
+                                $"鸣牌缺少 cut_tile: action={action}, player={GetCardPlayer}, cut_from_player={cut_from_player}");
+                        }
+                        currentMeldClaimedTileId = cut_tile.Value;
                         RemoveClaimedDiscardFromRiver(currentMeldDiscarderPos, currentMeldClaimedTileId);
 
                         player_to_info[GetCardPlayer].combination_tiles.Add(combination_target);
@@ -337,39 +337,32 @@ public partial class NormalGameStateManager {
         foreach (string action in action_list) {
             if (!ActionAffectsVisibleTiles(action)) continue;
             // 自家鸣牌后 ShowTipsBlock 会全量重算；刷新前同步手牌避免缓存与 GameState 不一致
-            TipsContainer.Instance?.RefreshTenpaiTipsIfCached(syncHandFromLiveState: true);
+            TipsContainer.Instance.RefreshTenpaiTipsIfCached(syncHandFromLiveState: true);
             return;
         }
     }
 
     /// <summary>
     /// 吃/碰/明杠：从出牌者河牌移除被鸣走的一张（与服务端 discard_tiles.pop(-1) 及牌谱回放一致）。
-    /// discarderPos / claimedTile 由调用方通过 action_tick 回查得到，避免乱序下 lastDiscardPlayerPosition/currentAskCutTileId 已被覆盖。
+    /// discarderPos / claimedTile 由服务端 cut_from_player / cut_tile 必填提供。
     /// </summary>
     private void RemoveClaimedDiscardFromRiver(string discarderPos, int claimedTile) {
-        if (string.IsNullOrEmpty(discarderPos)) {
-            discarderPos = !string.IsNullOrEmpty(lastDiscardPlayerPosition) ? lastDiscardPlayerPosition : CurrentPlayer;
-        }
-        if (claimedTile <= 0) {
-            claimedTile = currentAskCutTileId > 0 ? currentAskCutTileId : lastCutCardID;
-        }
         if (string.IsNullOrEmpty(discarderPos)
+            || claimedTile <= 0
             || !player_to_info.TryGetValue(discarderPos, out PlayerInfoClass discarder)
             || discarder.discard_tiles == null
             || discarder.discard_tiles.Count == 0) {
             Debug.LogWarning(
-                $"RemoveClaimedDiscardFromRiver: 无法移除河牌 discarder={discarderPos}, "
-                + $"lastDiscard={lastDiscardPlayerPosition}, currentPlayer={CurrentPlayer}, "
-                + $"askCut={currentAskCutTileId}, lastCut={lastCutCardID}, claimed={claimedTile}");
+                $"RemoveClaimedDiscardFromRiver: 无法移除河牌 discarder={discarderPos}, claimed={claimedTile}");
             return;
         }
 
         int lastIdx = discarder.discard_tiles.Count - 1;
         int removedTile;
-        if (claimedTile > 0 && discarder.discard_tiles[lastIdx] == claimedTile) {
+        if (discarder.discard_tiles[lastIdx] == claimedTile) {
             removedTile = claimedTile;
             discarder.discard_tiles.RemoveAt(lastIdx);
-        } else if (claimedTile > 0) {
+        } else {
             int idx = discarder.discard_tiles.LastIndexOf(claimedTile);
             if (idx >= 0) {
                 removedTile = claimedTile;
@@ -380,9 +373,6 @@ public partial class NormalGameStateManager {
                 Debug.LogWarning(
                     $"RemoveClaimedDiscardFromRiver: 河末张 {removedTile} 与鸣牌张 {claimedTile} 不一致，已移除末张");
             }
-        } else {
-            removedTile = discarder.discard_tiles[lastIdx];
-            discarder.discard_tiles.RemoveAt(lastIdx);
         }
 
         if (discarder.discard_riichi_flags != null && discarder.discard_riichi_flags.Count > 0) {
@@ -466,15 +456,20 @@ public partial class NormalGameStateManager {
     }
 
     /// <summary>
-    /// 鸣牌（吃/碰/明杠）时解析被认走的打牌者座位：优先用服务器在 meld payload 显式下发的
-    /// cut_from_player（绝对权威，乱序/双同牌都不歧义）；字段缺失（老服务器/非国标）时退回
-    /// lastDiscardPlayerPosition（S1 消除乱序后到达顺序即逻辑顺序，正确）。meldPlayer 仅用于异常自检。
+    /// 鸣牌必填 cut_from_player：映射为打牌者座位；缺失或与鸣牌者相同则抛错。
     /// </summary>
-    private string ResolveMeldDiscarder(int? cutFromPlayer, string meldPlayer) {
-        if (cutFromPlayer.HasValue && indexToPosition.TryGetValue(cutFromPlayer.Value, out string pos)
-            && !string.IsNullOrEmpty(pos) && pos != meldPlayer) {
-            return pos;
+    private string RequireMeldDiscarder(int? cutFromPlayer, string meldPlayer) {
+        if (!cutFromPlayer.HasValue) {
+            throw new System.Exception($"鸣牌缺少 cut_from_player: meldPlayer={meldPlayer}");
         }
-        return !string.IsNullOrEmpty(lastDiscardPlayerPosition) ? lastDiscardPlayerPosition : CurrentPlayer;
+        if (!indexToPosition.TryGetValue(cutFromPlayer.Value, out string pos) || string.IsNullOrEmpty(pos)) {
+            throw new System.Exception(
+                $"鸣牌 cut_from_player={cutFromPlayer.Value} 无法映射座位: meldPlayer={meldPlayer}");
+        }
+        if (pos == meldPlayer) {
+            throw new System.Exception(
+                $"鸣牌 cut_from_player 与鸣牌者相同: seat={pos}, index={cutFromPlayer.Value}");
+        }
+        return pos;
     }
 }

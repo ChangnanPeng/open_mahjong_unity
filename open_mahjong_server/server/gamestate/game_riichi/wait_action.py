@@ -411,7 +411,8 @@ async def wait_action(self):
                     return
 
                 if action_type in ("chi_left", "chi_mid", "chi_right", "peng", "gang"):
-                    discarder = self.player_list[self.current_player_index]
+                    discarder_index = self.current_player_index
+                    discarder = self.player_list[discarder_index]
                     discarder.discard_tiles.pop(-1)
                     # 同步移除横置标记；如果被吃/碰/明杠走的就是立直家刚摆出的横置弃牌，
                     # 则给该玩家 riichi_marker_pending 置位，使其下一张弃牌仍横置（视觉上"续横"）
@@ -425,7 +426,8 @@ async def wait_action(self):
                     player_action_record_chipenggang(self, action_type=action_type, mingpai_tile=tile_id,
                                                      action_player=player_index, combination_mask=combination_mask)
                     await broadcast_do_action(self, action_list=[action_type], action_player=self.current_player_index,
-                                              combination_mask=combination_mask, combination_target=combination_target)
+                                              combination_mask=combination_mask, combination_target=combination_target,
+                                              cut_from_player=discarder_index, cut_tile=tile_id)
                     if self.sync_furiten_tags():
                         await broadcast_refresh_player_tag_list(self)
                     await self._broadcast_langyong_tags_if_changed()

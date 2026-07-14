@@ -304,7 +304,7 @@ public class Chinese_Tingpai_Check
         DebugPrint("处理后的列表: {0}", string.Join(" | ", end_list.Select(x => $"[{string.Join(",", x.hand_tiles)}]")));
         DebugPrint("列表长度: {0}", end_list.Count);
 
-        // 剩余的手牌有五种组成方式 
+        // 剩余的手牌有五种组成方式
         // 1.单吊听牌型(无雀头型)[n] 2.有雀头剩余对子型(对碰)[n,n] 3.剩余两面型[n,n+1] 4.剩余坎张型[n,n+2] 5.无效型[n,m] 特殊情况:组合龙型 complete_step == 14 [temp_waiting_tiles]
         if (end_list.Count > 0)
         {
@@ -315,7 +315,7 @@ public class Chinese_Tingpai_Check
                     string.Join(", ", i.hand_tiles),
                     i.complete_step,
                     string.Join(", ", i.combination_list));
-                
+
                 // 如果有组合龙
                 if (i.combination_list.Any(comb => comb.Contains("z")))
                 {
@@ -341,7 +341,7 @@ public class Chinese_Tingpai_Check
                 {
                     int tile1 = i.hand_tiles[0];
                     int tile2 = i.hand_tiles[1];
-                    
+
                     if (tile1 == tile2)
                     {
                         waiting_tiles_list.Add(tile1); // 对碰型
@@ -462,8 +462,8 @@ public class Chinese_Tingpai_Check
             // Ensure tile_id+2 doesn't exceed x9 boundary (19, 29, 39) or reach honor tiles (40+)
             if (tile_id <= 37 && (tile_id % 10) <= 7)
             {
-                if (player_tiles.hand_tiles.Contains(tile_id + 1) && 
-                    player_tiles.hand_tiles.Contains(tile_id + 2) && 
+                if (player_tiles.hand_tiles.Contains(tile_id + 1) &&
+                    player_tiles.hand_tiles.Contains(tile_id + 2) &&
                     tile_id != same_tile_id)
                 {
                     PlayerTilesTingpai temp_list = player_tiles.DeepCopy();
@@ -515,4 +515,3 @@ public static class GBtingpai
         return checker.TingpaiCheck(hand_tile_list, combination_list);
     }
 }
-

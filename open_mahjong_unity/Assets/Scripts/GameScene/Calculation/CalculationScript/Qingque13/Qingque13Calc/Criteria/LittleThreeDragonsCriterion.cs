@@ -9,19 +9,19 @@ namespace Qingque13.Criteria
     public class LittleThreeDragonsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.LittleThreeDragons;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            var dragons = new[] 
-            { 
+            var dragons = new[]
+            {
                 new QingqueTile(QingqueTile.SuitType.Z, 5), // Red
                 new QingqueTile(QingqueTile.SuitType.Z, 6), // Green
                 new QingqueTile(QingqueTile.SuitType.Z, 7)  // White
             };
-            
+
             byte count = 0;
             foreach (var dragon in dragons)
             {
@@ -29,7 +29,7 @@ namespace Qingque13.Criteria
                 if (dragonCount >= 3) count++;
                 if (dragonCount >= 2) count++;
             }
-            
+
             return count == 5;
         }
     }

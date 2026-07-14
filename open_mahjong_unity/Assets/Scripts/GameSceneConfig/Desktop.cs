@@ -160,7 +160,6 @@ public class Desktop : MonoBehaviour {
         }
     }
 
-
     // 从文件路径加载纹理
     private Texture2D LoadTextureFromFile(string filePath){
         try{

@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
@@ -59,12 +58,12 @@ public class ChatTextItem : MonoBehaviour
 
             elapsedTime += Time.deltaTime;
             float progress = elapsedTime / FADE_DURATION;
-            
+
             if (canvasGroup != null)
             {
                 canvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, progress);
             }
-            
+
             yield return null;
         }
 
@@ -94,7 +93,7 @@ public class ChatTextItem : MonoBehaviour
                 canvasGroup = gameObject.AddComponent<CanvasGroup>();
             }
         }
-        
+
         // 直接设置透明度
         canvasGroup.alpha = alpha;
     }

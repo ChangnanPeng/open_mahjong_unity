@@ -10,12 +10,11 @@ public class TableEdgePanel : MonoBehaviour {
 
     private List<GameObject> tableEdgeItems = new List<GameObject>();
 
-
     // 初始化面板
     public void LoadTableEdges() {
         // 隐藏删除按钮
         deleteButton.gameObject.SetActive(false);
-        
+
         // 清空现有的项
         ClearTableEdges();
 

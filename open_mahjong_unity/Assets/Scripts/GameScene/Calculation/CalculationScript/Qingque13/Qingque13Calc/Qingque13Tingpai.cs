@@ -227,7 +227,7 @@ namespace Qingque13
                     {
                         int tile1 = i.hand_tiles[0];
                         int tile2 = i.hand_tiles[1];
-                        
+
                         if (tile1 == tile2)
                         {
                             waiting_tiles_list.Add(tile1); // 对碰型
@@ -348,8 +348,8 @@ namespace Qingque13
                 // Ensure tile_id+2 doesn't exceed x9 boundary (19, 29, 39) or reach honor tiles (40+)
                 if (tile_id <= 37 && (tile_id % 10) <= 7)
                 {
-                    if (player_tiles.hand_tiles.Contains(tile_id + 1) && 
-                        player_tiles.hand_tiles.Contains(tile_id + 2) && 
+                    if (player_tiles.hand_tiles.Contains(tile_id + 1) &&
+                        player_tiles.hand_tiles.Contains(tile_id + 2) &&
                         tile_id != same_tile_id)
                     {
                         PlayerTilesTingpai temp_list = player_tiles.DeepCopy();

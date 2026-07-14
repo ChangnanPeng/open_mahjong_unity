@@ -1,5 +1,4 @@
 using Qingque13.Core;
-using System.Linq;
 
 namespace Qingque13.Criteria
 {
@@ -10,18 +9,18 @@ namespace Qingque13.Criteria
     public class TwelveHogCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TwelveHog;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
-            
+
             // Count tiles appearing 4 times
             byte count = 0;
             foreach (var tile in QingqueTile.AllTiles)
             {
                 if (counter.Count(tile) == 4) count++;
             }
-            
+
             // Subtract declared kongs from original hand (not decomposition)
             foreach (var meld in decomposition.OriginalHand.OpenMelds)
             {
@@ -30,7 +29,7 @@ namespace Qingque13.Criteria
                     count--;
                 }
             }
-            
+
             return count == 3;
         }
     }

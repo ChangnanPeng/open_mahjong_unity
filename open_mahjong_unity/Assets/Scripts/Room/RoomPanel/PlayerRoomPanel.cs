@@ -67,8 +67,6 @@ public class PlayerRoomPanel : MonoBehaviour {
 
     private void OnRemovePlayerClicked() {
         // 仅房主才有权限，RoomPanel 会控制 canRemove，因此这里不再重复判断
-        if (RoomNetworkManager.Instance == null) return;
-
         string roomId = UserDataManager.Instance.RoomId;
         if (!string.IsNullOrEmpty(roomId)) {
             RoomNetworkManager.Instance.KickPlayerFromRoom(roomId, UserId);

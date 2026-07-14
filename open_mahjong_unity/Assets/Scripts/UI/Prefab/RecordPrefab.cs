@@ -2,7 +2,6 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
 
-
 public class RecordPrefab : MonoBehaviour{
     [Header("基本信息")]
     [SerializeField] private TextMeshProUGUI RecordIdText;
@@ -31,7 +30,7 @@ public class RecordPrefab : MonoBehaviour{
     [Header("按钮")]
     [SerializeField] private Button LoadRecordButton;
     [SerializeField] private Button CopyIdButton;
-    
+
     private string gameId;
     private PlayerRecordInfo[] playersInfo;
 

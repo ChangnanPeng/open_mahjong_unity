@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 #if UNITY_2017_1_OR_NEWER
 using UnityEngine;
 #endif
@@ -110,19 +109,19 @@ namespace Qingque13
             }
 
             string arrayContent = jsonText.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
-            
+
             // Parse each entry: {"code":"...","value":1.0}
             int pos = 0;
             while (pos < arrayContent.Length)
             {
                 int objStart = arrayContent.IndexOf('{', pos);
                 if (objStart < 0) break;
-                
+
                 int objEnd = arrayContent.IndexOf('}', objStart);
                 if (objEnd < 0) break;
 
                 string obj = arrayContent.Substring(objStart, objEnd - objStart + 1);
-                
+
                 // Extract code
                 int codeStart = obj.IndexOf("\"code\"");
                 if (codeStart < 0) { pos = objEnd + 1; continue; }
@@ -136,8 +135,8 @@ namespace Qingque13
                 int valueColonPos = obj.IndexOf(':', valueStart);
                 int valueEnd = obj.IndexOf('}', valueColonPos);
                 string valueStr = obj.Substring(valueColonPos + 1, valueEnd - valueColonPos - 1).Trim();
-                
-                if (double.TryParse(valueStr, System.Globalization.NumberStyles.Float, 
+
+                if (double.TryParse(valueStr, System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out double value))
                 {
                     fanCache[code] = value;
@@ -247,7 +246,7 @@ namespace Qingque13
 
                 // Get fan score for regular fans (cache lookup without occasional)
                 double currentFan = GetFan(regularFans);
-                
+
                 // Add occasional fan values back
                 currentFan += occasionalFanValue;
 

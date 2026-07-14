@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 /// 游戏状态网络管理器 - 处理所有游戏状态相关的网络通信
 /// </summary>
 public class GameStateNetworkManager : MonoBehaviour {
-    
+
     public static GameStateNetworkManager Instance { get; private set; }
 
     private void Awake() {
@@ -18,14 +18,14 @@ public class GameStateNetworkManager : MonoBehaviour {
         }
         Instance = this;
     }
-    
+
     /// <summary>
     /// 获取 websocket 连接（通过 NetworkManager）
     /// </summary>
     private WebSocket GetWebSocket() {
-        return NetworkManager.Instance?.GetWebSocket();
+        return NetworkManager.Instance.GetWebSocket();
     }
-    
+
     /// <summary>
     /// 处理游戏状态相关的服务器响应消息
     /// </summary>
@@ -125,7 +125,7 @@ public class GameStateNetworkManager : MonoBehaviour {
                 break;
         }
     }
-    
+
     /// <summary>
     /// 处理游戏开始响应
     /// </summary>
@@ -134,16 +134,14 @@ public class GameStateNetworkManager : MonoBehaviour {
         AutoReconnect.OnGameRestored();
         NormalGameStateManager.Instance.InitializeGame(response.success, response.message, response.game_info);
     }
-    
+
     /// <summary>
     /// 处理手牌轮操作广播
     /// </summary>
     private void HandleBroadcastHandAction(Response response) {
         Debug.Log($"收到手牌轮操作信息: {response.ask_hand_action_info}");
         AskHandActionGBInfo handresponse = response.ask_hand_action_info;
-        if (NormalGameStateManager.Instance != null) {
-            NormalGameStateManager.Instance.LastAskActionTick = handresponse.action_tick;
-        }
+        NormalGameStateManager.Instance.LastAskActionTick = handresponse.action_tick;
         NormalGameStateManager.Instance.AskHandAction(
             handresponse.remaining_time,
             handresponse.player_index,
@@ -154,16 +152,16 @@ public class GameStateNetworkManager : MonoBehaviour {
             handresponse.forced_cut_tiles
         );
     }
-    
+
     /// <summary>
     /// 四川麻将：处理定缺询问。仅本人收到该消息时弹出定缺面板（10 秒倒计时，超时自动选手牌最少花色）。
     /// </summary>
     private void HandleDingqueAsk(Response response) {
         Debug.Log($"收到定缺询问: {response.ask_hand_action_info}");
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
-        if (GameRecordManager.Instance != null && GameRecordManager.Instance.IsSpectating) return;
-        GameCanvas.Instance?.ClearActionButton();
-        GameCanvas.Instance?.ShowDingqueSelection(10);
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (GameRecordManager.Instance.IsSpectating) return;
+        GameCanvas.Instance.ClearActionButton();
+        GameCanvas.Instance.ShowDingqueSelection(10);
     }
 
     /// <summary>
@@ -172,11 +170,11 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleDingqueDone(Response response) {
         Debug.Log($"收到定缺完成: {response.show_result_info?.player_to_dingque}");
         if (response.show_result_info == null) return;
-        GameCanvas.Instance?.HideDingqueSelection();
-        GameCanvas.Instance?.UpdatePlayerDingque(response.show_result_info.player_to_dingque);
-        NormalGameStateManager.Instance?.SetSelfDingqueFromMap(response.show_result_info.player_to_dingque);
+        GameCanvas.Instance.HideDingqueSelection();
+        GameCanvas.Instance.UpdatePlayerDingque(response.show_result_info.player_to_dingque);
+        NormalGameStateManager.Instance.SetSelfDingqueFromMap(response.show_result_info.player_to_dingque);
         // 定缺完成后若已有手牌且轮到操作，立刻刷新定缺置灰（不等 askHandAction）
-        GameCanvas.Instance?.RefreshHandTileSelectability();
+        GameCanvas.Instance.RefreshHandTileSelectability();
     }
 
     /// <summary>
@@ -185,9 +183,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     private void HandleAskOtherAction(Response response) {
         Debug.Log($"收到询问弃牌后操作消息: {response.ask_other_action_info}");
         AskOtherActionGBInfo askresponse = response.ask_other_action_info;
-        if (NormalGameStateManager.Instance != null) {
-            NormalGameStateManager.Instance.LastAskActionTick = askresponse.action_tick;
-        }
+        NormalGameStateManager.Instance.LastAskActionTick = askresponse.action_tick;
         NormalGameStateManager.Instance.AskMingPaiAction(
             askresponse.remaining_time,
             askresponse.action_list,
@@ -196,7 +192,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             askresponse.is_tactical_recheck == true
         );
     }
-    
+
     /// <summary>
     /// 处理执行操作
     /// </summary>
@@ -206,8 +202,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         if (doresponse == null) return;
         // 服务器侧已消除乱序源头：受保护观众的实际鸣牌不再用追赶协程延迟发送，
         // 而是按序 await（cut flush 先发 -> meld -> 下一巡 cut），故此处直接派发即可保证逻辑顺序。
-        // 鸣牌认走的“打牌者+牌张”由服务器在 meld payload 显式下发 cut_from_player / cut_tile，
-        // 客户端据此精确移除对应牌河弃牌，不依赖 lastDiscardPlayerPosition、也不靠 tick 倒查。
+        // 鸣牌认走的打牌者+牌张由服务器必填下发 cut_from_player / cut_tile。
         NormalGameStateManager.Instance.DoAction(
             doresponse.action_list,
             doresponse.action_player,
@@ -231,7 +226,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             doresponse.meld_reveal_delay
         );
     }
-    
+
     /// <summary>
     /// 处理显示结算结果
     /// </summary>
@@ -274,7 +269,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             showresponse.liuju_refund
         );
         // 四川·血战到底：本盘未结束（仍有玩家继续行牌）→ 挂起结算层，待下次询问时关闭并续打
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsSichuanRule()) {
+        if (NormalGameStateManager.Instance.IsSichuanRule()) {
             if (showresponse.round_continues == true) {
                 NormalGameStateManager.Instance.MarkPendingSichuanContinue();
             } else {
@@ -316,7 +311,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             LangyongMultiplier = info.langyong_multiplier ?? 0,
         };
     }
-    
+
     /// <summary>
     /// 处理游戏结束
     /// </summary>
@@ -330,7 +325,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             gameendresponse.player_final_data
         );
     }
-    
+
     /// <summary>
     /// 处理换位消息
     /// </summary>
@@ -338,7 +333,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         Debug.Log($"收到换位消息: {response.message}");
         NormalGameStateManager.Instance.HandleSwitchSeat(response.switch_seat_info.current_round);
     }
-    
+
     /// <summary>
     /// 处理刷新玩家标签列表消息
     /// </summary>
@@ -347,7 +342,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         RefreshPlayerTagListInfo tagInfo = response.refresh_player_tag_list_info;
         NormalGameStateManager.Instance.RefreshPlayerTagList(tagInfo.player_to_tag_list);
     }
-    
+
     /// <summary>
     /// 处理获取观战列表响应
     /// </summary>
@@ -355,14 +350,14 @@ public class GameStateNetworkManager : MonoBehaviour {
         Debug.Log($"收到观战列表: {response.message}");
         SpectatorPanel.Instance?.GetSpectatorListResponse(response.success, response.message, response.spectator_list);
     }
-    
+
     // ========== 游戏状态相关的发送方法 ==========
-    
+
     /// <summary>
     /// 发送国标卡牌方法（切牌）
     /// </summary>
     public async void SendChineseGameTile(bool cutClass, int tileId, int cutIndex) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SendChineseGameTileRequest {
                 type = "gamestate/GB/cut_tile",
@@ -376,12 +371,12 @@ public class GameStateNetworkManager : MonoBehaviour {
             Debug.LogError($"发送切牌消息失败: {e.Message}");
         }
     }
-    
+
     /// <summary>
     /// 发送吃碰杠回应
     /// </summary>
     public async void SendAction(string action, int targetTile, int chiComboIndex = 0) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SendActionRequest {
                 type = "gamestate/GB/send_action",
@@ -389,9 +384,7 @@ public class GameStateNetworkManager : MonoBehaviour {
                 action = action,
                 targetTile = targetTile,
                 chiComboIndex = chiComboIndex,
-                action_tick = NormalGameStateManager.Instance != null
-                    ? NormalGameStateManager.Instance.LastAskActionTick
-                    : (int?)null,
+                action_tick = NormalGameStateManager.Instance.LastAskActionTick,
             };
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
@@ -400,7 +393,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     }
 
     public async void SetRyuukyokuTenpai(bool tenpai) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SetRyuukyokuTenpaiRequest {
                 type = "gamestate/riichi/set_ryuukyoku_tenpai",
@@ -417,7 +410,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     /// 发送对局表情包（格式 pack/id，如 turtle/3）。实时观战者不发送。
     /// </summary>
     public async void SendSticker(string sticker) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         if (string.IsNullOrEmpty(sticker)) return;
         try {
             var request = new SendStickerRequest {
@@ -433,7 +426,7 @@ public class GameStateNetworkManager : MonoBehaviour {
 
     private void HandleBroadcastSticker(Response response) {
         if (response?.sticker_info == null) return;
-        GameCanvas.Instance?.ShowSticker(
+        GameCanvas.Instance.ShowSticker(
             response.sticker_info.original_player_index,
             response.sticker_info.player_index,
             response.sticker_info.sticker);
@@ -470,17 +463,12 @@ public class GameStateNetworkManager : MonoBehaviour {
     }
 
     private static void ClearGameActionTimer() {
-        if (NormalGameStateManager.Instance != null) {
-            NormalGameStateManager.Instance.SwitchCurrentPlayer("None", "ClearAction", 0);
-        } else {
-            GameCanvas.Instance?.StopTimeRunning();
-            GameCanvas.Instance?.ClearActionButton();
-        }
+        NormalGameStateManager.Instance.SwitchCurrentPlayer("None", "ClearAction", 0);
     }
 
     /// <summary>发起投票（vote_type: "pause" / "end"）。仅自定义房间对局真人玩家可发。</summary>
     public async void SendVoteStart(string voteType) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new VoteStartRequest {
                 type = "gamestate/vote_start",
@@ -495,7 +483,7 @@ public class GameStateNetworkManager : MonoBehaviour {
 
     /// <summary>提交投票（vote: "agree" / "refuse"）。</summary>
     public async void SendVoteResponse(string vote) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new VoteResponseRequest {
                 type = "gamestate/vote_response",
@@ -510,7 +498,7 @@ public class GameStateNetworkManager : MonoBehaviour {
 
     /// <summary>请求解除暂停。</summary>
     public async void SendVoteResume() {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new VoteResumeRequest {
                 type = "gamestate/vote_resume",
@@ -521,7 +509,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             Debug.LogError($"请求解除暂停失败: {e.Message}");
         }
     }
-    
+
     /// <summary>
     /// 获取观战列表
     /// </summary>
@@ -537,7 +525,7 @@ public class GameStateNetworkManager : MonoBehaviour {
             SpectatorPanel.Instance.GetSpectatorListResponse(false, e.Message, null);
         }
     }
-    
+
     /// <summary>
     /// 添加观战
     /// </summary>
@@ -555,10 +543,10 @@ public class GameStateNetworkManager : MonoBehaviour {
             await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
         } catch (Exception e) {
             Debug.LogError($"添加观战失败: {e.Message}");
-            NotificationManager.Instance?.ShowTip("观战", false, $"添加观战失败: {e.Message}");
+            NotificationManager.Instance.ShowTip("观战", false, $"添加观战失败: {e.Message}");
         }
     }
-    
+
     /// <summary>
     /// 移除观战
     /// </summary>
@@ -570,7 +558,7 @@ public class GameStateNetworkManager : MonoBehaviour {
         Debug.Log($"发送移除观战消息: {request.type}, gamestate_id: {gamestate_id}");
         await GetWebSocket().SendText(JsonConvert.SerializeObject(request));
     }
-    
+
     /// <summary>
     /// 处理数和尾结算
     /// </summary>
@@ -611,7 +599,7 @@ public class GameStateNetworkManager : MonoBehaviour {
     /// 立直切牌请求
     /// </summary>
     public async void SendRiichiCut(bool cutClass, int tileId, int cutIndex) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) return;
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) return;
         try {
             var request = new SendChineseGameTileRequest {
                 type = "gamestate/riichi/riichi_cut",
@@ -642,4 +630,3 @@ public class GameStateNetworkManager : MonoBehaviour {
         }
     }
 }
-

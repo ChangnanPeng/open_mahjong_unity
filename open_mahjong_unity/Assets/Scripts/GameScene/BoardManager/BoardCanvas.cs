@@ -13,7 +13,7 @@ public partial class BoardCanvas : MonoBehaviour {
     [Header("玩家信息")]
     [SerializeField] private TMP_Text player_self_score;       // 玩家分数文本
     [SerializeField] private TMP_Text player_self_index;       // 玩家索引文本
-    [SerializeField] private Image player_self_current_image;    // 玩家回合标记    
+    [SerializeField] private Image player_self_current_image;    // 玩家回合标记
 
     [SerializeField] private TMP_Text player_left_score;         // 玩家分数文本
     [SerializeField] private TMP_Text player_left_index;         // 玩家索引文本
@@ -74,7 +74,7 @@ public partial class BoardCanvas : MonoBehaviour {
         }
 
         // 设置剩余牌数
-        remiansTilesText.text = $"余:{gameInfo.tile_count}"; 
+        remiansTilesText.text = $"余:{gameInfo.tile_count}";
 
         // 设置当前回合（按 room_rule 判断）
         string roomType = gameInfo.room_rule;
@@ -267,7 +267,7 @@ public partial class BoardCanvas : MonoBehaviour {
     public void UpdatePlayerScores(Dictionary<int, int> player_to_score, Dictionary<int, string> indexToPosition) {
         // 如果正在显示分差，先恢复到基准分数
         if (isShowingScoreDifference) {
-            CoroutineManager.Instance?.StopNamed(CoroutineKeys.BoardScoreDifference);
+            CoroutineManager.Instance.StopNamed(CoroutineKeys.BoardScoreDifference);
             RestoreBaselineScores();
             isShowingScoreDifference = false;
         }
@@ -307,5 +307,3 @@ public partial class BoardCanvas : MonoBehaviour {
         }
     }
 }
-
-

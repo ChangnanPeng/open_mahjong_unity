@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -57,7 +55,7 @@ public class SceneConfigPanel : MonoBehaviour
         characterPanel.gameObject.SetActive(false);
         nowPage = "Clear";
     }
-    
+
     public void RefreshPage(){
         if (nowPage == "TableCloth"){
             tableClothPanel.LoadTablecloths();

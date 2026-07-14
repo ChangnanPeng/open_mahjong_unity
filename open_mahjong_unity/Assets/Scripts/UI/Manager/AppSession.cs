@@ -8,11 +8,11 @@ public static class AppSession {
     public static void ResetToLogin() {
         try {
             Debug.Log("[AppSession] 开始软重置到登录界面");
-            WindowsManager.Instance?.ResetToLoginUI();
+            WindowsManager.Instance.ResetToLoginUI();
             LoginPanel.Instance?.PrepareForReconnect();
 
             // 优先发起 WebSocket 重连，避免后续清理逻辑异常导致跳过
-            NetworkManager.Instance?.RequestReconnectWebSocket();
+            NetworkManager.Instance.RequestReconnectWebSocket();
 
             try {
                 NormalGameStateManager.Instance?.StopAsRealtimeSpectator();
@@ -24,7 +24,7 @@ public static class AppSession {
                     GameSceneTeardown.ResetToIdle();
                 }
 
-                UserDataManager.Instance?.ClearSessionState();
+                UserDataManager.Instance.ClearSessionState();
                 HeaderPanel.Instance?.SetBackToGameVisible(false);
                 HeaderPanel.Instance?.RefreshMatchButtonVisibility();
             } catch (Exception cleanupEx) {

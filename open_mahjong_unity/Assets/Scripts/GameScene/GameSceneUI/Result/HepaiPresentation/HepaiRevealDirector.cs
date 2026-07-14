@@ -9,8 +9,7 @@ public static partial class HepaiRevealDirector {
         if (hepaiPlayerHand == null || hepaiPlayerHand.Length == 0) {
             yield break;
         }
-        if (NormalGameStateManager.Instance == null
-            || !NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) {
+        if (!NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) {
             yield break;
         }
 
@@ -23,7 +22,7 @@ public static partial class HepaiRevealDirector {
 
     public static HepaiPresentationRequest BuildRequest(string winnerPosition, string huClass, int[] hand, string[] huFan) {
         string ruleKey = ResolveLiveRuleKey();
-        string discardPos = NormalGameStateManager.Instance?.lastDiscardPlayerPosition;
+        string discardPos = NormalGameStateManager.Instance.lastDiscardPlayerPosition;
         return BuildRequestCore(winnerPosition, huClass, hand, huFan, ruleKey, discardPos);
     }
 
@@ -114,7 +113,7 @@ public static partial class HepaiRevealDirector {
             WinTileMode = mode,
             RecycleDiscardAfterPresent = recycleDiscard,
             IsQianggang = isQianggang,
-            DiscardPlayerPosition = NormalGameStateManager.Instance?.ResolveRonDiscarderPosition(ronDiscarderIndex),
+            DiscardPlayerPosition = NormalGameStateManager.Instance.ResolveRonDiscarderPosition(ronDiscarderIndex),
         };
     }
 
@@ -126,11 +125,9 @@ public static partial class HepaiRevealDirector {
         int? ronDiscarderIndex,
         bool recycleDiscard,
         bool isQianggang = false) {
-        if (NormalGameStateManager.Instance == null
-            || !NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) {
+        if (!NormalGameStateManager.Instance.indexToPosition.TryGetValue(hepaiPlayerIndex, out string winnerPos)) {
             yield break;
         }
-        if (Game3DManager.Instance == null) yield break;
 
         HepaiPresentationRequest request = BuildSichuanMidGameRequest(
             winnerPos, huClass, hepaiTile, multiRon, ronDiscarderIndex, recycleDiscard, isQianggang);

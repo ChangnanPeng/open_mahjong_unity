@@ -7,11 +7,11 @@ public class WindowsManager : MonoBehaviour {
     [SerializeField] private GameObject mainCanvas;
 
     [Header("顶层窗口")]
-    [SerializeField] private GameObject headerPanel; // 
+    [SerializeField] private GameObject headerPanel; //
     [SerializeField] private GameObject chatPanel; // 聊天窗口 保持窗口常开
     [SerializeField] private GameObject streamerModePanel; // 主播模式面板
     [SerializeField] private GameObject gamePanel; // 游戏窗口
-    
+
     [Header("一级窗口")]
     [SerializeField] private GameObject loginPanel; // 登录窗口
     [SerializeField] private GameObject menuPanel; // 菜单界面窗口
@@ -36,7 +36,7 @@ public class WindowsManager : MonoBehaviour {
     */
 
     public static WindowsManager Instance { get; private set; } // 单例
-    
+
     private string currentWindow; // 当前所在窗口状态
     /// <summary>最近一次所在的大厅顶栏标签；进入 game/recordscene 时不改写，退出时直接切回此处。</summary>
     private string lastLobbyTab = "menu";
@@ -207,9 +207,8 @@ public class WindowsManager : MonoBehaviour {
         currentWindow = targetWindow; // 更新当前窗口状态
         HeaderPanel.Instance?.UpdateButtonState(targetWindow); // 即时刷新导航栏按钮
         if (targetWindow == "room"
-            && UserDataManager.Instance != null
             && UserDataManager.Instance.RoomId == UserDataManager.ROOM_ID_NONE) {
-            RoomWindowsManager.Instance?.SwitchRoomWindow("createRoom");
+            RoomWindowsManager.Instance.SwitchRoomWindow("createRoom");
         }
 
         var fadeOut = new List<(GameObject go, CanvasGroup cg)>(); // 待渐隐面板
@@ -242,10 +241,10 @@ public class WindowsManager : MonoBehaviour {
     private static void RefreshLobbyDataOnSwitch(string targetWindow) {
         switch (targetWindow) {
             case "menu":
-                RoomNetworkManager.Instance?.GetRoomList(showTipOnSuccess: false);
+                RoomNetworkManager.Instance.GetRoomList(showTipOnSuccess: false);
                 break;
             case "match":
-                MatchNetworkManager.Instance?.RequestQueueStatusForMatchPanel();
+                MatchNetworkManager.Instance.RequestQueueStatusForMatchPanel();
                 break;
         }
     }

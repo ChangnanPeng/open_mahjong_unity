@@ -87,7 +87,7 @@ public class SwitchSeatPanel : MonoBehaviour {
             indexToOriginalPosition[2] = "left";
             indexToOriginalPosition[3] = "self";
         }
-        
+
         // 计算换位映射关系：从原始索引到目标索引
         Dictionary<int, int> indexMapping = new Dictionary<int, int>();
 
@@ -259,7 +259,6 @@ public class SwitchSeatPanel : MonoBehaviour {
             }
         }
     }
-
 
     // 清空换位面板，清理临时对象
     public void ClearSwitchSeatPanel() {

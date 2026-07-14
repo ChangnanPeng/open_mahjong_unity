@@ -193,7 +193,7 @@ namespace Qingque13
         private static List<QingqueMeld> ConvertMelds(List<string> meldStrings)
         {
             var melds = new List<QingqueMeld>();
-            
+
             foreach (var str in meldStrings)
             {
                 if (str.Length < 2) continue;
@@ -227,14 +227,14 @@ namespace Qingque13
         /// </summary>
         private static QingqueWinType ConvertWinType(List<string> wayToHepai)
         {
-            bool selfDrawn = wayToHepai.Any(w => 
+            bool selfDrawn = wayToHepai.Any(w =>
                 w == "自摸" || w == "海底捞月" ||
                 w == "岭上开花" || w == "天和");
-            bool finalTile = wayToHepai.Any(w => 
+            bool finalTile = wayToHepai.Any(w =>
                 w == "海底捞月" || w == "河底捞鱼");
-                bool kongRelated = wayToHepai.Any(w => 
+                bool kongRelated = wayToHepai.Any(w =>
                 w == "岭上开花" || w == "抢杠");
-            bool heavenlyOrEarthly = wayToHepai.Any(w => 
+            bool heavenlyOrEarthly = wayToHepai.Any(w =>
                 w == "天和" || w == "地和");
 
             // Parse seat wind (自风)

@@ -1,4 +1,3 @@
-using System.Linq;
 using Qingque13.Core;
 
 namespace Qingque13.Criteria
@@ -10,17 +9,17 @@ namespace Qingque13.Criteria
     public class ConnectedNumbersCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ConnectedNumbers;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
-            
+
             // Must have no honour tiles
             for (byte n = 1; n <= 7; n++)
             {
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.Z, n)) > 0) return false;
             }
-            
+
             if (decomposition.IsSevenPairs)
             {
                 // Seven pairs: count pairs per number
@@ -39,9 +38,9 @@ namespace Qingque13.Criteria
             {
                 // Standard decomposition
                 if (decomposition.Pair.IsHonor) return false;
-                
+
                 uint numTable = 1u << (3 * decomposition.Pair.Num());
-                
+
                 foreach (var meld in decomposition.Melds)
                 {
                     if (meld.Type == QingqueMeldType.Sequence)
@@ -57,11 +56,11 @@ namespace Qingque13.Criteria
                         numTable += (1u << (3 * meld.Tile.Num()));
                     }
                 }
-                
+
                 return CheckConnected(numTable);
             }
         }
-        
+
         private static bool CheckConnected(uint numTable)
         {
             // Check for connected pattern: no gaps between used numbers
@@ -75,7 +74,7 @@ namespace Qingque13.Criteria
                 if (state == 0 && c == 1) state = 1; // Sequence started
                 numTable >>= 3;
             }
-            
+
             return true;
         }
     }

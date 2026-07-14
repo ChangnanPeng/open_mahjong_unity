@@ -23,7 +23,7 @@ public static class PostGameNavigator {
             GameSceneTeardown.ResetToIdle();
         }
 
-        MatchNetworkManager.Instance?.ResetMatchLock();
+        MatchNetworkManager.Instance.ResetMatchLock();
         HeaderPanel.Instance?.SetBackToGameVisible(false);
 
         if (wasMatch) {
@@ -38,15 +38,14 @@ public static class PostGameNavigator {
     private static void RefreshLobbyTabIfNeeded(string tab) {
         switch (tab) {
             case "record":
-                DataNetworkManager.Instance?.GetRecordList();
+                DataNetworkManager.Instance.GetRecordList();
                 break;
             case "friend":
-                FriendNetworkManager.Instance?.ListAllFriendPanels();
+                FriendNetworkManager.Instance.ListAllFriendPanels();
                 break;
             case "room":
-                if (UserDataManager.Instance != null
-                    && UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE) {
-                    RoomWindowsManager.Instance?.SwitchRoomWindow("roomInfo");
+                if (UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE) {
+                    RoomWindowsManager.Instance.SwitchRoomWindow("roomInfo");
                 }
                 break;
         }

@@ -79,7 +79,6 @@ public class GamePlayerPanel : MonoBehaviour {
         if (playerDingqueImage != null) playerDingqueImage.color = DingqueColors[suit];
     }
 
-
     public void SetPlayerInfo(PlayerInfo playerInfo, string state, string position = null) {
         if (state == "gamestate") {
             playerNameText.text = StreamerModeHelper.FormatGamestatePlayerName(
@@ -89,7 +88,6 @@ public class GamePlayerPanel : MonoBehaviour {
         }
         // 设置头衔
         playerTitleText.text = ConfigManager.GetTitleText(playerInfo.title_used);
-
 
         if (playerProfilePicture != null) {
             // 加载头像

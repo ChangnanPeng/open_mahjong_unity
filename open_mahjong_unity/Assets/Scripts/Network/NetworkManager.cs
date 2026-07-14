@@ -9,10 +9,6 @@ using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 
-
-
-
-
 [Serializable]
 public class GameEvent : UnityEvent<bool, string> {} // 标准通知类
 
@@ -20,7 +16,7 @@ public class NetworkManager : MonoBehaviour {
 
     public static NetworkManager Instance { get; private set; }
     private WebSocket websocket; // 定义websocket
-    
+
     /// <summary>
     /// 获取 websocket 连接（供其他管理器使用）
     /// </summary>
@@ -68,7 +64,6 @@ public class NetworkManager : MonoBehaviour {
     private enum DisconnectDialogState { Start, Connected, Disconnected, Shown, NoMatch }
     private DisconnectDialogState _disconnectDialogState = DisconnectDialogState.Start;
     // 解析后的 WebSocket URL（用于存储 DNS 解析结果）
-
 
     // 1.Awake方法用于实例化单例进入DontDestroyOnLoad，并配置WebSocket基础的方法
     private void Awake(){
@@ -378,7 +373,6 @@ public class NetworkManager : MonoBehaviour {
         }
     }
 
-
     // 网络管理器实例在 Update 中处理消息队列
     private void Update(){
         // 非WebGL平台需要调用DispatchMessageQueue来处理WebSocket消息
@@ -500,8 +494,8 @@ public class NetworkManager : MonoBehaviour {
                 );
             }
             UserContainer.Instance.ShowUserSettings(response.user_settings);
-            FriendNetworkManager.Instance?.ListFriends();
-            EventNetworkManager.Instance?.ListMyActiveEvents();
+            FriendNetworkManager.Instance.ListFriends();
+            EventNetworkManager.Instance.ListMyActiveEvents();
         }
     }
 
@@ -517,7 +511,7 @@ public class NetworkManager : MonoBehaviour {
         }
     }
 
-    // 3.Get_Message方法用于处理服务器返回的消息 
+    // 3.Get_Message方法用于处理服务器返回的消息
     private void Get_Message(byte[] bytes){
         try{
             string jsonStr = System.Text.Encoding.UTF8.GetString(bytes);
@@ -529,13 +523,13 @@ public class NetworkManager : MonoBehaviour {
 
             // 好友 / 实时观战相关消息统一交由 FriendNetworkManager 处理
             if (response.type != null && response.type.StartsWith("friend/")) {
-                FriendNetworkManager.Instance?.HandleFriendMessage(response);
+                FriendNetworkManager.Instance.HandleFriendMessage(response);
                 return;
             }
 
             // 赛事相关消息统一交由 EventNetworkManager 处理
             if (response.type != null && response.type.StartsWith("event/")) {
-                EventNetworkManager.Instance?.HandleEventMessage(response);
+                EventNetworkManager.Instance.HandleEventMessage(response);
                 return;
             }
 
@@ -555,7 +549,7 @@ public class NetworkManager : MonoBehaviour {
                 case "error_message":
                     Debug.Log($"错误消息: {response.message}");
                     // 加入/创建失败时取消待进入，避免滞后 refresh_room_info 错误跳进房间页
-                    RoomNetworkManager.Instance?.CancelPendingRoomEntry();
+                    RoomNetworkManager.Instance.CancelPendingRoomEntry();
                     ErrorResponse.Invoke(response.success, response.message);
                     NotificationManager.Instance.ShowTip("error_message",false,response.message);
                     break;
@@ -566,7 +560,7 @@ public class NetworkManager : MonoBehaviour {
                 case "room/sync_not_in_room":
                 case "room/join_room_done":
                 case "room/leave_room_done":
-                    RoomNetworkManager.Instance?.HandleRoomMessage(response);
+                    RoomNetworkManager.Instance.HandleRoomMessage(response);
                     break;
                 // 数据相关消息交由 DataNetworkManager 处理
                 case "data/get_record_list":
@@ -577,7 +571,7 @@ public class NetworkManager : MonoBehaviour {
                 case "data/get_classical_stats":
                 case "data/get_leaderboard":
                 case "data/get_rank_record_list":
-                    DataNetworkManager.Instance?.HandleDataMessage(response);
+                    DataNetworkManager.Instance.HandleDataMessage(response);
                     break;
                 // 观战系统：初始牌谱 / 增量更新 → GameRecordManager
                 case "spectator/record_init":
@@ -650,14 +644,14 @@ public class NetworkManager : MonoBehaviour {
                 case "gamestate/broadcast_sticker":
                 case "gamestate/vote_update":
                 case "gamestate/vote_end":
-                    GameStateNetworkManager.Instance?.HandleGameStateMessage(response);
+                    GameStateNetworkManager.Instance.HandleGameStateMessage(response);
                     break;
                 // 匹配系统消息交由 MatchNetworkManager 处理
                 case "match/join_queue_done":
                 case "match/leave_queue_done":
                 case "match/queue_status":
                 case "match/match_found":
-                    MatchNetworkManager.Instance?.HandleMatchMessage(response);
+                    MatchNetworkManager.Instance.HandleMatchMessage(response);
                     break;
 
                 case "get_player_info":
@@ -693,14 +687,14 @@ public class NetworkManager : MonoBehaviour {
                         _disconnectDialogState = DisconnectDialogState.Shown;
                     }
                     NotificationManager.Instance.ShowMessage(
-                        response.message_info.title, 
-                        response.message_info.content, 
+                        response.message_info.title,
+                        response.message_info.content,
                         response.message
                     );
 
                     LoginPanel.Instance.ResetLoginButton();
                     break;
-                
+
                 default:
                     NotificationManager.Instance.ShowTip("未知的消息类型", false,"未知的消息类型");
                     throw new Exception($"未知的消息类型: {response.type}");
@@ -711,7 +705,6 @@ public class NetworkManager : MonoBehaviour {
             Debug.LogError($"消息处理错误: {e.Message}\n{e.StackTrace}");  // 添加堆栈信息
         }
     }
-    
 
     // ========== 观战消息处理 ==========
 
@@ -745,9 +738,7 @@ public class NetworkManager : MonoBehaviour {
             yield break;
         }
 
-        if (WindowsManager.Instance != null) {
-            WindowsManager.Instance.SwitchWindow("game");
-        }
+        WindowsManager.Instance.SwitchWindow("game");
         yield return null;
 
         var grm = GameRecordManager.Instance;
@@ -777,7 +768,7 @@ public class NetworkManager : MonoBehaviour {
         }
 
         string msg = string.IsNullOrEmpty(response.message) ? "游戏对局结束，已获取全部对局记录" : response.message;
-        NotificationManager.Instance?.ShowTip("观战", true, msg);
+        NotificationManager.Instance.ShowTip("观战", true, msg);
 
         string recordJson = response.message_info?.content;
         if (!string.IsNullOrEmpty(recordJson)) {
@@ -795,10 +786,10 @@ public class NetworkManager : MonoBehaviour {
 
     private void HandleSpectatorAddResult(Response response) {
         if (response.success) {
-            NotificationManager.Instance?.ShowTip("观战", true, response.message);
+            NotificationManager.Instance.ShowTip("观战", true, response.message);
         } else {
             GameRecordManager.Instance?.ClearDelayedSpectatorSession();
-            NotificationManager.Instance?.ShowTip("观战", false, response.message);
+            NotificationManager.Instance.ShowTip("观战", false, response.message);
         }
     }
 
@@ -876,7 +867,6 @@ public class NetworkManager : MonoBehaviour {
     // 房间相关方法已移至 RoomNetworkManager
     // 游戏状态相关方法已移至 GameStateNetworkManager
 
-
     // 4.11 游客登录方法 TouristLogin 从LoginPanel发送
     public void TouristLogin() {
         try {
@@ -920,7 +910,6 @@ public class NetworkManager : MonoBehaviour {
         };
         await websocket.SendText(JsonConvert.SerializeObject(request));
     }
-
 
     private async void OnApplicationQuit() {
         if (websocket != null && websocket.State == WebSocketState.Open)
