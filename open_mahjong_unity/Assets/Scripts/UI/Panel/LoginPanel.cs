@@ -27,14 +27,13 @@ public class LoginPanel : MonoBehaviour {
             Destroy(gameObject);
             return;
         }
-        
+
         loginButton.onClick.AddListener(LoginClick);
         touristButton.onClick.AddListener(TouristLoginClick);
         ShowTestPanelButton.onClick.AddListener(ShowTestPanel);
         // 设置输入框选中事件
         inputUser.onSelect.AddListener((text) => ShowTip(userNameTips));
         inputPassword.onSelect.AddListener((text) => ShowTip(passwordTips));
-
 
     }
 
@@ -79,62 +78,6 @@ public class LoginPanel : MonoBehaviour {
         NetworkManager.Instance.TouristLogin(); // 发送游客登录请求
     }
 
-    /// <summary>
-    /// 验证用户名：不超过16个字符，中文=2，数字=1，英文=1，总长度>=2，不超过20
-    /// </summary>
-    private string ValidateUsername(string username){
-        if (string.IsNullOrEmpty(username))
-            return "用户名不能为空";
-
-        // 检查字符数（不超过16个字符）
-        if (username.Length > 16)
-            return "用户名不能超过16个字符";
-
-        // 计算长度（中文=2，英文=1，数字=1）
-        int length = 0;
-        foreach (char c in username) {
-            if (c >= 0x4E00 && c <= 0x9FFF)
-                length += 2;  // 中文=2
-            else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-                length += 1;  // 英文=1
-            else if (c >= '0' && c <= '9')
-                length += 1;  // 数字=1
-        }
-
-        if (length < 2)
-            return "用户名长度至少需要2（中文=2，数字=1，英文=1）";
-        
-        if (length > 20)
-            return "用户名长度不能超过20字节";
-
-        return null;
-    }
-
-    /// <summary>
-    /// 验证密码：6-32个字符，只能包含英文、数字或特殊字符
-    /// </summary>
-    private string ValidatePassword(string password){
-        if (string.IsNullOrEmpty(password))
-            return "密码不能为空";
-
-        if (password.Length < 6 || password.Length > 32)
-            return password.Length < 6 ? "密码至少需要6个字符" : "密码不能超过32个字符";
-
-        if (System.Text.Encoding.UTF8.GetByteCount(password) > 32)
-            return "密码不能超过32个字符";
-
-        foreach (char c in password) {
-            bool isLetter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-            bool isDigit = c >= '0' && c <= '9';
-            bool isSpecial = c >= 33 && c <= 126 && !char.IsLetterOrDigit(c);
-            
-            if (!(isLetter || isDigit || isSpecial))
-                return "密码只能包含英文、数字或特殊字符";
-        }
-
-        return null;
-    }
-
     // 服务器连接协程
     private IEnumerator ServerConnectCoroutine() {
         while (true) {
@@ -156,7 +99,7 @@ public class LoginPanel : MonoBehaviour {
 
     // 连接成功时调用
     public void ConnectOkText() {
-        if (NetworkManager.Instance == null || !NetworkManager.Instance.IsWebSocketOpen) return;
+        if (!NetworkManager.Instance.IsWebSocketOpen) return;
         // 终止协程
         if (serverConnectCoroutine != null) {
             StopCoroutine(serverConnectCoroutine);
@@ -192,4 +135,4 @@ public class LoginPanel : MonoBehaviour {
         }
         serverConnectCoroutine = StartCoroutine(ServerConnectCoroutine());
     }
-} 
+}

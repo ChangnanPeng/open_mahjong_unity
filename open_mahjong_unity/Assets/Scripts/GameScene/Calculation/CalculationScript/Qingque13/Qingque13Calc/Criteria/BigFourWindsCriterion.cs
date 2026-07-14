@@ -9,20 +9,20 @@ namespace Qingque13.Criteria
     public class BigFourWindsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.BigFourWinds;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            var winds = new[] 
-            { 
+            var winds = new[]
+            {
                 new QingqueTile(QingqueTile.SuitType.Z, 1), // East
                 new QingqueTile(QingqueTile.SuitType.Z, 2), // South
                 new QingqueTile(QingqueTile.SuitType.Z, 3), // West
                 new QingqueTile(QingqueTile.SuitType.Z, 4)  // North
             };
-            
+
             foreach (var wind in winds)
             {
                 if (counter.Count(wind) < 3) return false;

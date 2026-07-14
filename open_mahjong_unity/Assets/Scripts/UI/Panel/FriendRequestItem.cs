@@ -61,11 +61,11 @@ public class FriendRequestItem : MonoBehaviour {
 
     private void OnAccept() {
         if (_info == null) return;
-        FriendNetworkManager.Instance?.RespondFriendRequest(_info.user_id, true);
+        FriendNetworkManager.Instance.RespondFriendRequest(_info.user_id, true);
     }
 
     private void OnDecline() {
         if (_info == null) return;
-        FriendNetworkManager.Instance?.RespondFriendRequest(_info.user_id, false);
+        FriendNetworkManager.Instance.RespondFriendRequest(_info.user_id, false);
     }
 }

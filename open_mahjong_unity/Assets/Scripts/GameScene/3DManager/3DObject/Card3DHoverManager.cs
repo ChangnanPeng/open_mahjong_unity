@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -72,7 +71,7 @@ public class Card3DHoverManager : MonoBehaviour
         }
         if (!tileIdToCards[key].Contains(cardObj)) {
             tileIdToCards[key].Add(cardObj);
-            
+
             Renderer renderer = cardObj.GetComponent<Renderer>();
             Material mat = renderer.materials[0];
             if (mat.shader.name == "Custom/ThreeDTiles") {
@@ -296,4 +295,3 @@ public class Card3DHoverManager : MonoBehaviour
         ClearAllCards();
     }
 }
-

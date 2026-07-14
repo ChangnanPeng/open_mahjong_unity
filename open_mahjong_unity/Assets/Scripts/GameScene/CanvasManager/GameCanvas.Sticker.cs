@@ -132,14 +132,14 @@ public partial class GameCanvas {
     }
 
     private void OnStickerClicked(int stickerId) {
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) {
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) {
             return;
         }
         if (_stickerSendLocked) {
             return;
         }
         string sticker = $"{DefaultStickerPack}/{stickerId}";
-        GameStateNetworkManager.Instance?.SendSticker(sticker);
+        GameStateNetworkManager.Instance.SendSticker(sticker);
         HideStickerPanel();
         BeginStickerSendCooldown();
     }

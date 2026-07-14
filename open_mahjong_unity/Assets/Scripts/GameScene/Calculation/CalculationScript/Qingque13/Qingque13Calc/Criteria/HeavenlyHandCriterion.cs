@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class HeavenlyHandCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.HeavenlyHand;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             return decomposition.IsWonBy(QingqueWinType.HeavenlyOrEarthlyHand | QingqueWinType.SelfDrawn);

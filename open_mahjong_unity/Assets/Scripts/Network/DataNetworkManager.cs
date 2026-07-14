@@ -8,12 +8,12 @@ using Newtonsoft.Json;
 /// 数据网络管理器 - 处理所有数据相关的网络通信（游戏记录、统计数据等）
 /// </summary>
 public class DataNetworkManager : MonoBehaviour {
-    
+
     public static DataNetworkManager Instance { get; private set; }
 
     private int _recordListPendingOffset;
     public const int RecordListPageSize = 20;
-    
+
     private void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -21,14 +21,14 @@ public class DataNetworkManager : MonoBehaviour {
         }
         Instance = this;
     }
-    
+
     /// <summary>
     /// 获取 websocket 连接（通过 NetworkManager）
     /// </summary>
     private WebSocket GetWebSocket() {
-        return NetworkManager.Instance?.GetWebSocket();
+        return NetworkManager.Instance.GetWebSocket();
     }
-    
+
     /// <summary>
     /// 处理数据相关的服务器响应消息
     /// </summary>
@@ -63,7 +63,7 @@ public class DataNetworkManager : MonoBehaviour {
                 break;
         }
     }
-    
+
     private void HandleGetRecordListResponse(Response response) {
         Debug.Log($"收到游戏记录列表: {response.message}");
         RecordPanel.Instance?.GetRecordListResponse(
@@ -73,7 +73,7 @@ public class DataNetworkManager : MonoBehaviour {
             _recordListPendingOffset
         );
     }
-    
+
     private void HandleGetRecordByIdResponse(Response response) {
         Debug.Log($"收到牌谱详情: {response.message}");
         if (!response.success) {
@@ -82,50 +82,50 @@ public class DataNetworkManager : MonoBehaviour {
         }
         RecordPanel.OpenRecord(response.record_detail);
     }
-    
+
     /// <summary>
     /// 处理获取国标统计数据响应
     /// </summary>
     private void HandleGetGuobiaoStatsResponse(Response response) {
         if (PlayerInfoPanel.Instance == null) return;
-        
+
         // 如果响应中包含玩家信息，先显示玩家信息
         if (response.player_info != null) {
             PlayerInfoPanel.Instance.ShowPlayerInfo(response.player_info);
         }
-        
+
         // 处理统计数据
         PlayerInfoPanel.Instance.OnGuobiaoStatsReceived(response.success, response.message, response.rule_stats);
     }
-    
+
     /// <summary>
     /// 处理获取立直统计数据响应
     /// </summary>
     private void HandleGetRiichiStatsResponse(Response response) {
         if (PlayerInfoPanel.Instance == null) return;
-        
+
         // 如果响应中包含玩家信息，先显示玩家信息
         if (response.player_info != null) {
             PlayerInfoPanel.Instance.ShowPlayerInfo(response.player_info);
         }
-        
+
         // 处理统计数据
         PlayerInfoPanel.Instance.OnRiichiStatsReceived(response.success, response.message, response.rule_stats);
     }
-    
+
     /// <summary>
     /// 处理获取青雀统计数据响应
     /// </summary>
     private void HandleGetQingqueStatsResponse(Response response) {
         if (PlayerInfoPanel.Instance == null) return;
-        
+
         if (response.player_info != null) {
             PlayerInfoPanel.Instance.ShowPlayerInfo(response.player_info);
         }
-        
+
         PlayerInfoPanel.Instance.OnQingqueStatsReceived(response.success, response.message, response.rule_stats);
     }
-    
+
     /// <summary>
     /// 处理获取古典麻将统计数据响应
     /// </summary>
@@ -156,9 +156,9 @@ public class DataNetworkManager : MonoBehaviour {
         Debug.Log($"收到观战列表: {response.message}");
         SpectatorPanel.Instance?.GetSpectatorListResponse(response.success, response.message, response.spectator_list);
     }
-    
+
     // ========== 数据相关的发送方法 ==========
-    
+
     public async void GetRecordList(int offset = 0) {
         try {
             _recordListPendingOffset = offset;
@@ -174,7 +174,7 @@ public class DataNetworkManager : MonoBehaviour {
             RecordPanel.Instance?.GetRecordListResponse(false, e.Message, null, offset);
         }
     }
-    
+
     public async void GetRecordById(string gameId) {
         try {
             var request = new { type = "data/get_record_by_id", game_id = gameId };
@@ -185,7 +185,7 @@ public class DataNetworkManager : MonoBehaviour {
             NotificationManager.Instance.ShowTip("牌谱", false, $"获取牌谱失败: {e.Message}");
         }
     }
-    
+
     /// <summary>
     /// 获取国标统计数据
     /// </summary>
@@ -280,4 +280,3 @@ public class DataNetworkManager : MonoBehaviour {
         }
     }
 }
-

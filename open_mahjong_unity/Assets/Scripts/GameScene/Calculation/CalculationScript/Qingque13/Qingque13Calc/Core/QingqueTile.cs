@@ -18,7 +18,7 @@ namespace Qingque13.Core
     /// <summary>
     /// Represents a mahjong tile.
     /// Matches C++ tile_t (uint8_t) and tile class.
-    /// </summary>  
+    /// </summary>
     public struct QingqueTile : IEquatable<QingqueTile>
     {
         public const byte Invalid = 0;
@@ -162,7 +162,7 @@ namespace Qingque13.Core
             public static QingqueTile M(byte num) => new QingqueTile((byte)(num + (byte)QingqueSuit.M));
             public static QingqueTile P(byte num) => new QingqueTile((byte)(num + (byte)QingqueSuit.P));
             public static QingqueTile S(byte num) => new QingqueTile((byte)(num + (byte)QingqueSuit.S));
-            
+
             public static QingqueTile Z(byte num)
             {
                 byte[] honours = { 0, Honours.E, Honours.S, Honours.W, Honours.N, Honours.C, Honours.F, Honours.P };

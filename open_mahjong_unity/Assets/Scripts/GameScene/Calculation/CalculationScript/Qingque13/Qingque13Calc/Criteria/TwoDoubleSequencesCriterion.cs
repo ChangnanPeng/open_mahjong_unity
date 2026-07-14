@@ -10,14 +10,14 @@ namespace Qingque13.Criteria
     public class TwoDoubleSequencesCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TwoDoubleSequences;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             int count = CountEquivalentPairs(decomposition.Melds);
             return count == 2 || count > 3;
         }
-        
+
         private int CountEquivalentPairs(List<QingqueMeld> melds)
         {
             int count = 0;

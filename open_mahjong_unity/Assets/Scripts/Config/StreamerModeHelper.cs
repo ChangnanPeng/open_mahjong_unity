@@ -10,8 +10,7 @@ public static class StreamerModeHelper {
 
     public static event Action OnChanged;
 
-    public static bool IsEnabled =>
-        ConfigManager.Instance != null && ConfigManager.Instance.StreamerModeEnabled;
+    public static bool IsEnabled => ConfigManager.Instance.StreamerModeEnabled;
 
     public static void NotifyChanged() {
         OnChanged?.Invoke();
@@ -37,7 +36,7 @@ public static class StreamerModeHelper {
         if (!IsEnabled || IsSelfUser(userId, username) || position == "self") {
             return username ?? string.Empty;
         }
-        if (NormalGameStateManager.Instance != null && NormalGameStateManager.Instance.IsRealtimeSpectator) {
+        if (NormalGameStateManager.Instance.IsRealtimeSpectator) {
             return username ?? string.Empty;
         }
         return MaskedPlayerName;
@@ -45,9 +44,6 @@ public static class StreamerModeHelper {
 
     private static bool IsSelfUser(int userId, string username) {
         var userData = UserDataManager.Instance;
-        if (userData == null) {
-            return false;
-        }
         if (userId > 0 && userId == userData.UserId) {
             return true;
         }
@@ -55,7 +51,7 @@ public static class StreamerModeHelper {
     }
 
     public static void RefreshAllDisplays() {
-        WindowsManager.Instance?.ApplyStreamerModePanels();
+        WindowsManager.Instance.ApplyStreamerModePanels();
 
         if (RoomListPanel.Instance != null && RoomListPanel.Instance.gameObject.activeInHierarchy) {
             RoomListPanel.Instance.RefreshRoomList();
@@ -64,7 +60,7 @@ public static class StreamerModeHelper {
         RoomPanel.Instance?.RefreshStreamerModeDisplay();
 
         if (ScoreHistoryPanel.Instance != null && ScoreHistoryPanel.Instance.gameObject.activeInHierarchy) {
-            GameSceneUIManager.Instance?.UpdateScoreRecord();
+            GameSceneUIManager.Instance.UpdateScoreRecord();
         }
     }
 }

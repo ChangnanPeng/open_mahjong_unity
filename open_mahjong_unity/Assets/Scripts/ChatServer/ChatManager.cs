@@ -22,24 +22,24 @@ public class ChatManager : MonoBehaviour {
         Instance = this;
         connectId = System.Guid.NewGuid().ToString(); // 生成一个不同机器唯一的连接id
         websocket = new WebSocket($"{ConfigManager.chatUrl}/{connectId}"); // 初始化WebSocket
-        
+
         // 配置WebSocket事件处理器（NativeWebSocket格式）
         websocket.OnOpen += () => {
             Debug.Log("WebSocket To ChatServer连接已打开");
             isConnecting = false;
         };
-        
+
         websocket.OnMessage += (bytes) => {
             lock(ConcurrentQueue) {
                 ConcurrentQueue.Enqueue(bytes);
             }
         };
-        
+
         websocket.OnError += (errorMsg) => {
             Debug.Log($"WebSocket To ChatServer错误: {errorMsg}");
             isConnecting = false;
         };
-        
+
         websocket.OnClose += (code) => {
             Debug.Log($"WebSocket To ChatServer已关闭: {code}");
             isConnecting = false;
@@ -58,9 +58,7 @@ public class ChatManager : MonoBehaviour {
             }
             catch (Exception e) {
                 Debug.Log($"连接聊天服务器错误: {e.Message}");
-                if (NotificationManager.Instance != null) {
-                    NotificationManager.Instance.ShowTip("WebSocket To ChatServer错误", false, e.Message);
-                }
+                NotificationManager.Instance.ShowTip("WebSocket To ChatServer错误", false, e.Message);
             }
             finally {
                 isConnecting = false; // 连接失败，设置连接状态为false
@@ -87,7 +85,7 @@ public class ChatManager : MonoBehaviour {
         #if !UNITY_WEBGL || UNITY_EDITOR
         websocket?.DispatchMessageQueue();
         #endif
-        
+
         if (ConcurrentQueue.Count > 0) {
             byte[] messageBytes;
             lock(ConcurrentQueue) {
@@ -114,21 +112,21 @@ public class ChatManager : MonoBehaviour {
     // 登录聊天服务器
     public async void LoginChatServer(string username, string userkey) {
         Debug.Log($"开始登录聊天服务器，连接ID: {connectId}, 用户名: {username}, 用户密钥: {userkey}");
-        
+
         // 检查WebSocket连接状态
         if (websocket == null || websocket.State != WebSocketState.Open) {
             Debug.Log("WebSocket连接未建立，无法发送登录消息");
             return;
         }
-        
+
         var request = new ChatRequest {
             type = "login",
-            data = new ChatLoginRequest { 
-                username = username, 
-                userkey = userkey 
+            data = new ChatLoginRequest {
+                username = username,
+                userkey = userkey
             }
         };
-        
+
         // 发送登录消息
         string jsonMessage = JsonConvert.SerializeObject(request);
         Debug.Log($"发送登录聊天服务器消息: {jsonMessage}");
@@ -145,9 +143,9 @@ public class ChatManager : MonoBehaviour {
 
         var request = new ChatRequest {
             type = "sendChat",
-            data = new ChatSendChatRequest { 
-                content = message.Trim(), 
-                roomId = targetChannelId 
+            data = new ChatSendChatRequest {
+                content = message.Trim(),
+                roomId = targetChannelId
             }
         };
         string jsonMessage = JsonConvert.SerializeObject(request);
@@ -163,11 +161,11 @@ public class ChatManager : MonoBehaviour {
             NotificationManager.Instance.ShowTip("WebSocket连接未建立，无法发送加入房间消息", false, "");
             return;
         }
-        
+
         var request = new ChatRequest {
             type = "joinRoom",
-            data = new ChatJoinRoomRequest { 
-                roomId = roomId 
+            data = new ChatJoinRoomRequest {
+                roomId = roomId
             }
         };
         string jsonMessage = JsonConvert.SerializeObject(request);
@@ -183,11 +181,11 @@ public class ChatManager : MonoBehaviour {
             NotificationManager.Instance.ShowTip("WebSocket连接未建立，无法发送离开房间消息", false, "");
             return;
         }
-        
+
         var request = new ChatRequest {
             type = "leaveRoom",
-            data = new ChatLeaveRoomRequest { 
-                roomId = roomId 
+            data = new ChatLeaveRoomRequest {
+                roomId = roomId
             }
         };
         string jsonMessage = JsonConvert.SerializeObject(request);
@@ -202,4 +200,3 @@ public class ChatManager : MonoBehaviour {
         }
     }
 }
-

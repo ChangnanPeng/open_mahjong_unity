@@ -127,7 +127,7 @@ public partial class Game3DManager {
                 if (op.PlayerPosition == "self") {
                     yield break;
                 }
-                yield return Get3DTileCoroutine(op.PlayerPosition, "get", op.TileId);
+                yield return Get3DTileCoroutine(op.PlayerPosition, "get");
                 break;
             case HandAnimOpKind.DiscardTile:
                 yield return DiscardTileFromQueue(panel, op);
@@ -228,25 +228,9 @@ public partial class Game3DManager {
     /// </summary>
     private const float MeldRiverRegisterWaitSec = 2f;
 
-    private void ResolveMeldDiscarderAndTile(
-        string discarderPosOverride,
-        int claimedTileOverride,
-        out string discarderPos,
-        out int claimedTile) {
-        discarderPos = discarderPosOverride;
-        claimedTile = claimedTileOverride;
-        if (string.IsNullOrEmpty(discarderPos) && NormalGameStateManager.Instance != null) {
-            discarderPos = NormalGameStateManager.Instance.currentMeldDiscarderPos;
-            if (string.IsNullOrEmpty(discarderPos)) {
-                discarderPos = NormalGameStateManager.Instance.lastDiscardPlayerPosition;
-            }
-            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentMeldClaimedTileId;
-            if (claimedTile <= 0) claimedTile = NormalGameStateManager.Instance.currentAskCutTileId;
-        }
-    }
-
     /// <summary>
     /// 吃碰明杠：回收 RegisterLastDiscard 登记的河牌切子（加杠/暗杠除外）。
+    /// discarderPos / claimedTile 须由调用方显式传入（对局 cut_from_player/cut_tile，牌谱 tick 推断）。
     /// 若 cut 仍在打牌者手牌队列中尚未登记，则等待登记完成后再回收；超时仍认不到则 Warning 放弃。
     /// </summary>
     private IEnumerator ReturnLastCutTileForMeldCoroutine(
@@ -257,8 +241,14 @@ public partial class Game3DManager {
             yield break;
         }
 
-        ResolveMeldDiscarderAndTile(
-            discarderPosOverride, claimedTileOverride, out string discarderPos, out int claimedTile);
+        string discarderPos = discarderPosOverride;
+        int claimedTile = claimedTileOverride;
+        if (string.IsNullOrEmpty(discarderPos) || claimedTile <= 0) {
+            Debug.LogError(
+                $"ReturnLastCutTileForMeld: 缺少显式打牌者/牌张 action={actionType}, "
+                + $"discarder={discarderPos}, claimed={claimedTile}");
+            yield break;
+        }
 
         GameObject obj = ResolveLastDiscardObject(discarderPos, claimedTile);
         float elapsed = 0f;
@@ -293,9 +283,6 @@ public partial class Game3DManager {
         // 停掉该打牌者的飞牌协程并清登记，避免被认走的牌仍在飞行/落到河里或被重复认走。
         OnLastDiscardTaken(discarderPos);
         MahjongObjectPool.Instance.Return(-1, obj);
-        if (lastCutJiagang3DObject == obj) {
-            lastCutJiagang3DObject = null;
-        }
     }
 
     /// <summary>吃碰明杠等：回收河牌切子并启动副露动画（不进入暗杠手牌队列）。</summary>
@@ -408,4 +395,3 @@ public partial class Game3DManager {
         return false;
     }
 }
-

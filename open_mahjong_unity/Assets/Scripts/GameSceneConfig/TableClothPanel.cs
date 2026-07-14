@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -202,6 +201,5 @@ public class TableClothPanel : MonoBehaviour {
             if (tableCloth != null) { tableCloth.tableClothChoseImage.gameObject.SetActive(false); }
         }
     }
-
 
 }

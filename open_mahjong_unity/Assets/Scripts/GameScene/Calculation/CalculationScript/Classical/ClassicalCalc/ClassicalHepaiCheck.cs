@@ -26,15 +26,10 @@ namespace Classical {
         };
 
         private readonly ClassicalCombinationSolver _solver = new ClassicalCombinationSolver();
-        private readonly bool _debug;
 
         static ClassicalHepaiCheck() {
             Yaojiu = new HashSet<int>(Terminals);
             foreach (int h in Honors) Yaojiu.Add(h);
-        }
-
-        public ClassicalHepaiCheck(bool debug = false) {
-            _debug = debug;
         }
 
         /// <summary>

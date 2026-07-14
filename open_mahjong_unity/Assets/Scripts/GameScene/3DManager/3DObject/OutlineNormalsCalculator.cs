@@ -29,7 +29,7 @@ public class OutlineNormalsCalculator : MonoBehaviour
 
         _originalVertices = _mesh.vertices;
         _originalNormals = _mesh.normals;
-        
+
         if (!HasUV1Data()) {
             CalculateAndApplySmoothNormals(true);
         } else {
@@ -81,12 +81,12 @@ public class OutlineNormalsCalculator : MonoBehaviour
             GetMesh();
             if (_mesh == null) return;
         }
-        
+
         if (!force && _skipIfAlreadyCalculated && HasUV1Data()) {
             _hasCalculated = true;
             return;
         }
-        
+
         if (!_mesh.name.Contains("(Clone)")) {
             var meshFilter = GetComponent<MeshFilter>();
             if (meshFilter != null && meshFilter.sharedMesh == _mesh) {
@@ -163,7 +163,7 @@ public class OutlineNormalsCalculator : MonoBehaviour
         _mesh.SetUVs(1, uv1List);
         _hasCalculated = true;
     }
-    
+
     [ContextMenu("Calculate and Apply Smooth Normals")]
     private void CalculateAndApplySmoothNormalsContextMenu() {
         CalculateAndApplySmoothNormals(true);

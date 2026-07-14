@@ -1,6 +1,4 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class UserDataManager : MonoBehaviour {
@@ -68,10 +66,10 @@ public class UserDataManager : MonoBehaviour {
         if (string.IsNullOrEmpty(room_id)) room_id = ROOM_ID_NONE;
         // 如果房间ID发生变化
         if (this.RoomId != room_id){
-            if (this.RoomId != ROOM_ID_NONE && ChatManager.Instance != null) {
+            if (this.RoomId != ROOM_ID_NONE) {
                 ChatManager.Instance.LeaveRoom(int.Parse(this.RoomId));
             }
-            else if (room_id != ROOM_ID_NONE && ChatManager.Instance != null) {
+            else if (room_id != ROOM_ID_NONE) {
                 ChatManager.Instance.JoinRoom(int.Parse(room_id));
             }
             this.RoomId = room_id;

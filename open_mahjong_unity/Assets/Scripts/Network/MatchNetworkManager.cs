@@ -54,7 +54,7 @@ public class MatchNetworkManager : MonoBehaviour {
 
     private bool IsMatchUiLocked() {
         return isMatchFoundLocked
-            || (MatchStateManager.Instance != null && MatchStateManager.Instance.IsMatchFound);
+            || MatchStateManager.Instance.IsMatchFound;
     }
 
     private void ShowMatchFoundedUi() {
@@ -72,7 +72,7 @@ public class MatchNetworkManager : MonoBehaviour {
 
     private void HandleLeaveQueueDone(Response response) {
         isMatchFoundLocked = false;
-        MatchStateManager.Instance?.StopQueueing();
+        MatchStateManager.Instance.StopQueueing();
         MatchQueueingPanel.Instance?.HideImmediately();
         MatchFoundedPanel.Instance?.StopCountdownAndHide();
     }
@@ -101,32 +101,28 @@ public class MatchNetworkManager : MonoBehaviour {
     }
 
     public async void SendJoinQueue(string queueType) {
-        if (UserDataManager.Instance != null && UserDataManager.Instance.IsTourist) {
-            NotificationManager.Instance?.ShowTip("匹配", false, "游客无法进行排位匹配，请先注册账号");
+        if (UserDataManager.Instance.IsTourist) {
+            NotificationManager.Instance.ShowTip("匹配", false, "游客无法进行排位匹配，请先注册账号");
             return;
         }
         if (isMatchFoundLocked) {
-            NotificationManager.Instance?.ShowTip("匹配", false, "已匹配到对局，正在进入游戏");
+            NotificationManager.Instance.ShowTip("匹配", false, "已匹配到对局，正在进入游戏");
             return;
         }
         if (GameSessionGuard.HasExclusiveSession) {
-            NotificationManager.Instance?.ShowTip("匹配", false, "当前对局尚未结束，无法匹配");
+            NotificationManager.Instance.ShowTip("匹配", false, "当前对局尚未结束，无法匹配");
             return;
         }
         if (LobbyStateGuard.BlockIfInRoomForMatch()) {
             return;
         }
         GameRecordManager.Instance?.AbandonDelayedSpectatorSessionOnServer();
-        if (MatchStateManager.Instance != null && MatchStateManager.Instance.IsQueueing) {
-            NotificationManager.Instance?.ShowTip("匹配", false, "您已在匹配队列中");
+        if (MatchStateManager.Instance.IsQueueing) {
+            NotificationManager.Instance.ShowTip("匹配", false, "您已在匹配队列中");
             return;
         }
         isMatchFoundLocked = false;
         lastJoinedQueueType = queueType;
-        if (NetworkManager.Instance == null) {
-            Debug.LogWarning("[MatchNetworkManager] NetworkManager 不存在，无法发送加入匹配请求");
-            return;
-        }
         var ws = NetworkManager.Instance.GetWebSocket();
         if (ws == null || ws.State != WebSocketState.Open) {
             Debug.LogWarning("[MatchNetworkManager] WebSocket未连接，无法发送加入匹配请求");
@@ -141,7 +137,6 @@ public class MatchNetworkManager : MonoBehaviour {
     }
 
     public async void SendLeaveQueue() {
-        if (NetworkManager.Instance == null) return;
         var ws = NetworkManager.Instance.GetWebSocket();
         if (ws == null || ws.State != WebSocketState.Open) return;
         try {
@@ -160,7 +155,6 @@ public class MatchNetworkManager : MonoBehaviour {
     }
 
     private async void RequestQueueStatus(MatchQueueStatusConsumer consumer) {
-        if (NetworkManager.Instance == null) return;
         var ws = NetworkManager.Instance.GetWebSocket();
         if (ws == null || ws.State != WebSocketState.Open) return;
 

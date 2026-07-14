@@ -298,7 +298,7 @@ public partial class GameCanvas {
                 if (!main.Contains(pinnedDraw)) {
                     main.Add(pinnedDraw);
                 }
-                bool autoArrange = AutoAction.Instance != null && AutoAction.Instance.IsAutoArrangeHandCards;
+                bool autoArrange = AutoAction.Instance.IsAutoArrangeHandCards;
                 if (autoArrange) {
                     main.Sort((a, b) => TileIdOrder.Compare(a.tileId, b.tileId));
                 } else {

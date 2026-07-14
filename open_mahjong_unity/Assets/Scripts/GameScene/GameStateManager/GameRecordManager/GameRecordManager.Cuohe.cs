@@ -32,6 +32,6 @@ public partial class GameRecordManager {
         if (string.IsNullOrEmpty(_pendingRecordCuoheWinnerPosition)) return;
         string winnerPos = _pendingRecordCuoheWinnerPosition;
         _pendingRecordCuoheWinnerPosition = null;
-        Game3DManager.Instance?.RestoreRecordPlayerHandAfterCuoheReveal(winnerPos);
+        Game3DManager.Instance.RestoreRecordPlayerHandAfterCuoheReveal(winnerPos);
     }
 }

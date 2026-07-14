@@ -11,18 +11,18 @@ namespace Qingque13.Criteria
     public class MixedStraightCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedStraight;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             foreach (var pattern in QingquePatterns.MixedStraight)
             {
                 if (ContainsMelds(decomposition.Melds, pattern)) return true;
             }
             return false;
         }
-        
+
         private bool ContainsMelds(List<QingqueMeld> melds, List<QingqueMeld> required)
         {
             foreach (var req in required)

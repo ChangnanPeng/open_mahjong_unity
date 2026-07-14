@@ -131,16 +131,16 @@ public class FriendItem : MonoBehaviour {
 
     private void OnClickSpectate() {
         if (_info == null || string.IsNullOrEmpty(_info.gamestate_id)) {
-            NotificationManager.Instance?.ShowTip("观战", false, "对方当前不在对局中");
+            NotificationManager.Instance.ShowTip("观战", false, "对方当前不在对局中");
             return;
         }
-        GameStateNetworkManager.Instance?.AddSpectator(_info.gamestate_id);
+        GameStateNetworkManager.Instance.AddSpectator(_info.gamestate_id);
     }
 
     private void OnClickRealtime() {
         if (_info == null) return;
         if (!IsInGameState(_info.state)) {
-            NotificationManager.Instance?.ShowTip("实时观战", false, "对方当前不在对局中");
+            NotificationManager.Instance.ShowTip("实时观战", false, "对方当前不在对局中");
             return;
         }
         if (LobbyStateGuard.BlockIfInMatchQueueForSpectator()) return;
@@ -148,7 +148,7 @@ public class FriendItem : MonoBehaviour {
         if (RealtimeRequestWaitPanel.Instance != null) {
             RealtimeRequestWaitPanel.Instance.ShowWaiting(_info.user_id, _info.username);
         }
-        FriendNetworkManager.Instance?.RequestRealtime(_info.user_id);
+        FriendNetworkManager.Instance.RequestRealtime(_info.user_id);
     }
 
     private void OnClickDeleteFriend() {

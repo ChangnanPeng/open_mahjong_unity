@@ -10,7 +10,7 @@ namespace Qingque13.Criteria
     public class ConcealedHandCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ConcealedHand;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             // Only check the open melds (declared melds), not all melds from decomposition

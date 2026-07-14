@@ -330,7 +330,8 @@ async def broadcast_do_action(self, action_list: List[str], action_player: int,
                               deal_tile: int = None, combination_target: str = None,
                               combination_mask: List[int] = None, is_mo_gang: bool = None,
                               gang_score_changes: Dict[int, int] = None, gang_score_type: str = None,
-                              is_claim: bool = False, silent: bool = False):
+                              is_claim: bool = False, silent: bool = False,
+                              cut_from_player: int = None):
     if not is_claim and not silent and getattr(self, "_tactical_silent_action", False):
         silent = True
         self._tactical_silent_action = False
@@ -390,6 +391,7 @@ async def broadcast_do_action(self, action_list: List[str], action_player: int,
                 gang_score_changes=gang_score_changes,
                 gang_score_type=gang_score_type,
                 meld_reveal_delay=viewer_reveal_delay,
+                cut_from_player=cut_from_player,
             )
 
             if protected and is_cut:
@@ -429,6 +431,7 @@ def _build_do_action_payload(
     gang_score_changes=None,
     gang_score_type=None,
     meld_reveal_delay=None,
+    cut_from_player=None,
 ):
     viewer_deal_tile = sanitize_deal_tile_for_viewer(deal_tile, action_player, viewer_index)
     return {
@@ -448,6 +451,7 @@ def _build_do_action_payload(
         "gang_score_type": gang_score_type,
         # 受保护观众鸣牌显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画，复现 claim_meld_followup_gap 间隔。
         "meld_reveal_delay": meld_reveal_delay,
+        "cut_from_player": cut_from_player,
     }
 
 

@@ -41,9 +41,7 @@ public class HeaderPanel : MonoBehaviour {
     }
 
     private void Start() {
-        if (UserDataManager.Instance != null) {
-            UserDataManager.Instance.OnRoomIdChanged += RefreshButtonAppearance;
-        }
+        UserDataManager.Instance.OnRoomIdChanged += RefreshButtonAppearance;
         if (backToGameButton != null) {
             backToGameButton.Button.gameObject.SetActive(false);
             backToGameButton.Button.onClick.AddListener(BackToGame);
@@ -72,9 +70,7 @@ public class HeaderPanel : MonoBehaviour {
 
     private void OnDestroy() {
         ConfigManager.OnLanguageChanged -= RefreshHeaderLabels;
-        if (UserDataManager.Instance != null) {
-            UserDataManager.Instance.OnRoomIdChanged -= RefreshButtonAppearance;
-        }
+        UserDataManager.Instance.OnRoomIdChanged -= RefreshButtonAppearance;
     }
 
     /// <summary>
@@ -121,11 +117,11 @@ public class HeaderPanel : MonoBehaviour {
     }
     private void Record() {
         WindowsManager.Instance.SwitchWindow("record");
-        DataNetworkManager.Instance?.GetRecordList();
+        DataNetworkManager.Instance.GetRecordList();
     }
     private void PlayerData() {
         WindowsManager.Instance.SwitchWindow("player");
-        DataNetworkManager.Instance?.GetLeaderboard();
+        DataNetworkManager.Instance.GetLeaderboard();
     }
     private void Config() => WindowsManager.Instance.SwitchWindow("config");
     private void AboutUs() => WindowsManager.Instance.SwitchWindow("aboutUs");
@@ -148,11 +144,11 @@ public class HeaderPanel : MonoBehaviour {
     }
     private void Friend() {
         WindowsManager.Instance.SwitchWindow("friend");
-        FriendNetworkManager.Instance?.ListAllFriendPanels();
+        FriendNetworkManager.Instance.ListAllFriendPanels();
     }
 
     private void Logout() {
-        NotificationManager.Instance?.ShowMessage(
+        NotificationManager.Instance.ShowMessage(
             "登出",
             "确定要登出当前账号吗？",
             "logout_confirm"
@@ -184,7 +180,7 @@ public class HeaderPanel : MonoBehaviour {
     }
 
     private static bool IsInRoom() {
-        return UserDataManager.Instance != null && UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE;
+        return UserDataManager.Instance.RoomId != UserDataManager.ROOM_ID_NONE;
     }
 
     private void RefreshHeaderLabels() {

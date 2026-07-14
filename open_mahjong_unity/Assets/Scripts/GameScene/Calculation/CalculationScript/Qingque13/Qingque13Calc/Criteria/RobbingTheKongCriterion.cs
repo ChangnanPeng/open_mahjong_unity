@@ -5,7 +5,7 @@ namespace Qingque13.Criteria
     public class RobbingTheKongCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.RobbingTheKong;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var wt = decomposition.WinningType;

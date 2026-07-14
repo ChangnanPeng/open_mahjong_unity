@@ -129,14 +129,7 @@ public static class AutoReconnect {
 
     private static void CaptureSnapshot() {
         var udm = UserDataManager.Instance;
-        if (udm == null) {
-            _snapshot = default;
-            return;
-        }
-
-        string currentWindow = WindowsManager.Instance != null
-            ? WindowsManager.Instance.GetCurrentWindow()
-            : "";
+        string currentWindow = WindowsManager.Instance.GetCurrentWindow();
 
         bool isInGame = !string.IsNullOrEmpty(udm.GamestateId) || currentWindow == "game";
 
@@ -177,7 +170,6 @@ public static class AutoReconnect {
         Debug.Log($"[AutoReconnect] 开始重连 (expectGame={ExpectGameRestore})");
 
         var nm = NetworkManager.Instance;
-        if (nm == null) { OnFailed("内部错误"); yield break; }
 
         // Phase 0: 快速探活。若旧连接仍存活（如截图临时失焦），说明并未真正断线，
         // 直接结束：不重连、不重新登录、不改动任何 UI。
@@ -210,12 +202,12 @@ public static class AutoReconnect {
         }
 
         // 走到这里说明已确认断线，正式进入恢复流程。此时才提示并离开可能失效的对局界面。
-        NotificationManager.Instance?.ShowTip("重连", true, "正在恢复连接…");
+        NotificationManager.Instance.ShowTip("重连", true, "正在恢复连接…");
         if (ExpectGameRestore)
         {
             // 离开可能已失效的对局界面，避免停留在空桌；重回对局须等到收到 game_start。
             GameSceneTeardown.ResetToIdle();
-            WindowsManager.Instance?.SwitchWindow("menu");
+            WindowsManager.Instance.SwitchWindow("menu");
         }
 
         // Phase 1: 重连 WebSocket
@@ -295,7 +287,7 @@ public static class AutoReconnect {
 
         // Phase 3: 同步房间状态（断线时服务端已将玩家移出房间，需按服务端权威数据刷新）
         Debug.Log("[AutoReconnect] [3/4] 同步房间状态");
-        RoomNetworkManager.Instance?.SyncMyRoom();
+        RoomNetworkManager.Instance.SyncMyRoom();
         const float roomSyncTimeout = 5f;
         float roomSyncElapsed = 0f;
         while (roomSyncElapsed < roomSyncTimeout && !_waitState.RoomSyncDone)
@@ -308,9 +300,9 @@ public static class AutoReconnect {
         {
             Debug.LogWarning("[AutoReconnect] 房间同步超时，清理残留房间状态");
             if (ExpectGameRestore) {
-                RoomNetworkManager.Instance?.ClearStaleLobbyState();
+                RoomNetworkManager.Instance.ClearStaleLobbyState();
             } else {
-                RoomNetworkManager.Instance?.ApplyLeftRoomState(silent: true);
+                RoomNetworkManager.Instance.ApplyLeftRoomState(silent: true);
             }
             _waitState.RoomSyncDone = true;
         }
@@ -332,11 +324,11 @@ public static class AutoReconnect {
             if (!_waitState.ReconnectAskReceived)
             {
                 Debug.LogWarning("[AutoReconnect] 未收到 reconnect_ask，对局已不存在");
-                UserDataManager.Instance?.SetGamestateId("");
-                UserDataManager.Instance?.SetRoomId(UserDataManager.ROOM_ID_NONE);
+                UserDataManager.Instance.SetGamestateId("");
+                UserDataManager.Instance.SetRoomId(UserDataManager.ROOM_ID_NONE);
                 GameSceneTeardown.ResetToIdle();
-                WindowsManager.Instance?.SwitchWindow("menu");
-                NotificationManager.Instance?.ShowTip("重连", false, "对局已结束");
+                WindowsManager.Instance.SwitchWindow("menu");
+                NotificationManager.Instance.ShowTip("重连", false, "对局已结束");
                 OnSucceeded(skipAllTips: true);
                 yield break;
             }
@@ -351,11 +343,11 @@ public static class AutoReconnect {
             if (!_waitState.GameRestored)
             {
                 Debug.LogWarning("[AutoReconnect] 重回对局超时，清理残留会话状态");
-                UserDataManager.Instance?.SetGamestateId("");
-                UserDataManager.Instance?.SetRoomId(UserDataManager.ROOM_ID_NONE);
+                UserDataManager.Instance.SetGamestateId("");
+                UserDataManager.Instance.SetRoomId(UserDataManager.ROOM_ID_NONE);
                 GameSceneTeardown.ResetToIdle();
-                WindowsManager.Instance?.SwitchWindow("menu");
-                NotificationManager.Instance?.ShowTip("重连", false, "重回对局超时");
+                WindowsManager.Instance.SwitchWindow("menu");
+                NotificationManager.Instance.ShowTip("重连", false, "重回对局超时");
                 OnSucceeded(skipAllTips: true);
                 yield break;
             }
@@ -372,7 +364,7 @@ public static class AutoReconnect {
         _backgroundDisconnectDetected = false;
         _retryCycle = 0;
         if (!skipAllTips) {
-            NotificationManager.Instance?.ShowTip("重连", true, "已自动恢复连接");
+            NotificationManager.Instance.ShowTip("重连", true, "已自动恢复连接");
         }
     }
 
@@ -397,16 +389,13 @@ public static class AutoReconnect {
         _waitState = null;
         _backgroundDisconnectDetected = false;
         _retryCycle = 0;
-        var nm = NetworkManager.Instance;
-        if (nm != null) {
-            nm.ForceShowDisconnectDialog();
-        }
+        NetworkManager.Instance.ForceShowDisconnectDialog();
     }
 
     private static IEnumerator DeferredRetryRoutine(int cycle) {
         float delay = cycle <= 1 ? 3f : 8f;
         Debug.Log($"[AutoReconnect] 延迟 {delay}s 后重试 (周期 {cycle})");
-        NotificationManager.Instance?.ShowTip("重连", true, $"正在恢复连接…（第{cycle + 1}次尝试）");
+        NotificationManager.Instance.ShowTip("重连", true, $"正在恢复连接…（第{cycle + 1}次尝试）");
         while (delay > 0f) {
             yield return null;
             if (_state == State.Idle) yield break;

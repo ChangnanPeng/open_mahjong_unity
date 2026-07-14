@@ -223,6 +223,7 @@ async def broadcast_do_action(
     is_mo_gang: bool = None,
     is_claim: bool = False,
     silent: bool = False,
+    cut_from_player: int = None,
 ):
     if not is_claim:
         self.server_action_tick += 1
@@ -255,6 +256,7 @@ async def broadcast_do_action(
                     is_mo_gang=is_mo_gang,
                     is_claim=True if is_claim else None,
                     silent=True if silent else None,
+                    cut_from_player=cut_from_player,
                 ),
             )
             await conn.websocket.send_json(response.dict(exclude_none=True))

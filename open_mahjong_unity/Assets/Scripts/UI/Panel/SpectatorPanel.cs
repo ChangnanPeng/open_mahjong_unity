@@ -1,11 +1,9 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class SpectatorPanel : MonoBehaviour {
     public static SpectatorPanel Instance { get; private set; }
-    
+
     [SerializeField] private SpectatorPrefab SpectatorPrefab;
     [SerializeField] private Transform contentTransform;
     [SerializeField] private Button RefreshButton;
@@ -24,7 +22,6 @@ public class SpectatorPanel : MonoBehaviour {
         // 当面板打开时，自动刷新观战列表
         RefreshSpectatorList();
     }
-
 
     private void RefreshSpectatorList() {
         // 发送获取观战列表的请求
@@ -67,4 +64,3 @@ public class SpectatorPanel : MonoBehaviour {
         Debug.Log($"成功加载 {spectatorList.Length} 个可观战游戏");
     }
 }
-

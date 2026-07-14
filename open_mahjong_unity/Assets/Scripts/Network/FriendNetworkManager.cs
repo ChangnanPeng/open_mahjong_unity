@@ -79,7 +79,7 @@ public class FriendNetworkManager : MonoBehaviour {
             case "friend/realtime_request_respond_result":
                 // 这些是发起方/响应方收到的回包，UI 通常不需要额外处理（除非弹 tip）
                 if (!response.success && !string.IsNullOrEmpty(response.message)) {
-                    NotificationManager.Instance?.ShowTip("实时观战", false, response.message);
+                    NotificationManager.Instance.ShowTip("实时观战", false, response.message);
                 }
                 break;
             case "friend/realtime_started":
@@ -93,12 +93,12 @@ public class FriendNetworkManager : MonoBehaviour {
                 break;
             case "friend/realtime_exit_result":
                 if (!string.IsNullOrEmpty(response.message)) {
-                    NotificationManager.Instance?.ShowTip("实时观战", response.success, response.message);
+                    NotificationManager.Instance.ShowTip("实时观战", response.success, response.message);
                 }
                 break;
             case "friend/realtime_kick_result":
                 if (!response.success && !string.IsNullOrEmpty(response.message)) {
-                    NotificationManager.Instance?.ShowTip("实时观战", false, response.message);
+                    NotificationManager.Instance.ShowTip("实时观战", false, response.message);
                 }
                 break;
             case "friend/realtime_spectators_changed":
@@ -121,7 +121,6 @@ public class FriendNetworkManager : MonoBehaviour {
     // ----------------- 发送 -----------------
 
     private static WebSocket _GetWs() {
-        if (NetworkManager.Instance == null) return null;
         var ws = NetworkManager.Instance.GetWebSocket();
         return (ws != null && ws.State == WebSocketState.Open) ? ws : null;
     }

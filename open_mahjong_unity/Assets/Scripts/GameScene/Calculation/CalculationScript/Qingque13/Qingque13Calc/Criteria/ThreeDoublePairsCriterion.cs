@@ -9,19 +9,19 @@ namespace Qingque13.Criteria
     public class ThreeDoublePairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeDoublePairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
             byte doublePairCount = 0;
-            
+
             foreach (var tile in QingqueTile.AllTiles)
             {
                 if (counter.Count(tile) == 4) doublePairCount++;
             }
-            
+
             return doublePairCount >= 3;
         }
     }

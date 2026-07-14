@@ -1,12 +1,10 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class Destroyer : MonoBehaviour {
     public static Destroyer Instance { get; private set; }
-    
+
     [SerializeField] private Transform pendingDestroyContainer;
-    
+
     private void Awake() {
         if (Instance == null) {
             Instance = this;
@@ -14,14 +12,14 @@ public class Destroyer : MonoBehaviour {
             Destroy(gameObject);
         }
     }
-    
+
     public void AddToDestroyer(Transform obj) {
         if (obj != null) {
             obj.SetParent(pendingDestroyContainer);
             Destroy(obj.gameObject);
         }
     }
-    
+
     void Update() {
         // 清理已销毁对象的引用
         if (pendingDestroyContainer.childCount > 0) {

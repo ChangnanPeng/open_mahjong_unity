@@ -97,5 +97,3 @@ public partial class Game3DManager : MonoBehaviour {
         return true;
     }
 }
-
-

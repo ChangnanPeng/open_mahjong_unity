@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
@@ -12,7 +10,7 @@ public class SpectatorPrefab : MonoBehaviour {
     [SerializeField] private TextMeshProUGUI Player4NameText;
     [SerializeField] private TextMeshProUGUI GamestateIdText;
     [SerializeField] private Button SpectateButton;
-    
+
     private string gamestate_id;
 
     public void InitializeSpectatorItem(string rule, string subRule, string player1_name, string player2_name, string player3_name, string player4_name, string gamestate_id) {
@@ -37,4 +35,3 @@ public class SpectatorPrefab : MonoBehaviour {
         GameStateNetworkManager.Instance.AddSpectator(gamestate_id);
     }
 }
-

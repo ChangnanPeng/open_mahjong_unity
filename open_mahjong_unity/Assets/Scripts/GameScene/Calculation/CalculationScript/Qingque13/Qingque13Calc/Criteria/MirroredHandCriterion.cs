@@ -9,11 +9,11 @@ namespace Qingque13.Criteria
     public class MirroredHandCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MirroredHand;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
-            
+
             // Must have exactly 2 suits
             byte suitDistribution = 0;
             foreach (var meld in decomposition.Melds)
@@ -23,13 +23,13 @@ namespace Qingque13.Criteria
                     suitDistribution |= (byte)(1 << (byte)meld.Tile.GetSuitType());
                 }
             }
-            
+
             if (CountBits(suitDistribution) != 2) return false;
-            
+
             // Count pairs of mixed double sequences or mixed double triplets
             byte matchCount = 0;
             byte visited = 0;
-            
+
             for (byte i = 0; i < decomposition.Melds.Count; i++)
             {
                 for (byte j = (byte)(i + 1); j < decomposition.Melds.Count; j++)
@@ -45,23 +45,23 @@ namespace Qingque13.Criteria
                     }
                 }
             }
-            
+
             return matchCount == 2;
         }
-        
+
         private bool IsMixedDoubleMeld(QingqueMeld meld1, QingqueMeld meld2)
         {
             // Different suits required
             if (meld1.Tile.GetSuitType() == meld2.Tile.GetSuitType()) return false;
             if (meld1.Tile.GetSuitType() == QingqueTile.SuitType.Z || meld2.Tile.GetSuitType() == QingqueTile.SuitType.Z) return false;
-            
+
             // Same type and same number
             if (meld1.Type != meld2.Type) return false;
             if (meld1.Tile.Num() != meld2.Tile.Num()) return false;
-            
+
             return true;
         }
-        
+
         private byte CountBits(byte value)
         {
             byte count = 0;

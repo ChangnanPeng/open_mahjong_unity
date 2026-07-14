@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class ThreeConsecutiveNumbersCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeConsecutiveNumbers;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             var counter = decomposition.Counter();
@@ -19,7 +19,7 @@ namespace Qingque13.Criteria
             {
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.Z, n)) > 0) return false;
             }
-            
+
             foreach (var tile in QingqueTile.NumberedTiles)
             {
                 if (counter.Count(tile) > 0)
@@ -27,7 +27,7 @@ namespace Qingque13.Criteria
                     numbers[tile.Num() - 1] = true;
                 }
             }
-            
+
             int first = -1, last = -1;
             for (int i = 0; i < 9; i++)
             {
@@ -37,15 +37,15 @@ namespace Qingque13.Criteria
                     last = i;
                 }
             }
-            
+
             if (last - first > 2) return false;
-            
+
             int count = 0;
             for (int i = 0; i < 9; i++)
             {
                 if (numbers[i]) count++;
             }
-            
+
             return count <= 3;
         }
     }
