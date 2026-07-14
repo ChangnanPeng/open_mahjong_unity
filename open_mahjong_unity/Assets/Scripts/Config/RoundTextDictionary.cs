@@ -53,6 +53,7 @@ public static class RoundTextDictionary {
         else if (rule == "classical") roundMap = CurrentRoundTextClassical;
         else if (rule == "sichuan") roundMap = CurrentRoundTextSichuan;
         else if (rule == "changsha") roundMap = CurrentRoundTextChangsha;
+        else if (rule == "jiandan") roundMap = CurrentRoundTextQingque;
         if (roundMap != null && roundMap.TryGetValue(currentRound, out string roundName)) {
             return roundName;
         }
