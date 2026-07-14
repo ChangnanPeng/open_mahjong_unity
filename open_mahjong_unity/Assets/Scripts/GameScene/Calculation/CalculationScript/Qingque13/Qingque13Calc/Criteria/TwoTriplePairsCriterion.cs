@@ -9,13 +9,13 @@ namespace Qingque13.Criteria
     public class TwoTriplePairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.TwoTriplePairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            
+
             for (byte i = 1; i <= 8; i++)
             {
                 for (byte j = (byte)(i + 1); j <= 9; j++)
@@ -23,15 +23,15 @@ namespace Qingque13.Criteria
                     bool iHasAll = counter.Count(new QingqueTile(QingqueTile.SuitType.M, i)) >= 2 &&
                                    counter.Count(new QingqueTile(QingqueTile.SuitType.P, i)) >= 2 &&
                                    counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) >= 2;
-                                   
+
                     bool jHasAll = counter.Count(new QingqueTile(QingqueTile.SuitType.M, j)) >= 2 &&
                                    counter.Count(new QingqueTile(QingqueTile.SuitType.P, j)) >= 2 &&
                                    counter.Count(new QingqueTile(QingqueTile.SuitType.S, j)) >= 2;
-                    
+
                     if (iHasAll && jHasAll) return true;
                 }
             }
-            
+
             // Also check for one number with 4 tiles in each suit (6 pairs total)
             for (byte i = 1; i <= 9; i++)
             {
@@ -42,10 +42,10 @@ namespace Qingque13.Criteria
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.P, i)) == 4) pairCount += 2;
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) == 2) pairCount++;
                 if (counter.Count(new QingqueTile(QingqueTile.SuitType.S, i)) == 4) pairCount += 2;
-                
+
                 if (pairCount == 6) return true;
             }
-            
+
             return false;
         }
     }

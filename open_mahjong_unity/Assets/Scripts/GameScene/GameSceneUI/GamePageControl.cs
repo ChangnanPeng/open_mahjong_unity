@@ -41,9 +41,7 @@ public class GamePageControl : MonoBehaviour {
     }
 
     private void OnDisable() {
-        if (NetworkManager.Instance != null) {
-            NetworkManager.Instance.OnLatencyChanged -= HandleLatencyChanged;
-        }
+        NetworkManager.Instance.OnLatencyChanged -= HandleLatencyChanged;
         rulebookButton.onClick.RemoveListener(OnRulebookClicked);
         backToMenuButton.onClick.RemoveListener(OnBackToMenuClicked);
     }

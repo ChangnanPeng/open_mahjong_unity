@@ -77,7 +77,7 @@ public class FriendPanel : MonoBehaviour {
         ClearAllItems();
         SwitchTab(Tab.Friends);
         UpdateCountTexts(0, 0, 0);
-        FriendNetworkManager.Instance?.ListAllFriendPanels();
+        FriendNetworkManager.Instance.ListAllFriendPanels();
         if (_pollingCoroutine != null) StopCoroutine(_pollingCoroutine);
         _pollingCoroutine = StartCoroutine(CoPollFriendList());
     }
@@ -93,7 +93,7 @@ public class FriendPanel : MonoBehaviour {
         var wait = new WaitForSeconds(pollingIntervalSeconds);
         while (true) {
             yield return wait;
-            FriendNetworkManager.Instance?.ListAllFriendPanels();
+            FriendNetworkManager.Instance.ListAllFriendPanels();
         }
     }
 
@@ -105,33 +105,33 @@ public class FriendPanel : MonoBehaviour {
 
     private void OnClickAddFollowing() {
         if (followingUidInput == null || string.IsNullOrWhiteSpace(followingUidInput.text)) {
-            NotificationManager.Instance?.ShowTip("关注", false, "请输入要关注的玩家 UID");
+            NotificationManager.Instance.ShowTip("关注", false, "请输入要关注的玩家 UID");
             return;
         }
         if (!int.TryParse(followingUidInput.text.Trim(), out int uid)) {
-            NotificationManager.Instance?.ShowTip("关注", false, "UID 必须是数字");
+            NotificationManager.Instance.ShowTip("关注", false, "UID 必须是数字");
             return;
         }
-        FriendNetworkManager.Instance?.AddFollowing(uid);
+        FriendNetworkManager.Instance.AddFollowing(uid);
     }
 
     private void OnClickRequestFriend() {
         if (friendUidInput == null || string.IsNullOrWhiteSpace(friendUidInput.text)) {
-            NotificationManager.Instance?.ShowTip("好友", false, "请输入要申请的玩家 UID");
+            NotificationManager.Instance.ShowTip("好友", false, "请输入要申请的玩家 UID");
             return;
         }
         if (!int.TryParse(friendUidInput.text.Trim(), out int uid)) {
-            NotificationManager.Instance?.ShowTip("好友", false, "UID 必须是数字");
+            NotificationManager.Instance.ShowTip("好友", false, "UID 必须是数字");
             return;
         }
-        FriendNetworkManager.Instance?.RequestFriend(uid);
+        FriendNetworkManager.Instance.RequestFriend(uid);
     }
 
     public void ShowDeleteFriendConfirm(int userId, string username) {
         if (deleteConfirmPopup != null) {
-            deleteConfirmPopup.Show(username, () => FriendNetworkManager.Instance?.DeleteFriend(userId));
+            deleteConfirmPopup.Show(username, () => FriendNetworkManager.Instance.DeleteFriend(userId));
         } else {
-            FriendNetworkManager.Instance?.DeleteFriend(userId);
+            FriendNetworkManager.Instance.DeleteFriend(userId);
         }
     }
 
@@ -141,7 +141,7 @@ public class FriendPanel : MonoBehaviour {
 
     public void OnAddFollowingResponse(Response response) {
         if (!string.IsNullOrEmpty(response.message)) {
-            NotificationManager.Instance?.ShowTip("关注", response.success, response.message);
+            NotificationManager.Instance.ShowTip("关注", response.success, response.message);
         }
         if (response.success && followingUidInput != null) followingUidInput.text = string.Empty;
         ApplyFollowingList(response);
@@ -149,7 +149,7 @@ public class FriendPanel : MonoBehaviour {
 
     public void OnRemoveFollowingResponse(Response response) {
         if (!string.IsNullOrEmpty(response.message)) {
-            NotificationManager.Instance?.ShowTip("关注", response.success, response.message);
+            NotificationManager.Instance.ShowTip("关注", response.success, response.message);
         }
         ApplyFollowingList(response);
     }
@@ -160,7 +160,7 @@ public class FriendPanel : MonoBehaviour {
 
     public void OnRequestFriendResponse(Response response) {
         if (!string.IsNullOrEmpty(response.message)) {
-            NotificationManager.Instance?.ShowTip("好友", response.success, response.message);
+            NotificationManager.Instance.ShowTip("好友", response.success, response.message);
         }
         if (response.success && friendUidInput != null) friendUidInput.text = string.Empty;
         ApplyFriendList(response);
@@ -168,7 +168,7 @@ public class FriendPanel : MonoBehaviour {
 
     public void OnDeleteFriendResponse(Response response) {
         if (!string.IsNullOrEmpty(response.message)) {
-            NotificationManager.Instance?.ShowTip("好友", response.success, response.message);
+            NotificationManager.Instance.ShowTip("好友", response.success, response.message);
         }
         ApplyFriendList(response);
     }
@@ -179,7 +179,7 @@ public class FriendPanel : MonoBehaviour {
 
     public void OnRespondFriendRequestResponse(Response response) {
         if (!string.IsNullOrEmpty(response.message)) {
-            NotificationManager.Instance?.ShowTip("好友申请", response.success, response.message);
+            NotificationManager.Instance.ShowTip("好友申请", response.success, response.message);
         }
         ApplyFriendList(response);
         ApplyFriendRequestList(response);

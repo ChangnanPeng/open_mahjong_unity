@@ -10,23 +10,23 @@ namespace Qingque13.Criteria
     public class ThreeShiftedSequencesCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.ThreeShiftedSequences;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;
             var melds = decomposition.Melds;
-            
+
             foreach (var suit in new[] { QingqueTile.SuitType.M, QingqueTile.SuitType.P, QingqueTile.SuitType.S })
             {
                 for (byte num = 2; num <= 6; num++) // 2-6 for sequences
                 {
-                    if (ContainsSequences(melds, suit, num, (byte)(num + 1), (byte)(num + 2))) 
+                    if (ContainsSequences(melds, suit, num, (byte)(num + 1), (byte)(num + 2)))
                         return true;
                 }
             }
             return false;
         }
-        
+
         private bool ContainsSequences(List<QingqueMeld> melds, QingqueTile.SuitType suit, params byte[] middleTiles)
         {
             foreach (var midTile in middleTiles)
@@ -34,8 +34,8 @@ namespace Qingque13.Criteria
                 bool found = false;
                 foreach (var meld in melds)
                 {
-                    if (meld.Type == QingqueMeldType.Sequence && 
-                        meld.Tile.GetSuitType() == suit && 
+                    if (meld.Type == QingqueMeldType.Sequence &&
+                        meld.Tile.GetSuitType() == suit &&
                         meld.Tile.Num() == midTile)
                     {
                         found = true;

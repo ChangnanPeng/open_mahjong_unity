@@ -70,7 +70,7 @@ public class TipsContainer : MonoBehaviour
         _pendingCutTileId = null;
         hasTips = false;
         gameObject.SetActive(false);
-        if (HasCachedTenpaiTips && TipsBlock.Instance != null && TipsBlock.Instance.IsBlockActive) {
+        if (HasCachedTenpaiTips && TipsBlock.Instance.IsBlockActive) {
             RefreshTenpaiTipsIfCached();
         }
     }
@@ -182,7 +182,7 @@ public class TipsContainer : MonoBehaviour
             handList.Add(hepaiTile);
             List<string> combinationList = new List<string>(gameManager.player_to_info["self"].combination_tiles ?? new List<string>());
             int huapaiCount = gameManager.player_to_info["self"].huapai_list.Count;
-            
+
             // 根据房间规则调用不同的处理方法
             if (gameManager.roomRule == "qingque") {
                 ProcessQingqueTile(hepaiTile, handList, combinationList, wayToHepai, singleTilewayToHepai, mergedWayToHepai, huapaiCount);
@@ -420,7 +420,7 @@ public class TipsContainer : MonoBehaviour
                 zimoResult = GBhepai.HepaiCheck(handList, combinationList, zimoWayToHepai, hepaiTile, false);
             }
             int zimoFan = zimoResult.Item1;
-            
+
             if (zimoFan - huapaiCount >= hepaiLimit) {
                 InstantiateTipsTile(hepaiTile);
                 GameObject fanObject = Instantiate(FanPrefab, FanContainer.transform);
@@ -464,13 +464,13 @@ public class TipsContainer : MonoBehaviour
             var zimoResult = Qingque13External.HepaiCheck(handList, combinationList, zimoWayToHepai, hepaiTile, false);
             double zimoFan = zimoResult.Item1; // 保持为 double 类型
             List<string> zimoFanNames = zimoResult.Item2; // 番种名称列表
-            
+
             // 打印所有返回值
             Debug.Log($"[TipsContainer] HepaiCheck 返回结果:");
             Debug.Log($"[TipsContainer] 番数: {zimoFan}");
             Debug.Log($"[TipsContainer] 番种数量: {zimoFanNames.Count}");
             Debug.Log($"[TipsContainer] 番种列表: {string.Join(", ", zimoFanNames)}");
-            
+
             if (zimoFan - huapaiCount >= 1) {
                 InstantiateTipsTile(hepaiTile);
                 string fanDisplay = System.Math.Abs(zimoFan % 1) < 0.0001 ? $"{zimoFan:F0}番" : $"{zimoFan:F2}番".TrimEnd('0').TrimEnd('.');
@@ -615,7 +615,7 @@ public class TipsContainer : MonoBehaviour
             }
         }
 
-        if (RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive) {
+        if (RiichiCutSelectionController.Instance.IsActive) {
             ctx.IsPendingRiichi = true;
             if (!ctx.IsRiichi) {
                 ctx.IsRiichi = true;
@@ -878,4 +878,3 @@ public class TipsContainer : MonoBehaviour
     }
 
 }
-

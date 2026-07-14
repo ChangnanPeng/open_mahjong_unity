@@ -55,5 +55,3 @@ public class Qingque_Create_RoomConfig {
         return true;
     }
 }
-
-

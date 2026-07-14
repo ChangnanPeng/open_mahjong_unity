@@ -21,7 +21,7 @@ public class StreamerModePanel : MonoBehaviour {
     }
 
     private void Start() {
-        WindowsManager.Instance?.ApplyStreamerModePanels();
+        WindowsManager.Instance.ApplyStreamerModePanels();
     }
 
     private void OnDestroy() {

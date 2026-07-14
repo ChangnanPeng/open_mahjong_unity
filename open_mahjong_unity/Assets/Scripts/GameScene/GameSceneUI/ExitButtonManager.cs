@@ -81,15 +81,13 @@ public class ExitButtonManager : MonoBehaviour {
     }
 
     private void OnClickQuitRealtimeSpectator() {
-        if (FriendNetworkManager.Instance != null) {
-            FriendNetworkManager.Instance.ExitRealtime();
-        }
+        FriendNetworkManager.Instance.ExitRealtime();
         PostGameNavigator.ExitToFriend();
     }
 
     private void OnClickVoteStart(string voteType) {
         // 投票进行中时面板会接管，重复点击由服务端节流（5 分钟内同一发起者一次）
-        GameStateNetworkManager.Instance?.SendVoteStart(voteType);
+        GameStateNetworkManager.Instance.SendVoteStart(voteType);
     }
 
     /// <summary>对外暴露按钮引用，供 GameRecordManager 等绑定 onClick。</summary>

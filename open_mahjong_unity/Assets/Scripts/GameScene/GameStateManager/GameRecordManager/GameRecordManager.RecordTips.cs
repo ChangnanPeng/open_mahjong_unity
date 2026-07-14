@@ -8,7 +8,7 @@ public partial class GameRecordManager {
     }
 
     public void HideRecordTips() {
-        TipsBlock.Instance?.HideTipsBlock();
+        TipsBlock.Instance.HideTipsBlock();
     }
 
     public void RefreshRecordTips() {
@@ -41,7 +41,7 @@ public partial class GameRecordManager {
         }
 
         RecordTipsContext ctx = BuildRecordTipsContext(selfPlayer);
-        TipsBlock.Instance?.ShowRecordTips(ctx, handForCheck, waiting.ToList());
+        TipsBlock.Instance.ShowRecordTips(ctx, handForCheck, waiting.ToList());
     }
 
     private RecordTipsContext BuildRecordTipsContext(RecordPlayer selfPlayer) {

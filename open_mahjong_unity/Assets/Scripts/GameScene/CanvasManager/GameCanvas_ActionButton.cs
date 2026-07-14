@@ -65,7 +65,7 @@ public partial class GameCanvas : MonoBehaviour {
     }
 
     private ActionButtonColorPreset GetActionButtonColorPreset(string action) {
-        if (ConfigManager.Instance == null || !ConfigManager.Instance.ActionButtonColorEnabled) {
+        if (!ConfigManager.Instance.ActionButtonColorEnabled) {
             return actionButtonColorPresets.fallback;
         }
         switch (action) {
@@ -105,8 +105,7 @@ public partial class GameCanvas : MonoBehaviour {
     }
 
     private static bool IsChangshaActionContext() {
-        return NormalGameStateManager.Instance != null
-            && NormalGameStateManager.Instance.roomRule == "changsha";
+        return NormalGameStateManager.Instance.roomRule == "changsha";
     }
 
     /// <summary>按当前开关与预设，刷新 ActionButtonContainer 内已有按钮配色。</summary>
@@ -141,7 +140,7 @@ public partial class GameCanvas : MonoBehaviour {
         foreach (Transform child in ActionButtonContainer){
             Destroy(child.gameObject);
         }
-        
+
         for (int i = 0; i < action_list.Count; i++){
 
             Debug.Log($"询问操作: {action_list[i]}");
@@ -207,7 +206,7 @@ public partial class GameCanvas : MonoBehaviour {
                 buttonText.text = "补花";
                 Debug.Log($"补花按钮: {ActionButtonObj}");
                 ActionButtonObj.actionTypeList.Add(action_list[i]);
-            } 
+            }
             // 暗杠加杠吃牌可能有多个选择的选项，将这些选项添加入单个按钮。
             // 暗杠
             else if (action_list[i] == "angang"){
@@ -280,7 +279,7 @@ public partial class GameCanvas : MonoBehaviour {
         }
 
         // 播放操作按钮出现音效
-        if (ActionButtonContainer.childCount > 0 && SoundManager.Instance != null) {
+        if (ActionButtonContainer.childCount > 0) {
             SoundManager.Instance.PlayActionButtonAppearSound();
         }
 

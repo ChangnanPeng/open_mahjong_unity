@@ -11,10 +11,10 @@ public class TestPanel : MonoBehaviour
     [Header("UI 组件")]
     [Tooltip("输入框：输入 Python 风格的测试数据，例如：[[\"k39\"],[32,32,32,33,33,33,34,34,34,41,41],33,[\"点和\"]]")]
     public TMP_InputField testInputField;
-    
+
     [Tooltip("运行测试按钮")]
     public Button testButton;
-    
+
     [Tooltip("结果显示文本")]
     public TMP_Text resultText;
 
@@ -37,7 +37,7 @@ public class TestPanel : MonoBehaviour
     public void TestHepaiCheck()
     {
         string inputText = "";
-        
+
         // 如果有输入框，使用输入框的内容
         if (testInputField != null && !string.IsNullOrWhiteSpace(testInputField.text))
         {
@@ -53,7 +53,7 @@ public class TestPanel : MonoBehaviour
         try
         {
             var (combinationList, tilesList, hepaiTile, wayToHepai) = ParseTestData(inputText);
-            
+
             Debug.Log($"解析结果:");
             Debug.Log($"  组合列表: [{string.Join(", ", combinationList)}]");
             Debug.Log($"  手牌列表: [{string.Join(", ", tilesList)}]");
@@ -65,7 +65,7 @@ public class TestPanel : MonoBehaviour
 
             // 测试脚本负责显示结果在 TMP Text 上
             string resultMessage = $"最终结果:\n得分: {result.Item1}\n番种: {string.Join(", ", result.Item2)}";
-            
+
             if (resultText != null)
             {
                 resultText.text = resultMessage;
@@ -78,7 +78,7 @@ public class TestPanel : MonoBehaviour
         catch (Exception e)
         {
             string errorMessage = $"解析或测试失败:\n{e.Message}\n\n{e.StackTrace}";
-            
+
             if (resultText != null)
             {
                 resultText.text = errorMessage;
@@ -99,7 +99,7 @@ public class TestPanel : MonoBehaviour
     {
         // 移除首尾空白字符
         input = input.Trim();
-        
+
         // 移除首尾的方括号
         if (input.StartsWith("[") && input.EndsWith("]"))
         {
@@ -116,7 +116,7 @@ public class TestPanel : MonoBehaviour
         for (int i = 0; i < input.Length; i++)
         {
             char c = input[i];
-            
+
             // 处理字符串
             if ((c == '"' || c == '\'') && (i == 0 || input[i - 1] != '\\'))
             {
@@ -145,7 +145,7 @@ public class TestPanel : MonoBehaviour
                 }
             }
         }
-        
+
         // 添加最后一个元素
         if (startIndex < input.Length)
         {
@@ -159,13 +159,13 @@ public class TestPanel : MonoBehaviour
 
         // 解析组合列表（第一个元素）
         List<string> combinationList = ParseStringList(elements[0]);
-        
+
         // 解析手牌列表（第二个元素）
         List<int> tilesList = ParseIntList(elements[1]);
-        
+
         // 解析和牌张（第三个元素）
         int hepaiTile = int.Parse(elements[2].Trim());
-        
+
         // 解析和牌方式列表（第四个元素）
         List<string> wayToHepai = ParseStringList(elements[3]);
 
@@ -178,7 +178,7 @@ public class TestPanel : MonoBehaviour
     private List<string> ParseStringList(string listStr)
     {
         listStr = listStr.Trim();
-        
+
         // 空列表
         if (listStr == "[]")
             return new List<string>();
@@ -194,7 +194,7 @@ public class TestPanel : MonoBehaviour
 
         var result = new List<string>();
         var matches = Regex.Matches(listStr, @"[""']([^""']+)[""']");
-        
+
         foreach (Match match in matches)
         {
             result.Add(match.Groups[1].Value);
@@ -209,7 +209,7 @@ public class TestPanel : MonoBehaviour
     private List<int> ParseIntList(string listStr)
     {
         listStr = listStr.Trim();
-        
+
         // 空列表
         if (listStr == "[]")
             return new List<int>();
@@ -225,7 +225,7 @@ public class TestPanel : MonoBehaviour
 
         var result = new List<int>();
         var parts = listStr.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-        
+
         foreach (var part in parts)
         {
             if (int.TryParse(part.Trim(), out int value))
@@ -236,7 +236,6 @@ public class TestPanel : MonoBehaviour
 
         return result;
     }
-
 
     private void OnTestDropdownChanged(int index)
     {
@@ -250,7 +249,7 @@ public class TestPanel : MonoBehaviour
     public void TestTingCheck()
     {
         string inputText = "";
-        
+
         // 如果有输入框，使用输入框的内容
         if (testInputField != null && !string.IsNullOrWhiteSpace(testInputField.text))
         {
@@ -266,7 +265,7 @@ public class TestPanel : MonoBehaviour
         try
         {
             var (combinationList, tilesList) = ParseTingpaiTestData(inputText);
-            
+
             Debug.Log($"解析结果:");
             Debug.Log($"  组合列表: [{string.Join(", ", combinationList)}]");
             Debug.Log($"  手牌列表: [{string.Join(", ", tilesList)}]");
@@ -276,7 +275,7 @@ public class TestPanel : MonoBehaviour
 
             // 测试脚本负责显示结果在 TMP Text 上
             string resultMessage = $"听牌检查结果:\n等待牌: {string.Join(", ", waitingTiles.OrderBy(x => x))}\n等待牌数量: {waitingTiles.Count}";
-            
+
             if (resultText != null)
             {
                 resultText.text = resultMessage;
@@ -289,7 +288,7 @@ public class TestPanel : MonoBehaviour
         catch (Exception e)
         {
             string errorMessage = $"解析或测试失败:\n{e.Message}\n\n{e.StackTrace}";
-            
+
             if (resultText != null)
             {
                 resultText.text = errorMessage;
@@ -310,7 +309,7 @@ public class TestPanel : MonoBehaviour
     {
         // 移除首尾空白字符
         input = input.Trim();
-        
+
         // 移除首尾的方括号
         if (input.StartsWith("[") && input.EndsWith("]"))
         {
@@ -327,7 +326,7 @@ public class TestPanel : MonoBehaviour
         for (int i = 0; i < input.Length; i++)
         {
             char c = input[i];
-            
+
             // 处理字符串
             if ((c == '"' || c == '\'') && (i == 0 || input[i - 1] != '\\'))
             {
@@ -356,7 +355,7 @@ public class TestPanel : MonoBehaviour
                 }
             }
         }
-        
+
         // 添加最后一个元素
         if (startIndex < input.Length)
         {
@@ -370,7 +369,7 @@ public class TestPanel : MonoBehaviour
 
         // 解析组合列表（第一个元素）
         List<string> combinationList = ParseStringList(elements[0]);
-        
+
         // 解析手牌列表（第二个元素）
         List<int> tilesList = ParseIntList(elements[1]);
 
@@ -383,7 +382,7 @@ public class TestPanel : MonoBehaviour
     public void TestQingqueHepaiCheck()
     {
         string inputText = "";
-        
+
         // 如果有输入框，使用输入框的内容
         if (testInputField != null && !string.IsNullOrWhiteSpace(testInputField.text))
         {
@@ -399,7 +398,7 @@ public class TestPanel : MonoBehaviour
         try
         {
             var (combinationList, tilesList, hepaiTile, wayToHepai) = ParseTestData(inputText);
-            
+
             Debug.Log($"解析结果:");
             Debug.Log($"  组合列表: [{string.Join(", ", combinationList)}]");
             Debug.Log($"  手牌列表: [{string.Join(", ", tilesList)}]");
@@ -411,7 +410,7 @@ public class TestPanel : MonoBehaviour
 
             // 测试脚本负责显示结果在 TMP Text 上
             string resultMessage = $"青雀和牌检查结果:\n番数: {result.Item1}\n番种: {string.Join(", ", result.Item2)}";
-            
+
             if (resultText != null)
             {
                 resultText.text = resultMessage;
@@ -424,7 +423,7 @@ public class TestPanel : MonoBehaviour
         catch (Exception e)
         {
             string errorMessage = $"解析或测试失败:\n{e.Message}\n\n{e.StackTrace}";
-            
+
             if (resultText != null)
             {
                 resultText.text = errorMessage;
@@ -442,7 +441,7 @@ public class TestPanel : MonoBehaviour
     public void TestQingqueTingCheck()
     {
         string inputText = "";
-        
+
         // 如果有输入框，使用输入框的内容
         if (testInputField != null && !string.IsNullOrWhiteSpace(testInputField.text))
         {
@@ -458,7 +457,7 @@ public class TestPanel : MonoBehaviour
         try
         {
             var (combinationList, tilesList) = ParseTingpaiTestData(inputText);
-            
+
             Debug.Log($"解析结果:");
             Debug.Log($"  组合列表: [{string.Join(", ", combinationList)}]");
             Debug.Log($"  手牌列表: [{string.Join(", ", tilesList)}]");
@@ -468,7 +467,7 @@ public class TestPanel : MonoBehaviour
 
             // 测试脚本负责显示结果在 TMP Text 上
             string resultMessage = $"青雀听牌检查结果:\n等待牌: {string.Join(", ", waitingTiles.OrderBy(x => x))}\n等待牌数量: {waitingTiles.Count}";
-            
+
             if (resultText != null)
             {
                 resultText.text = resultMessage;
@@ -481,7 +480,7 @@ public class TestPanel : MonoBehaviour
         catch (Exception e)
         {
             string errorMessage = $"解析或测试失败:\n{e.Message}\n\n{e.StackTrace}";
-            
+
             if (resultText != null)
             {
                 resultText.text = errorMessage;

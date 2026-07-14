@@ -46,7 +46,7 @@
 | `sub_rule` | string | 子规则，各 GameState 写入（如 `guobiao/standard`） |
 | `commitment_hex` | string | 承诺值，64 位 hex 字符串；每局 `game_start` 广播，对局内不暴露主种子 |
 | `salt` | string | 盐字符串，128 位 hex；与承诺值一同广播 |
-| `game_random_seed` | int? | **旧格式**整局随机种子，仅历史牌谱兼容 |
+| `game_random_seed` | int? | **已废弃**；客户端不再展示。新牌谱使用 `commitment_hex` / `salt` |
 | `max_round` | int | 风圈数（1=东风、2=半庄、4=全庄） |
 | `start_time` / `end_time` | datetime | 对局起止时间 |
 | `open_cuohe` | bool | 是否开启错和 |
@@ -70,7 +70,7 @@
 | `starting_score` | int | **统一起手分**。标准日麻 `25000`，浪涌 `50000`；房间可自定义覆盖 |
 | `starting_scores` | int[4] | **可选**。按 original 0～3 的各自起手分；存在时优先于 `starting_score` |
 
-旧牌谱无上述起手分字段时，客户端按 `sub_rule` 推断：`riichi/langyong` → 50000，其余立直 → 25000。
+立直牌谱须写入 `starting_score` 或 `starting_scores`；客户端不再按 `sub_rule` 推断。
 
 ### 3.1 WebSocket 对局字段（`GameInfo` / 每局 `game_start`）
 
@@ -115,21 +115,21 @@
 
 | 短码 | 含义 | 格式示例 |
 |------|------|----------|
-| `bh` | 补花 | `["bh", tile_id, action_player]` |
+| `bh` | 补花 | `["bh", tile_id, action_player, "T"\|"F"]`（`T`=摸补 / `F`=手补） |
 | `d` | 摸牌 | `["d", tile_id]` |
 | `gd` | 杠后摸牌 | `["gd", tile_id]` |
-| `bd` | 补花后摸牌 | `["bd", tile_id]` |
+| `bd` | 补花后摸牌 | `["bd", tile_id, action_player]` |
 | `c` | 切牌 | `["c", tile_id, "T"\|"F"]` 或带 `"H"` 表示立直横置 |
 | `cl` / `cm` / `cr` | 吃 | `[code, tile_id, action_player, h1, h2]`（`h1/h2` 为从手牌打出的**真实**牌 ID，含赤 5 的 105/205/305） |
 | `p` | 碰 | `["p", tile_id, action_player, h1, h2]` |
 | `g` | 明杠 | `["g", tile_id, action_player, h1, h2, h3]` |
-| `ag` | 暗杠 | `["ag", tile_id, "T"\|"F"]`（必填第三段；`T`=摸杠 / `F`=手杠；客户端拒绝两段格式） |
+| `ag` | 暗杠 | `["ag", tile_id, "T"\|"F", id0, id1, id2, id3]`（必填第三段与 4 张真实 ID；`T`=摸杠 / `F`=手杠） |
 | `jg` | 加杠 | `["jg", tile_id, "T"\|"F"]`（必填第三段；`T`=摸杠 / `F`=手杠；客户端拒绝两段格式） |
 | `ca` | 战术鸣牌申请（未最终执行） | `["ca", player_index, apply_action, cut_tile]`（仅回放 display/音效，不改牌面；`apply_action` 与执行 tick 同码，如 `cl`/`p`/`hu_second`） |
 | `liuju` | 流局 | `["liuju"]` |
 | `end` | 本局结束 | `["end"]`（和牌/流局后紧跟；错和无 `end`，对局继续） |
 
-**吃碰杠兼容：** 旧牌谱仅 3 段 `[code, tile_id, action_player]` 时，客户端按归一化后的 `tile_id±1` 算术回退推导手牌侧 ID。
+吃碰杠 / 暗杠 / 补花短 tick（缺手牌真实 ID 或 T/F）已废弃；客户端对不完整 tick 直接抛错，不再算术回退。
 
 **日麻赤 5 吃牌：** 105/205/305 与同点数 15/25/35 等价，但顺子仍须 456 三张不同点数。赤 5 只能作顺子的「5」位，故 `cm` 被鸣牌为 15 时手牌应为 `14+16` 而非 `14+105`；手牌出赤 5 时通常为 `cl`/`cr`（如打 16 手牌 14+105，或打 14 手牌 105+16），或 `cm` 被鸣牌为 105 且手牌 14+16。
 

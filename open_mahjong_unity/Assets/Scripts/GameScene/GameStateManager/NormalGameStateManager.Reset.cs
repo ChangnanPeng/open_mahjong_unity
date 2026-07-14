@@ -26,7 +26,7 @@ public partial class NormalGameStateManager {
         roomRule = null;
         subRule = null;
 
-        if (RiichiCutSelectionController.Instance != null && RiichiCutSelectionController.Instance.IsActive) {
+        if (RiichiCutSelectionController.Instance.IsActive) {
             RiichiCutSelectionController.Instance.ExitRiichiCutMode();
         }
     }

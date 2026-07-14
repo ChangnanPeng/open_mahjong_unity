@@ -9,13 +9,13 @@ namespace Qingque13.Criteria
     public class SevenWindPairsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.SevenWindPairs;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (!decomposition.IsSevenPairs) return false;
-            
+
             var counter = decomposition.Counter();
-            
+
             // Count pairs from wind tiles (E, S, W, N)
             byte pairCount = 0;
             for (byte n = 1; n <= 4; n++)
@@ -24,7 +24,7 @@ namespace Qingque13.Criteria
                 if (count == 2) pairCount++;
                 if (count == 4) pairCount += 2;
             }
-            
+
             return pairCount == 7;
         }
     }

@@ -1,15 +1,12 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-
 
 public partial class BoardCanvas {
 
     public void ResetForExit() {
-        CoroutineManager.Instance?.StopNamed(CoroutineKeys.BoardCurrentFlash);
-        CoroutineManager.Instance?.StopNamed(CoroutineKeys.BoardScoreDifference);
+        CoroutineManager.Instance.StopNamed(CoroutineKeys.BoardCurrentFlash);
+        CoroutineManager.Instance.StopNamed(CoroutineKeys.BoardScoreDifference);
         isShowingScoreDifference = false;
         RestoreBaselineScores();
 
@@ -20,7 +17,7 @@ public partial class BoardCanvas {
     }
 
     public void ShowCurrentPlayer(string currentPlayerIndex, int remainTiles){
-        CoroutineManager.Instance?.StopNamed(CoroutineKeys.BoardCurrentFlash);
+        CoroutineManager.Instance.StopNamed(CoroutineKeys.BoardCurrentFlash);
         player_self_current_image.gameObject.SetActive(false);
         player_left_current_image.gameObject.SetActive(false);
         player_top_current_image.gameObject.SetActive(false);

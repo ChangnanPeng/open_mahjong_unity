@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D;
 
@@ -103,7 +101,7 @@ public class Tile3D : MonoBehaviour
     private void Awake() {
         InitializeComponents();
     }
-    
+
     /// <summary>
     /// 初始化组件（可在Awake或需要时手动调用，用于处理SetActive(false)的对象）
     /// </summary>
@@ -111,7 +109,7 @@ public class Tile3D : MonoBehaviour
         if (targetMaterial != null && cardRenderer != null && propBlock != null) {
             return;
         }
-        
+
         const int outlineLayer = 10;
         gameObject.layer = outlineLayer;
 

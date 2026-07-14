@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -7,7 +5,7 @@ public class TipsFanCount : MonoBehaviour
 {
     [SerializeField] private TMP_Text tipsFanCountText; // 提示番数文本
     [SerializeField] private Image backgroundImage; // 背景图片组件
-    
+
     [Header("颜色设置")]
     public Color dianheColor = Color.green; // 点和颜色（绿色，可和牌）
     public Color zimoColor = Color.yellow; // 自摸颜色（黄色，仅自摸）
@@ -21,7 +19,7 @@ public class TipsFanCount : MonoBehaviour
     public void SetTipsFanCount(string fanCount, string colorType) {
         ConfigureText();
         tipsFanCountText.text = fanCount;
-        
+
         if (colorType == "exhausted")
         {
             backgroundImage.color = exhaustedColor;

@@ -10,7 +10,7 @@ namespace Qingque13.Criteria
     public class AllTripletsCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.AllTriplets;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) return false;

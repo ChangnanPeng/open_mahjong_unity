@@ -9,7 +9,7 @@ namespace Qingque13.Criteria
     public class MixedOutsideHandCriterion : IQingqueCriterion
     {
         public QingqueFan Fan => QingqueFan.MixedOutsideHand;
-        
+
         public bool Check(QingqueDecomposition decomposition)
         {
             if (decomposition.IsSevenPairs) {
@@ -20,25 +20,25 @@ namespace Qingque13.Criteria
                 }
                 return true;
             }
-            
+
             // Check pair
             if (!IsTerminalOrHonour(decomposition.Pair)) return false;
-            
+
             // Check all melds
             foreach (var meld in decomposition.Melds)
             {
                 if (!HasTerminalOrHonour(meld)) return false;
             }
-            
+
             return true;
         }
-        
+
         private bool IsTerminalOrHonour(QingqueTile tile)
         {
             if (tile.GetSuitType() == QingqueTile.SuitType.Z) return true;
             return tile.Num() == 1 || tile.Num() == 9;
         }
-        
+
         private bool HasTerminalOrHonour(QingqueMeld meld)
         {
             if (meld.Type == QingqueMeldType.Triplet || meld.Type == QingqueMeldType.Kong)

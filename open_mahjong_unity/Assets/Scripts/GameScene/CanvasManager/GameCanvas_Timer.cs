@@ -13,11 +13,11 @@ public partial class GameCanvas : MonoBehaviour {
         // 停止可能正在运行的倒计时协程
         if (_countdownCoroutine != null)
             StopCoroutine(_countdownCoroutine);
-        
+
         // 保存初始时间值
         _currentRemainingTime = remainingTime;
         _currentCutTime = cuttime;
-        
+
         // 设置倒计时初始值
         if (remianTimeText == null) return;
         remianTimeText.color = Color.white;
@@ -35,7 +35,7 @@ public partial class GameCanvas : MonoBehaviour {
     private IEnumerator CountdownTimer(){
         // 使用WaitForSeconds缓存，提高性能
         WaitForSeconds oneSecondWait = new WaitForSeconds(1.0f);
-        
+
         while (_currentCutTime > 0 || _currentRemainingTime > 0){
             if (VotePanel.Instance != null && VotePanel.Instance.IsGameTimerSuppressed) {
                 StopTimeRunning();

@@ -1,5 +1,5 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using Riichi;
 
 /// <summary>
@@ -12,23 +12,26 @@ public static class GameRecordMeldCodec {
     public const int AngangHandTileCount = 4;
 
     /// <summary>
-    /// 暗杠 tick 解析并删牌：新格式 [ag, norm, T|F, id0..id3] 用真实 ID；
-    /// 旧格式（仅 3 段）回退为归一化模拟删牌。
+    /// 暗杠 tick 解析并删牌：须为 [ag, norm, T|F, id0..id3]（可另附 gs 等延伸段）。
+    /// angangTileId / isMoGang 保留与调用方签名兼容，现行格式不再使用归一化回退。
     /// </summary>
     public static List<int> ResolveAngangRemovedTiles(
         IReadOnlyList<string> tick,
         List<int> tileList,
         int angangTileId,
         bool isMoGang) {
-        if (tick != null && tick.Count >= 3 + AngangHandTileCount) {
-            var stored = new List<int>(AngangHandTileCount);
-            for (int i = 3; i < 3 + AngangHandTileCount; i++) {
-                stored.Add(ParseTickInt(tick, i));
-            }
-            RemoveExactTilesFromList(tileList, stored);
-            return stored;
+        _ = angangTileId;
+        _ = isMoGang;
+        if (tick == null || tick.Count < 3 + AngangHandTileCount) {
+            throw new Exception(
+                $"暗杠 tick 缺少 4 张手牌真实 ID: [{string.Join(", ", tick ?? Array.Empty<string>())}]");
         }
-        return RemoveNTilesByNormalized(tileList, angangTileId, AngangHandTileCount, preferDrawSlotFirst: isMoGang);
+        var stored = new List<int>(AngangHandTileCount);
+        for (int i = 3; i < 3 + AngangHandTileCount; i++) {
+            stored.Add(ParseTickInt(tick, i));
+        }
+        RemoveExactTilesFromList(tileList, stored);
+        return stored;
     }
 
     public static void RemoveExactTilesFromList(List<int> tileList, IReadOnlyList<int> tileIds) {
@@ -186,19 +189,21 @@ public static class GameRecordMeldCodec {
     }
 
     /// <summary>
-    /// 从 tick 解析手牌侧真实 ID；旧牌谱（仅 3 段）回退为 tileId±1 算术推导。
+    /// 从 tick 解析手牌侧真实 ID。
     /// 格式：吃/碰 [code, mingpai, player, h1, h2]；杠 [code, mingpai, player, h1, h2, h3]
     /// </summary>
     public static List<int> ResolveHandTiles(IReadOnlyList<string> tick, string recordAction, int mingpaiTileId) {
+        _ = mingpaiTileId;
         int expected = HandTileCount(recordAction);
-        if (tick != null && tick.Count >= 3 + expected) {
-            var stored = new List<int>(expected);
-            for (int i = 3; i < 3 + expected; i++) {
-                stored.Add(ParseTickInt(tick, i));
-            }
-            return stored;
+        if (tick == null || tick.Count < 3 + expected) {
+            throw new Exception(
+                $"吃碰杠 tick 缺少手牌真实 ID（需要 {3 + expected} 段）: [{string.Join(", ", tick ?? Array.Empty<string>())}]");
         }
-        return BuildHandTilesFallback(recordAction, mingpaiTileId);
+        var stored = new List<int>(expected);
+        for (int i = 3; i < 3 + expected; i++) {
+            stored.Add(ParseTickInt(tick, i));
+        }
+        return stored;
     }
 
     public static string BuildCombinationTarget(string recordAction, int mingpaiTileId) {
@@ -232,15 +237,6 @@ public static class GameRecordMeldCodec {
             return new[] { 0, r1, 0, r2, 0, r3, 1, mingpaiTileId };
         }
         return new[] { 0, r1, 1, mingpaiTileId, 0, r2, 0, r3 };
-    }
-
-    private static List<int> BuildHandTilesFallback(string recordAction, int tileId) {
-        int norm = RiichiTileUtil.Normalize(tileId);
-        if (recordAction == "cl") return new List<int> { norm - 1, norm - 2 };
-        if (recordAction == "cm") return new List<int> { norm - 1, norm + 1 };
-        if (recordAction == "cr") return new List<int> { norm + 1, norm + 2 };
-        if (recordAction == "p") return new List<int> { norm, norm };
-        return new List<int> { norm, norm, norm };
     }
 
     private static int FindRemoveIndex(List<int> tileList, int norm, bool preferExact) {

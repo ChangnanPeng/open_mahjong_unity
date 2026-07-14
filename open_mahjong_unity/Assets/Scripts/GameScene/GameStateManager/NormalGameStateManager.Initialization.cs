@@ -22,8 +22,8 @@ public partial class NormalGameStateManager {
 
         gamestateId = gameInfo.gamestate_id;
         // 0.切换窗口
-        MatchStateManager.Instance?.StopQueueing();
-        MatchNetworkManager.Instance?.ResetMatchLock();
+        MatchStateManager.Instance.StopQueueing();
+        MatchNetworkManager.Instance.ResetMatchLock();
         MatchQueueingPanel.Instance?.HideImmediately();
         MatchFoundedPanel.Instance?.StopCountdownAndHide();
         WindowsManager.Instance.SwitchWindow("game"); // 切换到游戏场景
@@ -38,7 +38,7 @@ public partial class NormalGameStateManager {
         // 获取自己的手牌信息（从 PlayerInfo 中获取）
         PlayerInfo selfPlayerInfo = GetSelfPlayerInfo(gameInfo);
         int[] selfHandTilesArray = selfPlayerInfo.hand_tiles;
-        
+
         // 初始化手牌区域
         GameCanvas.Instance.ChangeHandCards("InitHandCards",0,selfHandTilesArray,null);
 
@@ -69,10 +69,9 @@ public partial class NormalGameStateManager {
 
         IsGameActive = true;
         IsSelfActionRequired = false;
-        TipsContainer.Instance?.ResetRyuukyokuTenpaiChoiceForRound();
-        TipsContainer.Instance?.HideRyuukyokuTenpaiChoice();
-        if (IsRealtimeSpectator && tips && TipsBlock.Instance != null
-            && player_to_info.TryGetValue("self", out PlayerInfoClass selfInfo)) {
+        TipsContainer.Instance.ResetRyuukyokuTenpaiChoiceForRound();
+        TipsContainer.Instance.HideRyuukyokuTenpaiChoice();
+        if (IsRealtimeSpectator && tips && player_to_info.TryGetValue("self", out PlayerInfoClass selfInfo)) {
             TipsBlock.Instance.ShowTipsBlock(selfHandTiles, selfInfo.combination_tiles ?? new List<string>());
         }
     }
@@ -96,7 +95,7 @@ public partial class NormalGameStateManager {
         foreach (var player in gameInfo.players_info){
             if (!indexToPosition.ContainsKey(player.player_index)) continue;
             string position = indexToPosition[player.player_index];
-            
+
             // 1. 生成弃牌（同时复原立直横置标记，重连/初始化时与服务器一致）
             if (player.discard_tiles != null && player.discard_tiles.Length > 0){
                 bool[] flags = player.discard_riichi_flags;
@@ -107,28 +106,28 @@ public partial class NormalGameStateManager {
                     Debug.Log($"生成弃牌: {tileId} horizontal={horizontal}");
                 }
             }
-            
+
             // 2. 生成花牌
             if (player.huapai_list != null && player.huapai_list.Length > 0){
                 foreach (int tileId in player.huapai_list){
                     Game3DManager.Instance.Change3DTile("SetBuhuacardWithoutAnimation", tileId, 0, position, false, null);
                 }
             }
-            
+
             // 3. 生成副露（组合牌）
             // 直接遍历副露列表和掩码，调用 ActionAnimation 显示
             // 手牌数量已经反映了副露消耗，不需要再做移除操作
             if (player.combination_tiles != null && player.combination_tiles.Length > 0 &&
                 player.combination_mask != null && player.combination_mask.Length > 0){
-                
+
                 // 遍历每个副露组合，直接使用二维数组中的每个子数组
                 for (int i = 0; i < player.combination_tiles.Length && i < player.combination_mask.Length; i++){
                     string combinationStr = player.combination_tiles[i];
                     if (string.IsNullOrEmpty(combinationStr) || combinationStr.Length < 2) continue;
-                    
+
                     int[] combinationMask = player.combination_mask[i];
                     if (combinationMask == null || combinationMask.Length == 0) continue;
-                    
+
                     // 统计掩码中加杠牌（值为3）的数量
                     int jiagangCount = 0;
                     foreach (int value in combinationMask){
@@ -136,7 +135,7 @@ public partial class NormalGameStateManager {
                             jiagangCount++;
                         }
                     }
-                    
+
                     // 如果 combination_tiles 的字符串有 "k"（刻子/碰），传入 "peng"
                     if (combinationStr.Contains("k")){
                         Game3DManager.Instance.StartCoroutine(Game3DManager.Instance.ActionAnimationCoroutine(position, "peng", combinationMask, false));
@@ -229,7 +228,7 @@ public partial class NormalGameStateManager {
         remainTiles = gameInfo.tile_count; // 存储剩余牌数
         currentRound = gameInfo.current_round; // 存储当前轮数
         maxRound = gameInfo.max_round;
-        
+
         // 获取自己的手牌信息（从 PlayerInfo 中获取）
         PlayerInfo selfPlayerInfo = GetSelfPlayerInfo(gameInfo);
         if (selfPlayerInfo != null && selfPlayerInfo.hand_tiles != null){

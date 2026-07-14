@@ -1,12 +1,10 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 public class RoomPanel : MonoBehaviour {
     public static RoomPanel Instance { get; private set; }
-    
+
     [SerializeField] private TMP_Text roomIdText; // 房间号
     [SerializeField] private TMP_Text roomnameText; // 房间名
     [SerializeField] private PlayerRoomPanel playerPanel1; // 玩家1 面板
@@ -51,8 +49,6 @@ public class RoomPanel : MonoBehaviour {
             Destroy(gameObject);
         }
     }
-
-
 
     public void GetRoomInfoResponse(bool success, string message, RoomInfo roomInfo) {
         lastRoomInfo = roomInfo;
@@ -138,7 +134,6 @@ public class RoomPanel : MonoBehaviour {
         addBotButton.interactable = isHost;
         addSmartBotButton.interactable = isHost;
 
-
         this.roomConfigContainer.SetRoomConfig(roomInfo);
         UpdateBotHintTexts(roomInfo.player_list);
     }
@@ -215,33 +210,23 @@ public class RoomPanel : MonoBehaviour {
 
     private void BackButtonClicked() {
         WindowsManager.Instance.SwitchWindow("menu");
-        if (RoomNetworkManager.Instance != null) {
-            RoomNetworkManager.Instance.LeaveRoom(UserDataManager.Instance.RoomId);
-        }
+        RoomNetworkManager.Instance.LeaveRoom(UserDataManager.Instance.RoomId);
     }
 
     private void StartButtonClicked() {
-        if (RoomNetworkManager.Instance != null) {
-            RoomNetworkManager.Instance.StartGame(UserDataManager.Instance.RoomId);
-        }
+        RoomNetworkManager.Instance.StartGame(UserDataManager.Instance.RoomId);
     }
 
     private void ReadyButtonClicked() {
-        if (RoomNetworkManager.Instance != null) {
-            // 切换准备状态：发送当前状态的取反
-            RoomNetworkManager.Instance.SetReady(UserDataManager.Instance.RoomId, !selfReady);
-        }
+        // 切换准备状态：发送当前状态的取反
+        RoomNetworkManager.Instance.SetReady(UserDataManager.Instance.RoomId, !selfReady);
     }
 
     private void AddBotButtonClicked() {
-        if (RoomNetworkManager.Instance != null) {
-            RoomNetworkManager.Instance.AddBotToRoom(UserDataManager.Instance.RoomId);
-        }
+        RoomNetworkManager.Instance.AddBotToRoom(UserDataManager.Instance.RoomId);
     }
 
     private void AddSmartBotButtonClicked() {
-        if (RoomNetworkManager.Instance != null) {
-            RoomNetworkManager.Instance.AddSmartBotToRoom(UserDataManager.Instance.RoomId);
-        }
+        RoomNetworkManager.Instance.AddSmartBotToRoom(UserDataManager.Instance.RoomId);
     }
 }

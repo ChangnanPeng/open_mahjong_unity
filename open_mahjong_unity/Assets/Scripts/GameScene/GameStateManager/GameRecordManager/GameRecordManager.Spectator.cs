@@ -67,7 +67,7 @@ public partial class GameRecordManager {
         if (string.IsNullOrEmpty(_delayedSpectatorGamestateId)) return;
         string gamestateId = _delayedSpectatorGamestateId;
         _delayedSpectatorGamestateId = "";
-        _ = GameStateNetworkManager.Instance?.RemoveSpectator(gamestateId);
+        _ = GameStateNetworkManager.Instance.RemoveSpectator(gamestateId);
     }
 
     /// <summary>
@@ -495,7 +495,6 @@ public partial class GameRecordManager {
     }
 
     private static void ClearSpectatorActionButtons() {
-        if (GameCanvas.Instance == null) return;
         GameCanvas.Instance.ClearActionButton();
     }
 
@@ -656,11 +655,9 @@ public partial class GameRecordManager {
         bool inRecord = CurrentMode == RecordManagerMode.Record;
         bool inSpectator = CurrentMode == RecordManagerMode.Spectator || CurrentMode == RecordManagerMode.RecordOnSpectator;
 
-        if (ExitButtonManager.Instance != null) {
-            if (inSpectator) ExitButtonManager.Instance.ShowForSpectator();
-            else if (inRecord) ExitButtonManager.Instance.ShowForRecord();
-            else ExitButtonManager.Instance.HideAll();
-        }
+        if (inSpectator) ExitButtonManager.Instance.ShowForSpectator();
+        else if (inRecord) ExitButtonManager.Instance.ShowForRecord();
+        else ExitButtonManager.Instance.HideAll();
         showGameInfoButton.gameObject.SetActive(inRecord);
         showSpectatorInfoButton.gameObject.SetActive(inSpectator);
         if (inSpectator) gameInfoView.SetActive(false);
@@ -753,4 +750,3 @@ public partial class GameRecordManager {
         return round;
     }
 }
-

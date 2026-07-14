@@ -22,7 +22,7 @@ public static class GameSessionGuard {
     /// </summary>
     public static bool BlockIfExclusiveSession(string actionDescription) {
         if (!HasExclusiveSession) return false;
-        NotificationManager.Instance?.ShowTip("提示", false,
+        NotificationManager.Instance.ShowTip("提示", false,
             $"当前{DescribeCurrentSession()}，无法{actionDescription}");
         return true;
     }

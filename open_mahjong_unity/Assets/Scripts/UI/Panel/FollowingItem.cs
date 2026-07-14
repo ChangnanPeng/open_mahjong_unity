@@ -109,14 +109,14 @@ public class FollowingItem : MonoBehaviour {
 
     private void OnClickSpectate() {
         if (_info == null || string.IsNullOrEmpty(_info.gamestate_id)) {
-            NotificationManager.Instance?.ShowTip("观战", false, "对方当前不允许普通观战");
+            NotificationManager.Instance.ShowTip("观战", false, "对方当前不允许普通观战");
             return;
         }
-        GameStateNetworkManager.Instance?.AddSpectator(_info.gamestate_id);
+        GameStateNetworkManager.Instance.AddSpectator(_info.gamestate_id);
     }
 
     private void OnClickUnfollow() {
         if (_info == null) return;
-        FriendNetworkManager.Instance?.RemoveFollowing(_info.user_id);
+        FriendNetworkManager.Instance.RemoveFollowing(_info.user_id);
     }
 }

@@ -100,7 +100,7 @@ public class RecordPanel : MonoBehaviour {
     private void RequestLoadMore() {
         if (_isLoadingMore || !_hasMore) return;
         _isLoadingMore = true;
-        DataNetworkManager.Instance?.GetRecordList(_loadedCount);
+        DataNetworkManager.Instance.GetRecordList(_loadedCount);
     }
 
     private void ResetPaginationState() {
@@ -142,7 +142,7 @@ public class RecordPanel : MonoBehaviour {
         if (!success) {
             Debug.LogError($"获取记录列表失败: {message}");
             if (offset == 0) {
-                NotificationManager.Instance?.ShowTip("牌谱", false, message);
+                NotificationManager.Instance.ShowTip("牌谱", false, message);
             }
             return;
         }
@@ -191,7 +191,7 @@ public class RecordPanel : MonoBehaviour {
     /// </summary>
     public static void OpenRecord(RecordDetail detail) {
         if (detail == null || detail.record == null) {
-            NotificationManager.Instance?.ShowTip("牌谱", false, "牌谱数据为空");
+            NotificationManager.Instance.ShowTip("牌谱", false, "牌谱数据为空");
             return;
         }
 
@@ -199,13 +199,13 @@ public class RecordPanel : MonoBehaviour {
         string recordJson = JToken.FromObject(detail.record).ToString(Formatting.None);
 
         if (string.IsNullOrWhiteSpace(recordJson)) {
-            NotificationManager.Instance?.ShowTip("牌谱", false, "牌谱内容为空");
+            NotificationManager.Instance.ShowTip("牌谱", false, "牌谱内容为空");
             return;
         }
 
-        WindowsManager.Instance?.SwitchWindow("recordscene");
+        WindowsManager.Instance.SwitchWindow("recordscene");
         if (GameRecordManager.Instance == null) {
-            NotificationManager.Instance?.ShowTip("牌谱", false, "牌谱场景未就绪");
+            NotificationManager.Instance.ShowTip("牌谱", false, "牌谱场景未就绪");
             return;
         }
 
@@ -213,7 +213,7 @@ public class RecordPanel : MonoBehaviour {
             GameRecordManager.Instance.LoadRecord(recordJson, detail.players);
         } catch (System.Exception e) {
             Debug.LogError($"加载牌谱失败: {e.Message}");
-            NotificationManager.Instance?.ShowTip("牌谱", false, $"解析牌谱失败: {e.Message}");
+            NotificationManager.Instance.ShowTip("牌谱", false, $"解析牌谱失败: {e.Message}");
         }
     }
 }
