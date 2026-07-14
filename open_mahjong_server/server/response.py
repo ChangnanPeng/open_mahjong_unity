@@ -65,6 +65,9 @@ class GameInfo(BaseModel):
     initial_hu_san_tong: Optional[bool] = None
     bird_count: Optional[int] = None
     dealer_bird: Optional[bool] = None
+    base_score_no_dealer: Optional[bool] = None
+    small_hu_score: Optional[int] = None
+    big_hu_score: Optional[int] = None
     self_hand_tiles: Optional[List[int]] = None
     # 立直麻将专用字段
     honba: Optional[int] = None  # 本场棒数
