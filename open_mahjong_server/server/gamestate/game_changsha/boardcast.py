@@ -374,6 +374,7 @@ def _build_do_action_payload(
     is_mo_gang=None,
     meld_reveal_delay=None,
     cut_from_player=None,
+    sea_bottom_discard=None,
 ):
     viewer_mask = combination_mask
     viewer_target = combination_target
@@ -400,6 +401,7 @@ def _build_do_action_payload(
         # 受保护观众鸣牌显示层延迟（秒）：服务器按序发送、客户端仅延迟鸣牌 3D 动画，复现 claim_meld_followup_gap 间隔。
         "meld_reveal_delay": meld_reveal_delay,
         "cut_from_player": cut_from_player,
+        "sea_bottom_discard": sea_bottom_discard,
     }
 
 
@@ -441,6 +443,7 @@ async def broadcast_do_action(
     silent: bool = False,
     is_mo_gang: bool = None,
     cut_from_player: int = None,
+    sea_bottom_discard: bool = None,
     ):
     # 战术鸣牌实际行为静默执行：申请阶段已发声/动画
     if not is_claim and not silent and getattr(self, "_tactical_silent_action", False):
@@ -506,6 +509,7 @@ async def broadcast_do_action(
                 is_mo_gang=is_mo_gang,
                 meld_reveal_delay=viewer_reveal_delay,
                 cut_from_player=cut_from_player,
+                sea_bottom_discard=sea_bottom_discard,
             )
 
             if protected and is_cut:

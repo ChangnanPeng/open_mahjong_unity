@@ -170,6 +170,7 @@ public class DoActionInfo { // 执行操作
     public int action_player;
     public int action_tick;
     public int? cut_from_player;      // 鸣牌（吃/碰/明杠）必填：被认走的打牌者座位索引；切牌等其它动作可空
+    public bool? sea_bottom_discard;  // 长沙海底牌翻开后进入牌河
     public float? meld_reveal_delay;  // 受保护观众鸣牌呈现延迟（秒）：display/音效/3D 一并延后，复现 claim_meld_followup_gap 间隔且不破坏 wire 顺序
     public int? cut_tile;           // 可空类型
     public int[] cut_tiles;
